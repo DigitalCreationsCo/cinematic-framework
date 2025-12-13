@@ -30,10 +30,10 @@ This system integrates the role prompts and temporal state into the final action
 
 This phase introduced a distributed, fault-tolerant execution model:
 
-1.  **New Service: `pipeline-wrapper/`**: A dedicated worker service responsible for running the LangGraph instance. It subscribes to Pub/Sub commands (`START_PIPELINE`, `STOP_PIPELINE`, etc.) published by the API server.
+1.  **New Service: `pipeline-wrapper/`**: A dedicated worker service running on **Node.js v20+**. It subscribes to Pub/Sub commands (`START_PIPELINE`, `STOP_PIPELINE`, etc.) published by the API server and executes the workflow using `node pipeline-wrapper/index.ts` instead of `tsx`. Audio assets are now copied into this container.
 2.  **State Management Abstraction: `pipeline-wrapper/checkpointer-manager.ts`**: Implements persistent state saving and loading using LangChain's PostgreSQL integration:
     *   Uses **`@langchain/langgraph-postgres`** via the `PostgresCheckpointer`.
-    *   Persists the `GraphState` using the `projectId` as the `thread_id`.
+    *   Persists the state via `checkpointer.put` and loads it using `channel_values` directly, bypassing stringified JSON state handling.
     *   Enables reliable resume, stop, and **scene retry capabilities**.
 3.  **Communication Layer**: The system now relies on **Pub/Sub topics** (`video-commands`, `video-events`) for all internal communication, replacing direct internal scripting calls.
 4.  **API Server (`server/routes.ts`)**: Refactored to be stateless, only responsible for publishing commands (POST endpoints) and relaying state events (SSE endpoint using temporary Pub/Sub subscriptions).

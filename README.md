@@ -12,7 +12,7 @@ Cinematic Framework leverages Google's Vertex AI (Gemini models) and LangGraph t
 - **Produces cinematic videos** with proper shot composition, lighting, and camera movements
 - **Stitches scenes** into a final rendered video synchronized with audio
 - **Self-improves** its generation process by learning from quality-check feedback, utilizing enhanced evaluation guidelines.
-- **Tracks learning metrics** and persists state using PostgreSQL for robust checkpointing and resumability.
+- **Tracks learning metrics** and persists state robustly using PostgreSQL via LangGraph checkpointers.
 
 ## Features
 
@@ -23,13 +23,13 @@ Cinematic Framework leverages Google's Vertex AI (Gemini models) and LangGraph t
 - **Learning Metrics**: The framework tracks the number of attempts and quality scores for each scene, calculating trend lines to provide real-time feedback on whether the system is "learning" (i.e., requiring fewer attempts to generate high-quality scenes).
 - **Visual Continuity**: Maintains character appearance and location consistency using reference images and **pre-generated start/end frames** for each scene, with intelligent skipping of generation if frames already exist in storage, now governed by persistent checkpoints.
 - **Cinematic Quality**: Professional shot types, camera movements, lighting, and transitions
-- **Persistent State & Resume Capability**: Workflow state is persisted in PostgreSQL via LangGraph checkpointers, allowing for robust resumption and enabling command-driven operations like STOP/RETRY.
+- **Persistent State & Resume Capability**: Workflow state is persisted in PostgreSQL via LangGraph checkpointers, allowing for robust resumption and enabling command-driven operations like STOP/RETRY via Pub/Sub commands.
 - **Comprehensive Schemas**: Type-safe data structures using Zod for all workflow stages, defined in [shared/schema.ts](shared/schema.ts).
-- **Automatic Retry Logic**: Handles API failures and safety filter violations, centrally managed via command handlers in the pipeline worker.
+- **Automatic Retry Logic**: Handles API failures and safety filter violations, centrally managed via command handlers in the pipeline worker service.
 
 ## Architecture
 
-The framework uses a **LangGraph state machine** running in a dedicated `pipeline-wrapper` service. Execution is controlled via commands published to a Pub/Sub topic (`video-commands`). State changes are broadcast via another Pub/Sub topic (`video-events`), which the API server relays to connected clients via SSE.
+The framework uses a **LangGraph state machine** running in a dedicated `pipeline-wrapper` service (using Node 20+). Execution is controlled via commands published to a Pub/Sub topic (`video-commands`). State changes are broadcast via another Pub/Sub topic (`video-events`), which the API server relays to connected clients via SSE.
 
 ```mermaid
 graph TD
@@ -56,14 +56,13 @@ graph TD
 5.  **QualityCheckAgent**: Evaluates generated scenes for quality and consistency, feeding back into the prompt/rule refinement loop.
 6.  **Prompt CorrectionInstruction**: Guides the process for refining prompts based on quality feedback.
 7.  **Generation Rules Presets**: Proactive domain-specific rules that can be automatically added to guide generation quality.
-8.  **Pipeline Worker (`pipeline-wrapper/`)**: A dedicated service running the LangGraph instance. It handles command execution (`START_PIPELINE`, `STOP_PIPELINE`, `RETRY_SCENE`) and uses the `PostgresCheckpointer` for reliable state management, removing reliance on in-memory storage for workflow progression. Its compilation now explicitly includes storage logic via `tsconfig.json`.
+8.  **Pipeline Worker (`pipeline-wrapper/`)**: A dedicated service running the LangGraph instance using Node.js v20+. It handles command execution (`START_PIPELINE`, `STOP_PIPELINE`, `RETRY_SCENE`) and uses the `PostgresCheckpointer` for reliable state management. It now uses `node` directly for execution, replacing `tsx`.
 9.  **API Server (`server/`)**: Now stateless, it acts as a proxy, publishing client requests as Pub/Sub commands and streaming Pub/Sub events back to the client via project-specific SSE connections managed via temporary Pub/Sub subscriptions. It initializes a Google Cloud Storage client upon startup to support project listing and metadata retrieval.
 
 ## Prerequisites
 
-- **Node.js** (v18 or higher)
+- **Node.js** (v20 or higher recommended for pipeline worker)
 - **Docker** and **Docker Compose** (for local development environment)
-- **PostgreSQL Database** (required for persistent state checkpointers; Docker Compose sets this up locally)
 - **Google Cloud Project** with:
   - Vertex AI API enabled
   - Google Cloud Storage bucket created
@@ -77,23 +76,24 @@ The local setup now requires running Docker Compose to manage the background ser
 # 1. Install dependencies for API/Worker/Client
 npm install
 
-# 2. Start necessary infrastructure components (Pub/Sub Emulator, Postgres, API Server, Client)
+# 2. Start necessary infrastructure components (Pub/Sub Emulator, API Server, Client)
 docker-compose up --build -d
 
-# Note: The pipeline-wrapper service builds and runs separately via docker-compose.
+# Note: The postgres-db service is started automatically by docker-compose if needed by the worker, but is not externally exposed or required by the API server anymore.
 ```
 
 ## Configuration
 
 ### Environment Variables
-Update `.env` (or environment variables in deployment). **The API Server now explicitly loads environment variables using `dotenv` upon startup.** Note that `GCP_PROJECT_ID` and `GCP_BUCKET_NAME` are now required for the API server to initialize Google Cloud Storage client connectivity.
+Update `.env` (or environment variables in deployment). **The API Server now explicitly loads environment variables using `dotenv` upon startup.** Note that `GCP_PROJECT_ID`, `GCP_BUCKET_NAME`, `PUBSUB_PROJECT_ID`, and `POSTGRES_URL` are required for full operation.
 
 ```bash
 # Google Cloud Platform Configuration
 GCP_PROJECT_ID="your-gcp-project-id"
 GCP_BUCKET_NAME="your-gcp-bucket-name"
+PUBSUB_PROJECT_ID="test-project" # Required for Pub/Sub operations
 # GOOGLE_APPLICATION_CREDENTIALS is often omitted when using ADC or Workload Identity
-# POSTGRES_URL must point to the database accessible by the pipeline worker (e.g., postgres://postgres:example@postgres-db:5432/cinematiccanvas)
+# POSTGRES_URL must point to the database accessible by the pipeline worker
 POSTGRES_URL="postgres://postgres:example@postgres-db:5432/cinematiccanvas"
 ```
 
@@ -147,16 +147,16 @@ cinematic-canvas/
 ├── audio/                            # Local audio files for testing
 ├── client/                           # Frontend application (React/Vite)
 ├── docs/                             # Documentation files
-├── pipeline-wrapper/                 # Dedicated service for running LangGraph/Checkpointer
+├── pipeline-wrapper/                 # Dedicated service for running LangGraph/Checkpointer (Uses Node 20, runs via 'node index.ts')
 │   ├── Dockerfile
-│   ├── checkpointer-manager.ts       # Abstraction for Postgres checkpointer
+│   ├── checkpointer-manager.ts       # Abstraction for Postgres checkpointer (LangGraph state serialization change)
 │   └── index.ts                      # Main worker logic subscribing to Pub/Sub commands
 ├── pipeline/                         # Core workflow agents and logic
 │   ├── agents/                       # Agent implementations
 │   ├── llm/                          # LLM provider abstractions
 │   ├── lib/                          # Utility libraries
 │   ├── prompts/                      # System prompts for agents
-│   ├── index.ts                      # Core graph definition
+│   ├── index.ts                      # Core graph definition (Uses import.meta.main)
 │   └── types.ts
 ├── server/                           # Stateless API server
 │   ├── index.ts                      # Server entry point and SSE implementation
@@ -167,8 +167,8 @@ cinematic-canvas/
 │   └── schema.ts
 ├── .env.example
 ├── package.json                      # Dependencies and scripts
-├── docker-compose.yml                # Local development orchestration
-├── Dockerfile.api                    # Dockerfile for API/Server
+├── docker-compose.yml                # Local development orchestration (Postgres service removed)
+├── Dockerfile.api                    # Dockerfile for API/Server (Uses Node 20)
 └── ...
 ```
 
@@ -176,7 +176,7 @@ cinematic-canvas/
 
 ### Core Dependencies (Updated)
 - **@google-cloud/pubsub** (^5.2.0): For command/event communication between services.
-- **@langchain/langgraph-checkpoint-postgres** (^1.0.0): For persistent state management.
+- **@langchain/langgraph-checkpoint-postgres** (^1.0.0): For persistent state management, handling LangGraph Checkpoint objects directly.
 - **pg** (^8.12.0): PostgreSQL client library used by the checkpointer.
 - **uuid** (^13.0.0): Used by the API server for unique SSE subscription IDs.
 
@@ -194,6 +194,7 @@ When running locally via `docker-compose.yml`, the following variables are impli
 - `PUBSUB_EMULATOR_HOST`: Points to the local Pub/Sub emulator container.
 - `POSTGRES_URL`: Connection string for the service database.
 - `GCP_PROJECT_ID`, `GCP_BUCKET_NAME`: GCP resource identifiers.
+- `PUBSUB_PROJECT_ID`: Project ID for Pub/Sub operations (used by worker/server if not using emulator host).
 
 ## Testing
 
@@ -210,7 +211,7 @@ npm run coverage
 
 ## Security: Google Cloud Credentials & Data Access
 
-**State Persistence**: All workflow progress, scenes, characters, and metrics are now persisted in a PostgreSQL database via LangGraph checkpoints (`thread_id` corresponds to `projectId`).
+**State Persistence**: All workflow progress, scenes, characters, and metrics are now persisted in a PostgreSQL database via LangGraph checkpoints (`thread_id` corresponds to `projectId`). The API server no longer directly interacts with the DB for state retrieval, relying on worker-published events or dedicated state API calls.
 
 (Rest of Security section regarding GCP keys remains largely unchanged, referencing correct environment variables.)
 
@@ -218,9 +219,9 @@ npm run coverage
 
 ### Common Issues (Updated)
 - **Issue: "Failed to connect to database"**
-  - Solution: Ensure `postgres-db` service is running and `POSTGRES_URL` in `.env` (or passed to pipeline-wrapper) is correct.
+  - Solution: Ensure the `pipeline-wrapper` service can access PostgreSQL. If running locally, check the `POSTGRES_URL` in `.env` or passed to the worker environment. The `postgres-db` service might need manual verification if not running via compose.
 - **Issue: "Pipeline did not resume / Ran from beginning"**
-  - Solution: Verify that the `projectId` used matches the `thread_id` saved in the database, and the `pipeline-wrapper` service can access PostgreSQL.
+  - Solution: Verify that the `projectId` used matches the `thread_id` saved in the database, and that the `pipeline-wrapper` service is correctly deserializing checkpoint state (`channel_values`).
 - **Issue: "Video generation timed out"**
   - Solution: Increase timeout settings configured within the pipeline agents or pipeline worker environment.
 - **Issue: "Safety filter triggered"**
@@ -243,7 +244,7 @@ Contributions are welcome! Please ensure:
 - All tests pass (`npm test`)
 - Code coverage remains above 90% (`npm run coverage`)
 - TypeScript strict mode compliance
-- New services (e.g., `pipeline-wrapper`) are properly containerized and configured in `docker-compose.yml`.
+- New services (e.g., `pipeline-wrapper`) are properly containerized (Node 20+) and configured in `docker-compose.yml`.
 
 ## License
 
