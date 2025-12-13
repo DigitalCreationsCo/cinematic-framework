@@ -18,8 +18,11 @@ interface PlaybackControlsProps {
   scenes: Scene[];
   totalDuration: number;
   audioUrl?: string;
+  mainVideoRef?: React.RefObject<HTMLVideoElement>;
+  timelineVideoRefs?: React.RefObject<HTMLVideoElement>[];
   onSeekSceneChange?: (sceneId: number) => void;
   onTimeUpdate?: (time: number) => void;
+  onPlayMainVideo?: () => void;
   isLoading?: boolean;
 }
 
@@ -33,8 +36,11 @@ export default function PlaybackControls({
   scenes,
   totalDuration,
   audioUrl,
+  mainVideoRef,
+  timelineVideoRefs,
   onSeekSceneChange,
   onTimeUpdate,
+  onPlayMainVideo,
   isLoading
 }: PlaybackControlsProps) {
   const [ isPlaying, setIsPlaying ] = useState(false);
@@ -68,19 +74,34 @@ export default function PlaybackControls({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [ audioUrl ]);
+  }, [ audioUrl, mainVideoRef ]);
 
+  // Handle user audio volume/mute
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = isMuted ? 0 : volume;
     }
   }, [ volume, isMuted ]);
 
+  // Handle user audio loop
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.loop = isLooping;
     }
   }, [ isLooping ]);
+
+  // Handle main video mute/audio source selection
+  useEffect(() => {
+    if (mainVideoRef?.current) {
+      if (audioUrl) {
+        // User audio provided: Mute intrinsic video audio
+        mainVideoRef.current.muted = true;
+      } else {
+        // No user audio: Unmute intrinsic video audio (assuming it's the source of truth for video sound)
+        mainVideoRef.current.muted = false;
+      }
+    }
+  }, [ audioUrl, mainVideoRef ]);
 
   const startPlayback = useCallback(() => {
     lastTimeRef.current = performance.now();
@@ -91,18 +112,28 @@ export default function PlaybackControls({
 
       setCurrentTime(prev => {
         const newTime = prev + delta;
+        let timeToSet = newTime;
+        let shouldStop = false;
+
         if (newTime >= totalDuration) {
           if (isLooping) {
+            timeToSet = 0;
             if (audioRef.current) {
               audioRef.current.currentTime = 0;
             }
-            return 0;
+            if (mainVideoRef?.current) {
+              mainVideoRef.current.currentTime = 0;
+            }
           } else {
-            setIsPlaying(false);
-            return totalDuration;
+            shouldStop = true;
           }
         }
-        return newTime;
+
+        if (shouldStop) {
+            setIsPlaying(false);
+            return totalDuration;
+        }
+        return timeToSet;
       });
 
       if (isPlaying) {
@@ -111,63 +142,105 @@ export default function PlaybackControls({
     };
 
     animationRef.current = requestAnimationFrame(animate);
-  }, [ totalDuration, isLooping, isPlaying ]);
+  }, [ totalDuration, isLooping, isPlaying, mainVideoRef ]);
 
   useEffect(() => {
     if (isPlaying) {
+      // Synchronize all media elements on play
       if (audioRef.current) {
         audioRef.current.currentTime = currentTime;
         audioRef.current.play().catch(() => { });
       }
+      if (mainVideoRef?.current) {
+        mainVideoRef.current.currentTime = currentTime;
+        mainVideoRef.current.play().catch(() => { });
+      }
+
       startPlayback();
     } else {
+      // Pause all media elements on pause
       if (audioRef.current) {
         audioRef.current.pause();
+      }
+      if (mainVideoRef?.current) {
+        mainVideoRef.current.pause();
       }
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     }
-  }, [ isPlaying, startPlayback ]);
+  }, [ isPlaying, startPlayback, currentTime, mainVideoRef ]);
 
+  // Update time for external consumers (like Timeline) and trigger scene change notification
   useEffect(() => {
     onTimeUpdate?.(currentTime);
+
+    // Seek all managed video elements (if they are not in a loop, they will react to currentTime change)
+    if (timelineVideoRefs) {
+        timelineVideoRefs.forEach(ref => {
+            if (ref.current) {
+                ref.current.currentTime = currentTime;
+            }
+        })
+    }
 
     if (playbackScene && playbackScene.id !== lastSceneIdRef.current) {
       lastSceneIdRef.current = playbackScene.id;
       onSeekSceneChange?.(playbackScene.id);
     }
-  }, [ currentTime, playbackScene, onSeekSceneChange, onTimeUpdate ]);
+  }, [ currentTime, playbackScene, onSeekSceneChange, onTimeUpdate, timelineVideoRefs ]);
 
   const handlePlayPause = () => {
+    if (onPlayMainVideo) {
+        onPlayMainVideo();
+    }
     setIsPlaying(!isPlaying);
   };
 
   const handleSeek = (value: number[]) => {
     const newTime = value[ 0 ];
     setCurrentTime(newTime);
+
+    // Seek custom audio
     if (audioRef.current) {
       audioRef.current.currentTime = newTime;
+    }
+
+    // Seek main video
+    if (mainVideoRef?.current) {
+      mainVideoRef.current.currentTime = newTime;
+    }
+
+    // Seek all timeline videos
+    if (timelineVideoRefs) {
+        timelineVideoRefs.forEach(ref => {
+            if (ref.current) {
+                ref.current.currentTime = newTime;
+            }
+        })
     }
   };
 
   const handleSkipBack = () => {
     const currentScene = getSceneAtTime(currentTime);
     if (!currentScene) {
-      setCurrentTime(0);
-      if (audioRef.current) audioRef.current.currentTime = 0;
+      const newTime = 0;
+      setCurrentTime(newTime);
+      if (audioRef.current) audioRef.current.currentTime = newTime;
+      if (mainVideoRef?.current) mainVideoRef.current.currentTime = newTime;
       return;
     }
 
     const currentIndex = scenes.findIndex(s => s.id === currentScene.id);
+    let newTime = 0;
     if (currentIndex > 0) {
       const prevScene = scenes[ currentIndex - 1 ];
-      setCurrentTime(prevScene.startTime);
-      if (audioRef.current) audioRef.current.currentTime = prevScene.startTime;
-    } else {
-      setCurrentTime(0);
-      if (audioRef.current) audioRef.current.currentTime = 0;
+      newTime = prevScene.startTime;
     }
+
+    setCurrentTime(newTime);
+    if (audioRef.current) audioRef.current.currentTime = newTime;
+    if (mainVideoRef?.current) mainVideoRef.current.currentTime = newTime;
   };
 
   const handleSkipForward = () => {
@@ -177,8 +250,10 @@ export default function PlaybackControls({
     const currentIndex = scenes.findIndex(s => s.id === currentScene.id);
     if (currentIndex < scenes.length - 1) {
       const nextScene = scenes[ currentIndex + 1 ];
-      setCurrentTime(nextScene.startTime);
-      if (audioRef.current) audioRef.current.currentTime = nextScene.startTime;
+      const newTime = nextScene.startTime;
+      setCurrentTime(newTime);
+      if (audioRef.current) audioRef.current.currentTime = newTime;
+      if (mainVideoRef?.current) mainVideoRef.current.currentTime = newTime;
     }
   };
 
@@ -187,6 +262,10 @@ export default function PlaybackControls({
     setVolume(newVolume);
     if (newVolume > 0 && isMuted) {
       setIsMuted(false);
+    }
+    // Also apply volume to intrinsic video audio if no user audio is present
+    if (!audioUrl && mainVideoRef?.current) {
+        mainVideoRef.current.volume = isMuted ? 0 : newVolume;
     }
   };
 

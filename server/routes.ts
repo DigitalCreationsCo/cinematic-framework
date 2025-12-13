@@ -177,7 +177,8 @@ export async function registerRoutes(
       delimiter: "/",
     });
 
-    const projects: string[] = ((apiResponse.prefixes ?? []) as string[]).map(prefix => prefix.replace(/\/$/, ""));
+    const excludeDirs = ["audio"]
+    const projects: string[] = ((apiResponse.prefixes ?? []) as string[]).map(prefix => prefix.replace(/\/$/, "")).filter(prefix => !excludeDirs.includes(prefix))
 
     res.json({ projects });
   });

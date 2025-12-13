@@ -3,6 +3,8 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { Storage } from "@google-cloud/storage";
+import * as dotenv from "dotenv";
+dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);

@@ -55,7 +55,7 @@ export function useAppData(projectId: string | null, shouldFetch: boolean = true
   };
 
   return {
-    data: data ? { ...data, projects: projectData?.projects || [] } : undefined,
+    data: projectData ? { ...data, projects: projectData?.projects || [] } : undefined,
     isLoading: isLoading || projectIsLoading,
     isError: error || projectError,
     refetchState: swrMutate,

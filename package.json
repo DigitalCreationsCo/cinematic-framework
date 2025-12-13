@@ -7,7 +7,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev": "NODE_ENV=development tsx server/index.ts",
+    "dev": "docker compose up",
     "build": "tsx script/build.ts",
     "watch": "tsc -watch",
     "start": "NODE_ENV=production node dist/index.cjs",

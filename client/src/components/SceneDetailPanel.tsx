@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Play, RefreshCw, Camera, Sun, Music, Users, MapPin, FileText } from "lucide-react";
+import { useRef, useEffect, useCallback, RefObject } from "react";
 import type { Scene, SceneStatus, Character, Location } from "@shared/pipeline-types";
 import StatusBadge from "./StatusBadge";
 import QualityEvaluationPanel from "./QualityEvaluationPanel";
@@ -15,9 +16,13 @@ interface SceneDetailPanelProps {
   status: SceneStatus;
   characters?: Character[];
   location?: Location;
+  currentTime: number;
+  isPlaying: boolean;
+  audioUrl?: string;
   onRegenerate?: () => void;
-  onPlayVideo?: () => void;
-  isLoading?: boolean; // Added isLoading prop
+  onPlayMainVideo?: () => void; // Renamed from onPlayVideo to match PlaybackControls
+  mainVideoRef?: RefObject<HTMLVideoElement>;
+  isLoading?: boolean;
 }
 
 export default function SceneDetailPanel({
@@ -25,11 +30,64 @@ export default function SceneDetailPanel({
   status,
   characters = [],
   location,
+  currentTime,
+  isPlaying,
+  audioUrl,
   onRegenerate,
-  onPlayVideo,
+  onPlayMainVideo,
+  mainVideoRef,
   isLoading = false
 }: SceneDetailPanelProps) {
   const hasVideo = !!scene.generatedVideo?.publicUri;
+
+  // Effect to sync time and handle intrinsic video audio muting based on global state/audioUrl
+  useEffect(() => {
+    if (mainVideoRef?.current) {
+      // 1. Time Synchronization
+      mainVideoRef.current.currentTime = currentTime;
+
+      // 2. Audio Muting logic: if user audio exists, mute local video audio.
+      if (audioUrl) {
+        mainVideoRef.current.muted = true;
+      } else {
+        mainVideoRef.current.muted = false;
+      }
+    }
+  }, [ currentTime, audioUrl, mainVideoRef ]);
+
+  // Effect to handle play/pause based on global state
+  useEffect(() => {
+    if (mainVideoRef?.current) {
+      if (isPlaying) {
+        mainVideoRef.current.play().catch(err => console.error("Error playing main video:", err));
+      } else {
+        mainVideoRef.current.pause();
+      }
+    }
+  }, [ isPlaying, mainVideoRef ]);
+
+  // Ensure video loads/reloads if scene changes (and thus src changes)
+  useEffect(() => {
+    if (mainVideoRef?.current) {
+      mainVideoRef.current.load();
+    }
+  }, [ scene.generatedVideo?.publicUri, mainVideoRef ]);
+
+  const handleLocalPlay = useCallback(() => {
+    if (mainVideoRef?.current) {
+      // If paused globally, press local play initiates global play sequence from current scene's start time
+      if (!isPlaying) {
+        // Seek to start of current scene to ensure correct start point for sequential play if time is off
+        mainVideoRef.current.currentTime = scene.startTime;
+        onPlayMainVideo?.(); // Triggers global play state change
+      } else {
+        // If already playing globally, just ensure the local video plays from current time if it paused locally
+        if (mainVideoRef.current.paused) {
+          mainVideoRef.current.play().catch(err => console.error("Error playing main video locally:", err));
+        }
+      }
+    }
+  }, [ isPlaying, onPlayMainVideo, scene.startTime, mainVideoRef ]);
 
   return (
     <div className="h-full flex flex-col" data-testid={ `panel-scene-detail-${scene.id}` }>
@@ -51,7 +109,7 @@ export default function SceneDetailPanel({
           { isLoading ? (
             <Skeleton className="h-8 w-16" />
           ) : hasVideo && (
-            <Button size="sm" onClick={ onPlayVideo } data-testid="button-play-video">
+            <Button size="sm" onClick={ handleLocalPlay } data-testid="button-play-video">
               <Play className="w-4 h-4 mr-1" />
               Play
             </Button>
@@ -81,8 +139,14 @@ export default function SceneDetailPanel({
           ) : hasVideo && (
             <Card>
               <CardContent className="p-3">
-                <video src={ scene.generatedVideo?.publicUri } preload="auto" controls={ true } playsInline={ true } className="aspect-video bg-muted rounded-md flex items-center justify-center">
-                </video>
+                <video
+                  ref={ mainVideoRef }
+                  src={ scene.generatedVideo?.publicUri }
+                  preload="auto"
+                  playsInline={ true }
+                  className="aspect-video bg-muted rounded-md flex items-center justify-center"
+                  controls={ false } // Custom controls used, disable native ones
+                />
               </CardContent>
             </Card>
           ) }
