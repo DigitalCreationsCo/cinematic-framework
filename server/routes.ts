@@ -3,10 +3,13 @@ import { type Server } from "http";
 import { PubSub } from "@google-cloud/pubsub";
 import { Command, PipelineEvent } from "../shared/pubsub-types";
 import { v4 as uuidv4 } from "uuid";
+import { Bucket } from "@google-cloud/storage";
+import { storage } from "./storage";
 
 export async function registerRoutes(
   httpServer: Server,
-  app: Express
+  app: Express,
+  bucket: Bucket,
 ): Promise<Server> {
 
   const pubsub = new PubSub({
@@ -18,7 +21,6 @@ export async function registerRoutes(
   const VIDEO_EVENTS_TOPIC_NAME = "video-events";
   const videoCommandsTopicPublisher = pubsub.topic(VIDEO_COMMANDS_TOPIC_NAME);
 
-  // Endpoint to start the pipeline
   app.post("/api/video/start", async (req: Request, res: Response) => {
     try {
       const { projectId, audioUrl, creativePrompt } = req.body;
@@ -134,6 +136,50 @@ export async function registerRoutes(
       console.error(`Failed to create SSE handler for projectId ${projectId}:`, error);
       res.status(500).send({ error: "Failed to establish event stream." });
     }
+  });
+
+  app.get("/api/state", async (req, res) => {
+    const [
+      metadata,
+      scenes,
+      characters,
+      locations,
+      metrics,
+      sceneStatuses,
+      messages,
+      projects,
+    ] = await Promise.all([
+      storage.getMetadata(),
+      storage.getScenes(),
+      storage.getCharacters(),
+      storage.getLocations(),
+      storage.getMetrics(),
+      storage.getSceneStatuses(),
+      storage.getMessages(),
+      storage.getProjects(),
+    ]);
+    res.json({
+      storyboardState: {
+        scenes,
+        characters,
+        locations,
+        metadata,
+      },
+      metrics,
+      sceneStatuses,
+      messages,
+      projects,
+    });
+  });
+
+  app.get("/api/projects", async (req, res) => {
+    const [ , , apiResponse ]: any = await bucket.getFiles({
+      delimiter: "/",
+    });
+
+    const projects: string[] = ((apiResponse.prefixes ?? []) as string[]).map(prefix => prefix.replace(/\/$/, ""));
+
+    res.json({ projects });
   });
 
   return httpServer;

@@ -11,7 +11,11 @@
     "build": "tsx script/build.ts",
     "watch": "tsc -watch",
     "start": "NODE_ENV=production node dist/index.cjs",
+    "pipeline:start": "ts-node src/graph.ts",
     "check": "tsc",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "test:watch": "vitest",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {

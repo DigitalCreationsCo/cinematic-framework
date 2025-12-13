@@ -2,9 +2,18 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { Storage } from "@google-cloud/storage";
 
 const app = express();
 const httpServer = createServer(app);
+
+const gcpProjectId = process.env.GCP_PROJECT_ID;
+const bucketName = process.env.GCP_BUCKET_NAME;
+
+if (!gcpProjectId) throw Error("A projectId was not provided");
+if (!bucketName) throw Error("A bucket name was not provided");
+
+const bucket = new Storage({ projectId: gcpProjectId }).bucket(bucketName);
 
 declare module "http" {
   interface IncomingMessage {
@@ -60,7 +69,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await registerRoutes(httpServer, app);
+  await registerRoutes(httpServer, app, bucket);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
