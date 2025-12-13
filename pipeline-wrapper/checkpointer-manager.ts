@@ -1,6 +1,7 @@
 import { RunnableConfig } from "@langchain/core/runnables";
 import { GraphState } from "../pipeline/types"; 
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
+import { Checkpoint } from "@langchain/langgraph";
 
 /**
  * Manages loading and saving graph states (checkpoints) to PostgreSQL using LangGraph's Postgres handler.
@@ -40,15 +41,14 @@ export class CheckpointerManager {
    * Loads the latest state for a given run ID.
    * @param runId The unique identifier for the pipeline run.
    */
-  public async loadCheckpoint(runId: string): Promise<GraphState> {
+  public async loadCheckpoint(config: RunnableConfig): Promise<Checkpoint | undefined> {
     if (!this.checkpointer) {
       throw new Error("CheckpointerManager not initialized.");
     }
 
-    const config: RunnableConfig<GraphState> = { runId: runId };
     const loadedState = await this.checkpointer.get(config);
 
-    return loadedState?.channel_values as GraphState;
+    return loadedState;
   }
 
   /**
@@ -56,16 +56,15 @@ export class CheckpointerManager {
    * @param runId The unique identifier for the pipeline run.
    * @param state The current graph state.
    */
-  public async saveCheckpoint(runId: string, state: GraphState): Promise<void> {
+  public async saveCheckpoint(config: RunnableConfig, checkpoint: Checkpoint): Promise<void> {
     if (!this.checkpointer) {
       throw new Error("CheckpointerManager not initialized.");
     }
 
-    const config: RunnableConfig = { runId: runId };
     const existingCheckpoint = await this.checkpointer.get(config);
     console.debug('Existing checkpoint:', existingCheckpoint);
 
-    await this.checkpointer.put(config, existingCheckpoint!, {} as any, {});
+    await this.checkpointer.put(config, { ...existingCheckpoint, ...checkpoint }, {} as any, {});
   }
 }
 

@@ -1,5 +1,5 @@
 import { PubSub } from "@google-cloud/pubsub";
-import { Command, PipelineEvent, PubSubMessage } from "../shared/pubsub-types";
+import { Command, PipelineEvent } from "../shared/pubsub-types";
 import { GraphState, InitialGraphState } from "../shared/pipeline-types";
 import { CinematicVideoWorkflow } from "../pipeline/graph";
 import { checkpointerManager } from "./checkpointer-manager";
@@ -101,11 +101,11 @@ async function handleRequestFullStateCommand(command: Extract<Command, { type: "
     }
 
     const checkpoint = await checkpointerManager.loadCheckpoint(runnableConfig);
-    if (checkpoint && checkpoint.state) {
+    if (checkpoint && checkpoint.channel_values) {
         await publishPipelineEvent({
             type: "FULL_STATE",
             projectId,
-            payload: { state: JSON.parse(checkpoint.state) as GraphState },
+            payload: { state: checkpoint.channel_values as GraphState },
             timestamp: new Date().toISOString(),
         });
     } else {
@@ -137,7 +137,7 @@ async function handleRetrySceneCommand(command: Extract<Command, { type: "RETRY_
         return;
     }
 
-    let currentState = JSON.parse(existingCheckpoint.state) as GraphState;
+    let currentState = existingCheckpoint.channel_values as GraphState;
 
     // Modify the state to retry the specified scene
     // This typically means setting the currentSceneIndex back to the scene to retry
@@ -157,7 +157,7 @@ async function handleRetrySceneCommand(command: Extract<Command, { type: "RETRY_
                     }
                     return scene;
                 })
-            } : undefined,
+            } : undefined as any,
         };
 
         // Save the modified state to the checkpointer
@@ -167,7 +167,7 @@ async function handleRetrySceneCommand(command: Extract<Command, { type: "RETRY_
 
         // LangGraph's checkpointer.put expects the *current* state of the graph. The LangGraph `stream` method will handle saving updates implicitly.
         // So, we just need to ensure the checkpoint is updated, and then restart the stream.
-        await checkpointer.put(runnableConfig, { ...existingCheckpoint, state: JSON.stringify(currentState) });
+        await checkpointer.put(runnableConfig, { ...existingCheckpoint, channel_values: currentState }, {} as any, {});
 
         console.log(`Pipeline for projectId: ${projectId} restarting from scene ${payload.sceneId}.`);
         const stream = await compiledGraph.stream(null, runnableConfig); // Start from null input to resume from checkpoint

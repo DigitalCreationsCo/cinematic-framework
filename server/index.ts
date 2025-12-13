@@ -13,6 +13,7 @@ const gcpProjectId = process.env.GCP_PROJECT_ID;
 const bucketName = process.env.GCP_BUCKET_NAME;
 
 if (!gcpProjectId) throw Error("A projectId was not provided");
+
 if (!bucketName) throw Error("A bucket name was not provided");
 
 const bucket = new Storage({ projectId: gcpProjectId }).bucket(bucketName);

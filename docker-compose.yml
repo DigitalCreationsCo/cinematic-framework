@@ -1,21 +1,9 @@
-version: '3.8'
-
 services:
   pubsub-emulator:
     image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
     command: gcloud beta emulators pubsub start --project=test-project --host-port=0.0.0.0:8085
     ports:
       - "8085:8085"
-
-  postgres-db:
-    image: postgres:16-alpine
-    environment:
-      # This will likely need to be replaced by the remote connection details in a real setup, 
-      # but we define it here for dependency tracking.
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=example
-      - POSTGRES_DB=cinematiccanvas
-    restart: always
 
   api-server:
     build:
@@ -25,12 +13,13 @@ services:
       - "8000:8000"
     environment:
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
-      - PUBSUB_PROJECT_ID=test-project
-      - POSTGRES_URL=${POSTGRES_URL} # Still need DB URL for API access if it uses it, or ensure pipeline worker is the primary user. Keeping for consistency, assuming API interacts with DB somehow.
+      - PUBSUB_PROJECT_ID=${PUBSUB_PROJECT_ID}
+      - POSTGRES_URL=${POSTGRES_URL}
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GCP_BUCKET_NAME=${GCP_BUCKET_NAME}
       - PORT=8000
     depends_on:
       - pubsub-emulator
-      - postgres-db
 
   pipeline-worker:
     build:
@@ -38,13 +27,24 @@ services:
       dockerfile: pipeline-wrapper/Dockerfile
     environment:
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
-      - PUBSUB_PROJECT_ID=test-project
+      - PUBSUB_PROJECT_ID=${PUBSUB_PROJECT_ID}
       - POSTGRES_URL=${POSTGRES_URL}
       - GCP_PROJECT_ID=${GCP_PROJECT_ID}
       - GCP_BUCKET_NAME=${GCP_BUCKET_NAME}
+      - ENABLE_QUALITY_CONTROL=true
+      - ACCEPT_THRESHOLD="0.90"
+      - MINOR_ISSUE_THRESHOLD="0.85"
+      - MAJOR_ISSUE_THRESHOLD="0.75"
+      - FAILTHRESHOLD="0.75"
+      - MAX_RETRIES="3"
+      - SAFETY_RETRIES="2"
+      - LLM_PROVIDER="google"
+      - TEXT_MODEL_NAME="gemini-3-pro-preview"
+      - IMAGE_MODEL_NAME="gemini-2.5-flash-image"
+      - VIDEO_MODEL_NAME="veo-2.0-generate-exp"
+      - LOCAL_AUDIO_PATH="audio/Day.mp3"
     depends_on:
       - pubsub-emulator
-      - postgres-db
 
   client:
     build:

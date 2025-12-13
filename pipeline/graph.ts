@@ -599,6 +599,6 @@ async function main() {
   }
 }
 
-if (require.main === module) {
+if (import.meta.main) {
   main().catch(console.error);
 }
