@@ -39,13 +39,16 @@ export async function registerRoutes(
   app.post("/api/video/start", async (req: Request, res: Response) => {
     try {
       const { projectId, audioUrl, creativePrompt } = req.body;
+      console.log(`Received START_PIPELINE command for projectId: ${projectId}`);
       if (!projectId || !creativePrompt) {
+        console.error("Validation error: projectId or creativePrompt missing.", { projectId, creativePrompt });
         return res.status(400).json({ error: "projectId and creativePrompt are required." });
       }
       await publishCommand({ type: "START_PIPELINE", projectId, payload: { audioUrl, creativePrompt } });
+      console.log(`Published START_PIPELINE command for projectId: ${projectId} to PubSub.`);
       res.status(202).json({ message: "Pipeline start command issued.", projectId });
     } catch (error) {
-      console.error("Error publishing start command:", error);
+      console.error("Error publishing START_PIPELINE command:", error);
       res.status(500).json({ error: "Failed to issue start command." });
     }
   });
@@ -91,11 +94,11 @@ export async function registerRoutes(
       const { projectId } = req.params;
       await publishCommand({ type: "REQUEST_FULL_STATE", projectId });
       res.status(202).json({ message: "Full state request command issued.", projectId });
-        } catch (error) {
-        console.error("Error publishing request state command:", error);
-        res.status(500).json({ error: "Failed to issue request state command." });
-      }
-    });
+    } catch (error) {
+      console.error("Error publishing request state command:", error);
+      res.status(500).json({ error: "Failed to issue request state command." });
+    }
+  });
 
   // SSE endpoint for a specific project
   app.get("/api/events/:projectId", async (req: Request, res: Response) => {
@@ -153,7 +156,7 @@ export async function registerRoutes(
     const excludeDirs = [ "audio" ];
     const projects: string[] = ((apiResponse.prefixes ?? []) as string[]).map(prefix => prefix.replace(/\/$/, "")).filter(prefix => !excludeDirs.includes(prefix));
 
-    res.json(projects.map(p => ({ id: p, createdAt: '...' })));
+    res.json({ projects });
   });
 
   return httpServer;

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CompositionalAgent } from './compositional-agent';
 import { GCPStorageManager } from '../storage-manager';
-import { Storyboard } from '../types';
+import { Storyboard } from '../../shared/pipeline-types';
 import { LlmController, GoogleProvider } from '../llm/controller';
 import { GoogleGenAI } from '@google/genai';
 
@@ -287,8 +287,8 @@ describe('CompositionalAgent', () => {
                 creativePrompt: creativePrompt,
                 videoModel: 'veo-2.0-generate-exp',
                 imageModel: 'imagen-3',
-                textModel: 'gemini-1.5-flash',
-            } as Storyboard['metadata'],
+                textModel: 'gemini-2.5-flash',
+            } as Storyboard[ 'metadata' ],
             characters: [],
             locations: [],
             scenes: [

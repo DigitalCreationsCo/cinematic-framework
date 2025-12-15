@@ -62,8 +62,18 @@ export type PipelineEvent =
     | SceneSkippedEvent
     | WorkflowCompletedEvent
     | WorkflowFailedEvent
-    | PipelineStatusEvent;
+    | PipelineStatusEvent
+    | LogEvent;
 
+
+export type LogEvent = PubSubMessage<
+    "LOG",
+    {
+        level: "info" | "warning" | "error" | "success";
+        message: string;
+        sceneId?: number;
+    }
+>;
 
 export type WorkflowStartedEvent = PubSubMessage<
     "WORKFLOW_STARTED",

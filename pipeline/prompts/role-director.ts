@@ -1,6 +1,6 @@
 export const promptVersion = "3.0.0-director";
 
-import { AudioSegment } from "../types";
+import { AudioSegment } from "../../shared/pipeline-types";
 import { buildSafetyGuidelinesPrompt } from "./safety-instructions";
 
 /**
@@ -16,7 +16,7 @@ export const buildDirectorVisionPrompt = (
 ) => {
   const audioContext = audioSegments
     ? `Musical Structure: ${audioSegments.length} segments
-Mood Range: ${audioSegments[0]?.mood || "N/A"} → ${audioSegments[audioSegments.length - 1]?.mood || "N/A"}
+Mood Range: ${audioSegments[ 0 ]?.mood || "N/A"} → ${audioSegments[ audioSegments.length - 1 ]?.mood || "N/A"}
 Duration: ${totalDuration || 0}s`
     : "No audio provided - establish pacing based on creative intent";
 

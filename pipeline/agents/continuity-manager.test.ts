@@ -4,7 +4,7 @@ import { GCPStorageManager } from '../storage-manager';
 import { FrameCompositionAgent } from './frame-composition-agent';
 import { QualityCheckAgent } from './quality-check-agent';
 import { LlmController } from '../llm/controller';
-import { Scene, Storyboard } from '../types';
+import { Scene, Storyboard } from '../shared/pipeline-types';
 
 // Mock dependencies
 const mockGenerateContent = vi.fn();

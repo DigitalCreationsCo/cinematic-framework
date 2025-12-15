@@ -2,7 +2,7 @@
  * Comprehensive retry logging utility for quality control processes
  */
 
-import { QualityEvaluationResult, PromptCorrection } from "../types";
+import { QualityEvaluationResult, PromptCorrection } from "../../shared/pipeline-types";
 
 export interface RetryContext {
   type: 'frame' | 'scene';
@@ -45,7 +45,7 @@ export class RetryLogger {
 
     // Log dimension-by-dimension breakdown
     console.log(`   📋 Dimension Breakdown:`);
-    Object.entries(evaluation.scores).forEach(([dimension, score]) => {
+    Object.entries(evaluation.scores).forEach(([ dimension, score ]) => {
       const dimIcon = this.getRatingIcon(score.rating);
       const weight = `(${(score.weight * 100).toFixed(0)}% weight)`;
       console.log(`      ${dimIcon} ${this.formatDimensionName(dimension)}: ${score.rating} ${weight}`);
@@ -213,8 +213,8 @@ export class RetryLogger {
     generationNumber: number
   ): void {
     const direction = trendSlope > 0.01 ? 'Improving ↗️' :
-                     trendSlope < -0.01 ? 'Worsening ↘️' :
-                     'Stable →';
+      trendSlope < -0.01 ? 'Worsening ↘️' :
+        'Stable →';
 
     console.log(`\n📈 LEARNING REPORT (Generation ${generationNumber}):`);
     console.log(`   Quality Trend Slope: ${trendSlope.toFixed(3)} (${direction})`);

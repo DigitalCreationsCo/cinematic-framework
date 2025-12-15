@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Play, Pause, RefreshCw, Camera, Sun, Music, Users, MapPin, FileText } from "lucide-react";
-import { useRef, useState, useEffect, useCallback, RefObject, memo } from "react";
+import { useRef, useState, useEffect, useCallback, RefObject, memo, useMemo } from "react";
 import type { Scene, SceneStatus, Character, Location } from "@shared/pipeline-types";
 import StatusBadge from "./StatusBadge";
 import QualityEvaluationPanel from "./QualityEvaluationPanel";
@@ -42,8 +42,8 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
 }: SceneDetailPanelProps) {
   const hasVideo = !!scene.generatedVideo?.publicUri;
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [isLocalPlaying, setIsLocalPlaying] = useState(false);
-  const [activePlayer, setActivePlayer] = useState<'local' | 'main'>('local');
+  const [ isLocalPlaying, setIsLocalPlaying ] = useState(false);
+  const [ activePlayer, setActivePlayer ] = useState<'local' | 'main'>('local');
 
   // Switch to main player if global playback starts or time changes (seeking)
   useEffect(() => {
@@ -53,7 +53,7 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
       // We check if currentPlaybackTime actually changed to trigger this via dependency array.
       // However, we only want to switch to main if we are not already main?
       // Or if we are playing locally and then global time changes (seek), we switch.
-      
+
       // If global is playing, definitely show main
       if (isGlobalPlaying) {
         setActivePlayer('main');
@@ -62,22 +62,22 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
       // Since we can't easily distinguish "time changed due to play" vs "time changed due to seek"
       // without looking at isPlaying, but isPlaying covers the play case.
       // This useEffect runs on isGlobalPlaying change OR currentPlaybackTime change.
-      
+
       // If we are just seeking (isGlobalPlaying is false), we want to show main.
       // But we need to avoid this firing on mount/initial render if we want to default to local?
       // Actually, if we seek, we want to see it.
-      
+
       if (!isLocalPlaying && mainVideoRef?.current) {
-          setActivePlayer('main');
+        setActivePlayer('main');
       }
     }
-    
+
     // If global playing started, ensure local is paused
     if (isGlobalPlaying && videoRef.current && !videoRef.current.paused) {
       videoRef.current.pause();
       setIsLocalPlaying(false);
     }
-  }, [isGlobalPlaying, currentPlaybackTime, isLocalPlaying, mainVideoRef]);
+  }, [ isGlobalPlaying, currentPlaybackTime, isLocalPlaying, mainVideoRef ]);
 
   // Ensure video loads/reloads if scene changes (and thus src changes)
   useEffect(() => {
@@ -101,9 +101,9 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
         videoRef.current.pause();
       }
     }
-  }, [onGlobalPause]);
+  }, [ onGlobalPause ]);
 
-  const showMainVideo = activePlayer === 'main' && mainVideoRef;
+  const showMainVideo = useMemo(() => activePlayer === 'main' && mainVideoRef && mainVideoSrc, [activePlayer, mainVideoRef, mainVideoSrc]);
 
   return (
     <div className="h-full flex flex-col" data-testid={ `panel-scene-detail-${scene.id}` }>
@@ -155,7 +155,7 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
           ) : (hasVideo || showMainVideo) && (
             <Card>
               <CardContent className="p-3 relative">
-                {/* Local Video */}
+                {/* Local Video */ }
                 { hasVideo && (
                   <video
                     ref={ videoRef }
@@ -169,16 +169,16 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
                     onEnded={ () => setIsLocalPlaying(false) }
                   />
                 ) }
-                
-                {/* Main Video (Global Playback) */}
-                { mainVideoRef && (
+
+                {/* Main Video (Global Playback) */ }
+                  { showMainVideo && (
                   <video
                     ref={ mainVideoRef }
                     src={ mainVideoSrc }
                     preload="auto"
                     playsInline={ true }
                     className={ `aspect-video bg-muted rounded-md flex items-center justify-center ${showMainVideo ? 'block' : 'hidden'}` }
-                    controls={ false }
+                    controls={ true }
                     onEnded={ onMainVideoEnded }
                   />
                 ) }

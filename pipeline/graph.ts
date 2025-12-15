@@ -100,7 +100,7 @@ export class CinematicVideoWorkflow {
   private async performIncrementalStitching(
     storyboardState: Storyboard,
     audioGcsUri: string | undefined
-  ): Promise<string | undefined> {
+  ) {
     const videoPaths = storyboardState.scenes
       .map(s => s.generatedVideo?.storageUri)
       .filter((url): url is string => !!url);
@@ -127,7 +127,7 @@ export class CinematicVideoWorkflow {
         storyboard: null,
         storyboardState: null,
         currentSceneIndex: null,
-        renderedVideoUrl: null,
+        renderedVideo: null,
         errors: null,
         generationRules: null,
         refinedRules: null,
@@ -391,9 +391,9 @@ export class CinematicVideoWorkflow {
           }
         }
 
-        let renderedVideoUrl = state.renderedVideoUrl;
+        let renderedVideo = state.renderedVideo;
         if (shouldStitch) {
-          renderedVideoUrl = await this.performIncrementalStitching(
+          renderedVideo = await this.performIncrementalStitching(
             updatedStoryboardState,
             state.audioGcsUri
           );
@@ -403,7 +403,7 @@ export class CinematicVideoWorkflow {
           ...state,
           currentSceneIndex: state.currentSceneIndex + 1,
           storyboardState: updatedStoryboardState,
-          renderedVideoUrl: renderedVideoUrl || state.renderedVideoUrl,
+          renderedVideo: renderedVideo || state.renderedVideo,
         };
       }
 
@@ -483,7 +483,7 @@ export class CinematicVideoWorkflow {
 
       currentMetrics.sceneMetrics.push(sceneMetric);
 
-      const renderedVideoUrl = await this.performIncrementalStitching(
+      const renderedVideo = await this.performIncrementalStitching(
         updatedStoryboardState,
         state.audioGcsUri
       );
@@ -506,7 +506,7 @@ export class CinematicVideoWorkflow {
         generationRules: newGenerationRules,
         refinedRules: refinedRules,
         metrics: currentMetrics,
-        renderedVideoUrl: renderedVideoUrl || state.renderedVideoUrl,
+        renderedVideo: renderedVideo || state.renderedVideo,
       };
     });
 
@@ -525,13 +525,13 @@ export class CinematicVideoWorkflow {
 
       try {
         // If audio is available, stitch with audio; otherwise, stitch without audio
-        const renderedVideoUrl = state.audioGcsUri
+        const renderedVideo = state.audioGcsUri
           ? await this.sceneAgent.stitchScenes(videoPaths, state.audioGcsUri)
           : await this.sceneAgent.stitchScenesWithoutAudio(videoPaths);
 
         return {
           ...state,
-          renderedVideoUrl
+          renderedVideo
         };
       } catch (error) {
         console.error("   Failed to render video:", error);

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useCallback, useMemo, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -25,8 +25,6 @@ import type {
   Location,
   SceneStatus,
   PipelineMessage,
-  WorkflowMetrics,
-  Storyboard
 } from "@shared/pipeline-types";
 import PipelineHeader from "@/components/PipelineHeader";
 import SceneCard from "@/components/SceneCard";
@@ -39,17 +37,18 @@ import LocationCard from "@/components/LocationCard";
 import MetricCard from "@/components/MetricCard";
 import { usePipelineEvents } from "@/hooks/use-pipeline-events";
 import { useStore } from "@/lib/store";
-import { startPipeline, stopPipeline } from "@/lib/api";
+import { resumePipeline, startPipeline, stopPipeline } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Dashboard() {
   const {
     isDark,
     pipelineStatus,
+    pipelineState,
+    isLoading,
+    error,
     selectedSceneId,
     activeTab,
-    audioUrl,
-    creativePrompt,
     setIsDark,
     setPipelineStatus,
     setSelectedSceneId,
@@ -60,9 +59,17 @@ export default function Dashboard() {
     selectedProject,
     isPlaying,
     setIsPlaying,
+    messages,
+    addMessage,
+    clearMessages,
+    removeMessage,
   } = useStore();
 
-  const { connected: sseConnected, pipelineState, isLoading, error } = usePipelineEvents({ projectId: selectedProject || null });
+  const audioUrl = pipelineState?.audioGcsUri;
+  const creativePrompt = pipelineState?.creativePrompt;
+
+  usePipelineEvents({ projectId: selectedProject || null });
+
   const mainVideoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -70,34 +77,6 @@ export default function Dashboard() {
       setPipelineStatus(pipelineState.currentSceneIndex < (pipelineState.storyboardState?.scenes.length || 0) ? "generating" : "complete");
     }
   }, [ pipelineState, setPipelineStatus ]);
-
-  const [ messages, setMessages ] = useState<PipelineMessage[]>([]);
-
-  // useEffect(() => {
-  //   if (data?.messages) {
-  //     setMessages(data.messages);
-  //   }
-  // }, [ data ]);
-
-  useEffect(() => {
-    if (pipelineState?.errors && pipelineState.errors.length > messages.filter(m => m.type === "error").length) {
-      const newError = pipelineState.errors[ pipelineState.errors.length - 1 ];
-      setMessages(prev => [ { id: Date.now().toString(), type: "error", message: `Pipeline Error: ${newError}`, timestamp: new Date() }, ...prev ]);
-    } else if (pipelineState?.storyboardState && pipelineState.currentSceneIndex > 0 && pipelineState.currentSceneIndex > messages.filter(m => m.type === "info" && m.message.includes("Processing Scene")).length) {
-      const currentScene = pipelineState.storyboardState.scenes[ pipelineState.currentSceneIndex - 1 ];
-      if (currentScene) {
-        setMessages(prev => [ {
-          id: Date.now().toString(),
-          type: "info",
-          message: `Processing Scene ${currentScene.id} - ${currentScene.description.substring(0, 50)}...`,
-          timestamp: new Date(),
-          sceneId: currentScene.id,
-        }, ...prev ]);
-      }
-    } else if (pipelineState?.renderedVideoUrl && !messages.some(m => m.message.includes("Video generation complete"))) {
-      setMessages(prev => [ { id: Date.now().toString(), type: "success", message: "Video generation complete!", timestamp: new Date() }, ...prev ]);
-    }
-  }, [ pipelineState, messages ]);
 
   useEffect(() => {
     if (isDark) {
@@ -140,12 +119,12 @@ export default function Dashboard() {
   }, [ currentScenes, currentPlaybackTime ]);
 
   const currentVideoSrc = useMemo(() => {
-    if (pipelineState?.renderedVideoUrl) return pipelineState.renderedVideoUrl;
+    if (pipelineState?.renderedVideo?.publicUri) return pipelineState.renderedVideo.publicUri;
     return activeScene?.generatedVideo?.publicUri;
-  }, [ pipelineState, activeScene ]);
+  }, [ pipelineState?.renderedVideo, activeScene ]);
 
   const playbackOffset = useMemo(() => {
-    if (pipelineState?.renderedVideoUrl) return 0;
+    if (pipelineState?.renderedVideo) return 0;
     return activeScene?.startTime || 0;
   }, [ pipelineState, activeScene ]);
 
@@ -160,10 +139,10 @@ export default function Dashboard() {
       await startPipeline({ projectId: selectedProject, audioUrl, creativePrompt });
     } catch (error) {
       console.error("Failed to start pipeline:", error);
-      setMessages(prev => [ { id: Date.now().toString(), type: "error", message: `Failed to start pipeline: ${(error as Error).message}`, timestamp: new Date() }, ...prev ]);
+      addMessage({ id: Date.now().toString(), type: "error", message: `Failed to start pipeline: ${(error as Error).message}`, timestamp: new Date() });
       setPipelineStatus("error");
     }
-  }, [ selectedProject, audioUrl, creativePrompt, setPipelineStatus ]);
+  }, [ selectedProject, audioUrl, creativePrompt, setPipelineStatus, addMessage ]);
 
   const handleStopPipeline = useCallback(async () => {
     if (!selectedProject) {
@@ -173,24 +152,28 @@ export default function Dashboard() {
     try {
       await stopPipeline({ projectId: selectedProject });
       setPipelineStatus("idle");
-      setMessages(prev => [ { id: Date.now().toString(), type: "info", message: "Pipeline stop command issued.", timestamp: new Date() }, ...prev ]);
+      addMessage({ id: Date.now().toString(), type: "info", message: "Pipeline stop command issued.", timestamp: new Date() });
     } catch (error) {
       console.error("Failed to stop pipeline:", error);
-      setMessages(prev => [ { id: Date.now().toString(), type: "error", message: `Failed to stop pipeline: ${(error as Error).message}`, timestamp: new Date() }, ...prev ]);
+      addMessage({ id: Date.now().toString(), type: "error", message: `Failed to stop pipeline: ${(error as Error).message}`, timestamp: new Date() });
     }
-  }, [ selectedProject, setPipelineStatus ]);
+  }, [ selectedProject, setPipelineStatus, addMessage ]);
+
+  const handleResume = async () => {
+    if (!selectedProject) return;
+    await resumePipeline({ projectId: selectedProject });
+  };
 
   const handleResetDashboard = useCallback(() => {
     resetDashboard();
-    setMessages([]);
-  }, [ resetDashboard ]);
+    clearMessages();
+  }, [ resetDashboard, clearMessages ]);
 
-  const handleToggleTheme = useCallback(() => setIsDark(!isDark), [ isDark, setIsDark ]);
-  const handlePause = useCallback(() => setPipelineStatus("idle"), [ setPipelineStatus ]);
+  const handlePause = useCallback(() => setPipelineStatus("paused"), [ setPipelineStatus ]);
   const handleDismissMessage = useCallback((id: string) => {
-    setMessages((prev: PipelineMessage[]) => prev.filter(m => m.id !== id));
-  }, []);
-  const handleClearMessages = useCallback(() => setMessages([]), []);
+    removeMessage(id);
+  }, [ removeMessage ]);
+  const handleClearMessages = useCallback(() => clearMessages(), [ clearMessages ]);
   const handleRegenerateScene = useCallback(() => {
     console.log("Regenerate scene", selectedSceneId);
   }, [ selectedSceneId ]);
@@ -412,15 +395,11 @@ export default function Dashboard() {
     <div className="h-screen flex flex-col bg-background">
       <PipelineHeader
         title={ currentMetadata?.title || "Loading..." }
-        status={ pipelineStatus }
-        connected={ sseConnected }
-        progress={ { current: completedScenes, total: currentScenes.length } }
-        isDark={ isDark }
-        onToggleTheme={ handleToggleTheme }
-        onStart={ handleStartPipeline }
+        handleStart={ handleStartPipeline }
+        handleStop={ handleStopPipeline }
+        handleResume={ handleResume }
         onPause={ handlePause }
-        onStop={ handleStopPipeline }
-        onReset={ handleResetDashboard }
+        handleResetDashboard={ handleResetDashboard }
       />
 
       <div className="flex-1 overflow-hidden">
@@ -441,6 +420,7 @@ export default function Dashboard() {
                   scenes={ currentScenes }
                   totalDuration={ currentMetadata?.duration || 0 }
                   audioUrl={ audioUrl }
+                  videoSrc={ currentVideoSrc }
                   mainVideoRef={ mainVideoRef }
                   playbackOffset={ playbackOffset }
                   onSeekSceneChange={ setSelectedSceneId }
@@ -510,7 +490,7 @@ export default function Dashboard() {
                 onMainVideoEnded={ () => {
                   // Only auto-stop from video event if we're playing the final render
                   // Otherwise PlaybackControls manages the timeline
-                  if (pipelineState?.renderedVideoUrl) {
+                  if (pipelineState?.renderedVideo) {
                     setIsPlaying(false);
                   }
                 } }

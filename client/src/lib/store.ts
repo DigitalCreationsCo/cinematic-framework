@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { GraphState, Scene, PipelineStatus } from '@shared/pipeline-types';
+import { GraphState, Scene, PipelineStatus, PipelineMessage } from '@shared/pipeline-types';
 import { immer } from 'zustand/middleware/immer';
 
 type ConnectionStatus = "connected" | "disconnected" | "connecting";
@@ -10,6 +10,7 @@ interface AppState {
   pipelineState: GraphState | null;
   pipelineStatus: PipelineStatus;
   connectionStatus: ConnectionStatus;
+  messages: PipelineMessage[];
   isHydrated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -29,6 +30,9 @@ interface AppState {
   setIsHydrated: (hydrated: boolean) => void;
   setIsLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  addMessage: (message: PipelineMessage) => void;
+  clearMessages: () => void;
+  removeMessage: (id: string) => void;
 
   updateScene: (sceneId: number, updates: Partial<Scene & { status?: string; }>) => void;
 
@@ -47,6 +51,7 @@ export const useStore = create<AppState>()(immer((set) => ({
   pipelineState: null,
   pipelineStatus: "idle",
   connectionStatus: "disconnected",
+  messages: [],
   isHydrated: false,
   isLoading: false,
   error: null,
@@ -59,13 +64,16 @@ export const useStore = create<AppState>()(immer((set) => ({
   activeTab: "scenes",
 
   // Actions
-  setSelectedProject: (projectId) => set({ selectedProject: projectId, pipelineState: null, isHydrated: false, isLoading: false, error: null, pipelineStatus: 'idle' }),
+  setSelectedProject: (projectId) => set({ selectedProject: projectId, pipelineState: null, isHydrated: false, isLoading: false, error: null, pipelineStatus: 'idle', messages: [] }),
   setPipelineState: (state) => set({ pipelineState: state }),
   setPipelineStatus: (status) => set({ pipelineStatus: status }),
   setConnectionStatus: (status) => set({ connectionStatus: status }),
   setIsHydrated: (hydrated) => set({ isHydrated: hydrated }),
   setIsLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error: error }),
+  addMessage: (message) => set((state) => { state.messages.unshift(message); }),
+  clearMessages: () => set({ messages: [] }),
+  removeMessage: (id) => set((state) => { state.messages = state.messages.filter(m => m.id !== id); }),
 
   updateScene: (sceneId, updates) => set((state) => {
     if (state.pipelineState?.storyboardState?.scenes) {

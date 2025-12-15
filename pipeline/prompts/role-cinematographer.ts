@@ -1,6 +1,6 @@
 export const promptVersion = "3.0.0-cinematographer";
 
-import { Scene } from "../types";
+import { Scene } from "../../shared/pipeline-types";
 
 /**
  * CINEMATOGRAPHER - Shot Composition & Framing
@@ -89,8 +89,7 @@ Look Room: [Space in direction of subject's gaze or motion]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${framePosition === "start" ? "START FRAME" : "END FRAME"} SPECIFIC:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${
-  framePosition === "start"
+${framePosition === "start"
     ? `- Subject positioning for action INITIATION
 - Clear staging for movement to BEGIN
 - Anticipatory pose: weight forward, eyes directed toward action
@@ -99,7 +98,7 @@ ${
 - Resolved pose: weight settled, action finished
 - Body language showing arrived state
 - Clear staging for transition to next scene`
-}
+  }
 
 CONSTRAINT: Avoid mid-motion awkwardness. Keyframes show clear before/after states, not transitional moments.
 

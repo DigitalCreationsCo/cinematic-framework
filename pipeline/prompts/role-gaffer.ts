@@ -1,6 +1,6 @@
 export const promptVersion = "3.0.0-gaffer";
 
-import { Scene, Location } from "../types";
+import { Scene, Location } from "../../shared/pipeline-types";
 
 /**
  * GAFFER - Lighting Design
@@ -81,8 +81,7 @@ ATMOSPHERE:
 - Light Beams: [Visible / None]
 - Practical Lights: [List any visible light sources in frame]
 
-${
-  scene.id > 1
+${scene.id > 1
     ? `
 CONTINUITY FROM PREVIOUS SCENE:
 - Previous lighting must match UNLESS location/time changed
@@ -90,7 +89,7 @@ CONTINUITY FROM PREVIOUS SCENE:
 - If time passed: adjust intensity/color temperature appropriately
 `
     : ""
-}
+  }
 
 CONSTRAINT: Every light must have a motivated source. No unmotivated lighting.
 

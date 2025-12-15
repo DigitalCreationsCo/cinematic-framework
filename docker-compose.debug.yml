@@ -20,17 +20,17 @@ services:
       - GCP_PROJECT_ID=${GCP_PROJECT_ID}
       - GCP_BUCKET_NAME=${GCP_BUCKET_NAME}
       - ENABLE_QUALITY_CONTROL=true
-      - ACCEPT_THRESHOLD="0.90"
-      - MINOR_ISSUE_THRESHOLD="0.85"
-      - MAJOR_ISSUE_THRESHOLD="0.75"
-      - FAILTHRESHOLD="0.75"
-      - MAX_RETRIES="3"
-      - SAFETY_RETRIES="2"
-      - LLM_PROVIDER="google"
-      - TEXT_MODEL_NAME="gemini-3-pro-preview"
-      - IMAGE_MODEL_NAME="gemini-2.5-flash-image"
-      - VIDEO_MODEL_NAME="veo-2.0-generate-exp"
-      - LOCAL_AUDIO_PATH="audio/Day.mp3"
+      - ACCEPT_THRESHOLD=0.90
+      - MINOR_ISSUE_THRESHOLD=0.85
+      - MAJOR_ISSUE_THRESHOLD=0.75
+      - FAILTHRESHOLD=0.75
+      - MAX_RETRIES=3
+      - SAFETY_RETRIES=2
+      - LLM_PROVIDER=google
+      - TEXT_MODEL_NAME=gemini-3-pro-preview
+      - IMAGE_MODEL_NAME=gemini-2.5-flash-image
+      - VIDEO_MODEL_NAME=veo-2.0-generate-exp
+      - LOCAL_AUDIO_PATH=audio/Day.mp3
       - DEBUG=true
     depends_on:
       - pubsub-emulator

@@ -16,15 +16,8 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
     setConnectionStatus,
     updateScene,
     setPipelineStatus,
-  } = useStore(state => ({
-    setPipelineState: state.setPipelineState,
-    setIsHydrated: state.setIsHydrated,
-    setIsLoading: state.setIsLoading,
-    setError: state.setError,
-    setConnectionStatus: state.setConnectionStatus,
-    updateScene: state.updateScene,
-    setPipelineStatus: state.setPipelineStatus,
-  }));
+    addMessage,
+  } = useStore();
 
   const isHydrated = useStore(state => state.isHydrated);
 
@@ -100,6 +93,16 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
           case "PIPELINE_STATUS":
             setPipelineStatus(parsedEvent.payload.status);
             break;
+
+          case "LOG":
+            addMessage({
+              id: crypto.randomUUID(),
+              type: parsedEvent.payload.level,
+              message: parsedEvent.payload.message,
+              timestamp: new Date(), // Use current time for receipt, or parse event timestamp? Event has timestamp string.
+              sceneId: parsedEvent.payload.sceneId
+            });
+            break;
         }
       } catch (e) {
         console.error("Failed to parse SSE event", e);
@@ -118,4 +121,8 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
       console.log(`SSE Disconnected for projectId: ${projectId}`);
     };
   }, [ projectId, isHydrated, setConnectionStatus, setError, setIsLoading, setIsHydrated, setPipelineState, updateScene, setPipelineStatus ]);
+
+  return {
+
+  };
 }

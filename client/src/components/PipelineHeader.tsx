@@ -1,56 +1,38 @@
 import { Button } from "@/components/ui/button";
 import { Play, Pause, RotateCcw, Moon, Sun, Square } from "lucide-react";
-import type { PipelineStatus } from "@shared/pipeline-types";
 import StatusBadge from "./StatusBadge";
 import ConnectionStatus from "./ConnectionStatus";
 import { useStore } from "@/lib/store";
-import { startPipeline, stopPipeline, resumePipeline } from "@/lib/api";
-import { shallow } from "zustand/shallow";
 import { Scene } from "@shared/pipeline-types";
+import { useCallback } from "react";
 
-export default function PipelineHeader() {
+interface PipelineHeaderProps {
+  title: string;
+  handleStart: () => void;
+  handleStop: () => void;
+  handleResume: () => void;
+  onPause: () => void;
+  handleResetDashboard: () => void;
+}
+
+export default function PipelineHeader({ title, handleStart, handleStop, handleResume, onPause, handleResetDashboard }: PipelineHeaderProps) {
   const {
     pipelineState,
     pipelineStatus,
     connectionStatus,
-    selectedProject,
     isDark,
     setIsDark
-  } = useStore(state => ({
-    pipelineState: state.pipelineState,
-    pipelineStatus: state.pipelineStatus,
-    connectionStatus: state.connectionStatus,
-    selectedProject: state.selectedProject,
-    isDark: state.isDark,
-    setIsDark: state.setIsDark,
-  }));
-
-  const handleStart = async () => {
-    if (!selectedProject || !pipelineState?.creativePrompt) return;
-    await startPipeline({
-      projectId: selectedProject,
-      creativePrompt: pipelineState.creativePrompt,
-      audioUrl: pipelineState.audioGcsUri
-    });
-  };
-
-  const handleStop = async () => {
-    if (!selectedProject) return;
-    await stopPipeline({ projectId: selectedProject });
-  };
-
-  const handleResume = async () => {
-    if (!selectedProject) return;
-    await resumePipeline({ projectId: selectedProject });
-  };
+  } = useStore();
 
   const isRunning = pipelineStatus === "running" || pipelineStatus === "generating" || pipelineStatus === "analyzing" || pipelineStatus === "evaluating";
-  const title = pipelineState?.storyboard?.metadata.title || "Untitled Project";
+  title = title || pipelineState?.storyboard?.metadata.title || "Untitled Project";
   const progress = pipelineState?.storyboardState ? {
     current: pipelineState.storyboardState.scenes.filter((s: Scene) => s.generatedVideo).length,
     total: pipelineState.storyboardState.scenes.length,
   } : undefined;
 
+  const handleToggleTheme = useCallback(() => setIsDark(!isDark), [ isDark, setIsDark ]);
+  
   return (
     <header className="h-14 border-b bg-background px-4 flex items-center justify-between gap-4 shrink-0" data-testid="pipeline-header">
       <div className="flex items-center gap-4 min-w-0">
@@ -73,9 +55,9 @@ export default function PipelineHeader() {
 
         <div className="flex items-center gap-1">
           { !isRunning ? (
-            <Button size="sm" onClick={ pipelineStatus === 'paused' ? handleResume : handleStart } disabled={ pipelineStatus === "complete" || pipelineStatus === "error" }>
+            <Button size="sm" onClick={ pipelineStatus === 'paused' ? handleResume : handleStart } disabled={ pipelineStatus === "error" }>
               <Play className="w-4 h-4 mr-1" />
-              { pipelineStatus === 'paused' ? 'Resume' : 'Start' }
+              { pipelineStatus === 'paused' ? 'Resume Pipeline' : 'Start Pipeline' }
             </Button>
           ) : (
             <Button size="sm" variant="destructive" onClick={ handleStop }>
@@ -85,7 +67,7 @@ export default function PipelineHeader() {
           ) }
         </div>
 
-        <Button size="icon" variant="ghost" onClick={ () => setIsDark(!isDark) } data-testid="button-theme">
+        <Button size="icon" variant="ghost" onClick={ handleToggleTheme } data-testid="button-theme">
           { isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" /> }
         </Button>
       </div>

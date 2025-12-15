@@ -1,4 +1,4 @@
-import { Location } from "../types";
+import { Location } from "../../shared/pipeline-types";
 import { buildProductionDesignerPrompt } from "./role-production-designer";
 
 /**

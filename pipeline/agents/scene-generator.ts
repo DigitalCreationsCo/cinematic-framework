@@ -556,7 +556,7 @@ export class SceneGeneratorAgent {
         }
     }
 
-    async stitchScenes(videoPaths: string[], audioPath: string): Promise<string> {
+    async stitchScenes(videoPaths: string[], audioPath: string): Promise<ObjectData> {
         console.log(`\n🎬 Stitching ${videoPaths.length} scenes...`);
 
         const tmpDir = "/tmp";
@@ -605,7 +605,9 @@ export class SceneGeneratorAgent {
             const gcsUri = await this.storageManager.uploadFile(finalVideoPath, objectPath);
 
             console.log(`   ✓ Rendered video uploaded: ${this.storageManager.getPublicUrl(gcsUri)}`);
-            return gcsUri;
+
+            const video = this.storageManager.buildObjectData(gcsUri);
+            return video;
 
         } catch (error) {
             console.error("   ✗ Failed to stitch scenes:", error);
@@ -622,7 +624,7 @@ export class SceneGeneratorAgent {
         }
     }
 
-    async stitchScenesWithoutAudio(videoPaths: string[]): Promise<string> {
+    async stitchScenesWithoutAudio(videoPaths: string[]): Promise<ObjectData> {
         console.log(`\n🎬 Stitching ${videoPaths.length} scenes (no audio)...`);
 
         const tmpDir = "/tmp";
@@ -657,7 +659,9 @@ export class SceneGeneratorAgent {
             const gcsUri = await this.storageManager.uploadFile(finalVideoPath, objectPath);
 
             console.log(`   ✓ Rendered video uploaded: ${this.storageManager.getPublicUrl(gcsUri)}`);
-            return gcsUri;
+            
+            const video = this.storageManager.buildObjectData(gcsUri);
+            return video;
 
         } catch (error) {
             console.error("   ✗ Failed to stitch scenes:", error);

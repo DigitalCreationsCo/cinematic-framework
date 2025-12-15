@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Docker: Attach to Pipeline Worker",
+            "name": "Docker: Attach to Worker",
             "type": "node",
             "request": "attach",
             "remoteRoot": "/usr/src/app",
@@ -37,8 +37,43 @@
             "remoteRoot": "/usr/src/app",
             "restart": true,
         },
+        
+
         {
-            "name": "Docker: Debug Client",
+            "name": "Launch Worker",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/node_modules/.bin/tsx",
+            "args": "pipeline-worker/index.ts",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceFolder}/pipeline-worker/**/*.js",
+                "${workspaceFolder}/pipeline/**/*.js",
+                "${workspaceFolder}/audio/**/*.js",
+                "${workspaceFolder}/shared/**/*.js",
+                "!**/node_modules/**"
+            ],
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/pipeline-worker/**",
+                "${workspaceFolder}/pipeline/**",
+                "!**/node_modules/**"
+            ]
+        },
+        {
+            "name": "Launch Server",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/node_modules/.bin/tsx",
+            "args": "server/index.ts",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+        },
+        {
+            "name": "Debug Client",
             "type": "chrome",
             "request": "launch",
             "url": "http://localhost:8000",
@@ -97,8 +132,17 @@
         {
             "name": "Docker: Debug Full-Stack",
             "configurations": [
+                "Docker: Attach to Worker",
                 "Docker: Attach to Server",
-                "Docker: Debug Client"
+                "Debug Client",
+            ]
+        },
+        {
+            "name": "Debug Full-Stack",
+            "configurations": [
+                "Launch Worker",
+                "Launch Server",
+                "Debug Client",
             ]
         }
     ]

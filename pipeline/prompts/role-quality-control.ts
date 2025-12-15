@@ -1,6 +1,6 @@
 export const promptVersion = "3.1.0-quality-control-enhanced";
 
-import { Scene } from "../types";
+import { Scene } from "../../shared/pipeline-types";
 import { ISSUE_CATEGORIZATION_GUIDE, EVALUATION_CALIBRATION_GUIDE } from "./evaluation-guidelines";
 
 /**

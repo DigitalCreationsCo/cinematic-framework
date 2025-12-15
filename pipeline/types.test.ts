@@ -5,7 +5,7 @@ import {
   isInstrumentalScene,
   requiresTransition,
   Scene
-} from './types';
+} from '../shared/pipeline-types';
 
 describe('Type Guards', () => {
   describe('isValidDuration', () => {

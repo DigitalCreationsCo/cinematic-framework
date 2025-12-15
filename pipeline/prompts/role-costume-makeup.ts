@@ -1,6 +1,6 @@
 export const promptVersion = "3.0.0-costume-makeup";
 
-import { Character } from "../types";
+import { Character } from "../../shared/pipeline-types";
 import { buildSafetyGuidelinesPrompt } from "./safety-instructions";
 
 /**

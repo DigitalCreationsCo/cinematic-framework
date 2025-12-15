@@ -474,7 +474,7 @@ export const InitialGraphStateSchema = z.object({
   currentSceneIndex: z.number().describe("index of scene currently being processed").default(0),
   forceRegenerateSceneId: z.number().optional().describe("ID of scene to force regenerate"),
   scenePromptOverrides: z.record(z.number(), z.string()).optional().describe("Manual overrides for scene prompts"),
-  renderedVideoUrl: z.string().optional().describe("GCS URL of final stitched video"),
+  renderedVideo: ObjectDataSchema.optional().describe("GCS URL of final stitched video"),
   errors: z.array(z.string()).describe("errors encountered during workflow").default([]),
 
   // Quality feedback loop
@@ -661,3 +661,5 @@ export interface PipelineMessage {
   timestamp: Date;
   sceneId?: number;
 }
+
+export type StatusType = PipelineStatus | SceneStatus | "PASS" | "MINOR_ISSUES" | "MAJOR_ISSUES" | "FAIL" | "ACCEPT" | "ACCEPT_WITH_NOTES" | "REGENERATE_MINOR" | "REGENERATE_MAJOR";
