@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+// @ts-ignore
+export const zodToJSONSchema = (schema: z.ZodType) => z.toJSONSchema(schema);
+
 // ============================================================================
 // AUDIO ANALYSIS SCHEMAS (Director: Musical Structure)
 // ============================================================================
@@ -469,6 +472,8 @@ export const InitialGraphStateSchema = z.object({
 
   // Execution tracking
   currentSceneIndex: z.number().describe("index of scene currently being processed").default(0),
+  forceRegenerateSceneId: z.number().optional().describe("ID of scene to force regenerate"),
+  scenePromptOverrides: z.record(z.number(), z.string()).optional().describe("Manual overrides for scene prompts"),
   renderedVideoUrl: z.string().optional().describe("GCS URL of final stitched video"),
   errors: z.array(z.string()).describe("errors encountered during workflow").default([]),
 
@@ -646,7 +651,7 @@ export function requiresTransition(scene: Scene): boolean {
   return scene.transitionType !== "Cut" && scene.transitionType !== "none";
 }
 
-export type PipelineStatus = "idle" | "analyzing" | "generating" | "evaluating" | "complete" | "error";
+export type PipelineStatus = "idle" | "analyzing" | "generating" | "evaluating" | "complete" | "error" | "running" | "paused";
 export type SceneStatus = "pending" | "generating" | "evaluating" | "complete" | "failed";
 
 export interface PipelineMessage {

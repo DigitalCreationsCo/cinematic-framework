@@ -10,18 +10,18 @@
 
 - [ ] __Phase 2: Pub/Sub & Checkpointer Integration__
 
-  - [x] Add the `@google-cloud/pubsub` dependency to both the `api-server` and `pipeline-wrapper`.
+  - [x] Add the `@google-cloud/pubsub` dependency to both the `api-server` and `pipeline-worker`.
   - [ ] Add `@langchain/langgraph-checkpoint-postgres` and `pg` dependencies to `package.json`.
   - [x] In `shared/`, update the Pub/Sub message schemas to include the new `STOP_PIPELINE` command.
-  - [ ] Create `pipeline-wrapper/checkpointer-manager.ts` using the provided example as a template.
+  - [ ] Create `pipeline-worker/checkpointer-manager.ts` using the provided example as a template.
 
 - [ ] __Phase 3: Pipeline Wrapper Service (Updated for Checkpointer & Stop Command)__
 
-  - [x] Create `pipeline-wrapper/` directory with `Dockerfile` and `index.ts` (skeleton).
+  - [x] Create `pipeline-worker/` directory with `Dockerfile` and `index.ts` (skeleton).
 
-  - [ ] Remove the in-memory `activePipelines` map from `pipeline-wrapper/index.ts`.
+  - [ ] Remove the in-memory `activePipelines` map from `pipeline-worker/index.ts`.
 
-  - [ ] Integrate `checkpointerManager` into `pipeline-wrapper/index.ts` to load/save `GraphState` from PostgreSQL.
+  - [ ] Integrate `checkpointerManager` into `pipeline-worker/index.ts` to load/save `GraphState` from PostgreSQL.
 
   - [ ] In `START_PIPELINE` command handler:
 
@@ -39,7 +39,7 @@
 
   - [ ] Implement `STOP_PIPELINE` command handler to gracefully abort a running graph and save its checkpointed state.
 
-  - [ ] Rename relevant variables for verbose functional clarity within `pipeline-wrapper/` and Pub/Sub related code.
+  - [ ] Rename relevant variables for verbose functional clarity within `pipeline-worker/` and Pub/Sub related code.
 
 - [x] __Phase 4: Stateless API Server (Updated for Stop Command)__
 

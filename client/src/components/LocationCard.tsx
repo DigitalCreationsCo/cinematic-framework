@@ -3,20 +3,21 @@ import { Badge } from "@/components/ui/badge";
 import { MapPin, Sun, Cloud } from "lucide-react";
 import type { Location } from "@shared/pipeline-types";
 import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton
+import { memo } from "react";
 
 interface LocationCardProps {
   location: Location;
-  onSelect?: () => void;
+  onSelect?: (id: string) => void;
   isLoading?: boolean; // Added isLoading prop
 }
 
-export default function LocationCard({ location, onSelect, isLoading = false }: LocationCardProps) {
+const LocationCard = memo(function LocationCard({ location, onSelect, isLoading = false }: LocationCardProps) {
   const referenceImage = location.referenceImages?.[ 0 ];
 
   return (
     <Card
       className={ "cursor-pointer hover-elevate overflow-hidden" }
-      onClick={ onSelect }
+      onClick={ () => onSelect?.(location.id) }
       data-testid={ `card-location-${location.id}` }
     >
       <div className="relative aspect-video bg-muted">
@@ -27,6 +28,8 @@ export default function LocationCard({ location, onSelect, isLoading = false }: 
             src={ referenceImage.publicUri }
             alt={ location.name }
             className="w-full h-full object-cover"
+            loading="lazy"
+            decoding="async"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -74,4 +77,6 @@ export default function LocationCard({ location, onSelect, isLoading = false }: 
       </CardContent>
     </Card>
   );
-}
+});
+
+export default LocationCard;

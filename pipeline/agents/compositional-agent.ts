@@ -9,7 +9,7 @@ import {
   zodToJSONSchema,
   InitialContextSchema,
   SceneBatchSchema
-} from "../types";
+} from "../../shared/pipeline-types";
 import { cleanJsonOutput } from "../utils";
 import { GCPStorageManager } from "../storage-manager";
 import { composeStoryboardEnrichmentPrompt } from "../prompts/prompt-composer";
@@ -67,7 +67,7 @@ export class CompositionalAgent {
             responseJsonSchema: zodToJSONSchema(SceneBatchSchema),
           }
         })
-      );
+        );
         const content = response.text;
         if (!content) throw new Error("No content generated from LLM");
 
@@ -90,7 +90,7 @@ export class CompositionalAgent {
         videoModel: (storyboard.metadata as any).videoModel || videoModelName,
         imageModel: (storyboard.metadata as any).imageModel || imageModelName,
         textModel: (storyboard.metadata as any).textModel || textModelName,
-      } as Storyboard['metadata']
+      } as Storyboard[ 'metadata' ]
     };
 
     this.validateTimingPreservation(storyboard.scenes, updatedStoryboard.scenes);
@@ -104,7 +104,7 @@ export class CompositionalAgent {
     console.log(`  - Total Scenes: ${updatedStoryboard.metadata.totalScenes}`);
     console.log(`  - Characters: ${updatedStoryboard.characters.length}`);
     console.log(`  - Locations: ${updatedStoryboard.locations.length}`);
-    console.log(`  - Creative prompt added to metadata: ${((updatedStoryboard.metadata as any).creativePrompt as string).slice(0, 50)}...`)
+    console.log(`  - Creative prompt added to metadata: ${((updatedStoryboard.metadata as any).creativePrompt as string).slice(0, 50)}...`);
 
     return updatedStoryboard;
   }
@@ -128,7 +128,7 @@ export class CompositionalAgent {
     }));
 
     const totalDuration = scenes.length > 0 ? scenes[ scenes.length - 1 ].endTime : 0;
-    
+
     const jsonSchema = zodToJSONSchema(InitialContextSchema);
     const systemPrompt = buildDirectorVisionPrompt(creativePrompt, jsonSchema, audioSegments, totalDuration);
 
@@ -190,7 +190,7 @@ export class CompositionalAgent {
     }
   }
 
-  async expandCreativePrompt (
+  async expandCreativePrompt(
     userPrompt: string,
   ): Promise<string> {
 
@@ -198,13 +198,13 @@ export class CompositionalAgent {
 
     const llmCall = async () => {
       const params = buildllmParams({
-         contents: [
+        contents: [
           { role: "user", parts: [ { text: systemPrompt } ] },
         ],
         config: {
           temperature: 0.9,
         }
-      })
+      });
 
       const response = await this.llm.generateContent(params);
 
@@ -249,7 +249,7 @@ export class CompositionalAgent {
           temperature: 0.8,
         }
       })
-    );
+      );
 
       const content = response.text;
       if (!content) throw new Error("No content generated from LLM");
@@ -283,7 +283,7 @@ export class CompositionalAgent {
     console.log(`  - Total Scenes: ${storyboard.metadata.totalScenes}`);
     console.log(`  - Characters: ${storyboard.characters.length}`);
     console.log(`  - Locations: ${storyboard.locations.length}`);
-    console.log(`  - Creative prompt added to metadata: ${((storyboard.metadata as any).creativePrompt as string).slice(0, 50)}...`)
+    console.log(`  - Creative prompt added to metadata: ${((storyboard.metadata as any).creativePrompt as string).slice(0, 50)}...`);
 
     return storyboard;
   }

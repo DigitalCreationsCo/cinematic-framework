@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton
+import { memo } from "react";
 
 interface MetricCardProps {
   label: string;
@@ -13,7 +14,7 @@ interface MetricCardProps {
   isLoading?: boolean; // Added isLoading prop
 }
 
-export default function MetricCard({ label, value, subValue, trend, trendValue, icon, isLoading }: MetricCardProps) {
+const MetricCard = memo(function MetricCard({ label, value, subValue, trend, trendValue, icon, isLoading }: MetricCardProps) {
   const TrendIcon = trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
 
   return (
@@ -59,4 +60,6 @@ export default function MetricCard({ label, value, subValue, trend, trendValue, 
       </CardContent>
     </Card>
   );
-}
+});
+
+export default MetricCard;

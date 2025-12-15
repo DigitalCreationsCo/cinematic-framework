@@ -11,10 +11,10 @@ RUN npm install --production
 RUN npm install tsx
 
 # Copy relevant source code for the pipeline worker
-COPY pipeline-wrapper/ ./pipeline-wrapper/
+COPY pipeline-worker/ ./pipeline-worker/
 COPY pipeline/ ./pipeline/
 COPY audio/ ./audio/
 COPY shared/ ./shared/
 
 # Assuming the main entry point for the worker service will be index.ts in this directory
-CMD ["node", "pipeline-wrapper/index.ts"]
+CMD ["tsx", "pipeline-worker/index.ts"]

@@ -2,6 +2,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertCircle, AlertTriangle, Info, CheckCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PipelineMessage } from "@shared/pipeline-types";
+import { memo } from "react";
 
 interface MessageLogProps {
   messages: PipelineMessage[];
@@ -16,7 +17,7 @@ const typeConfig = {
   success: { icon: CheckCircle, className: "text-chart-3 bg-chart-3/10" },
 };
 
-export default function MessageLog({ messages, maxHeight = "12rem", onDismiss }: MessageLogProps) {
+const MessageLog = memo(function MessageLog({ messages, maxHeight = "12rem", onDismiss }: MessageLogProps) {
   if (messages.length === 0) {
     return (
       <div className="text-xs text-muted-foreground text-center py-4" data-testid="message-log-empty">
@@ -68,4 +69,6 @@ export default function MessageLog({ messages, maxHeight = "12rem", onDismiss }:
       </div>
     </ScrollArea>
   );
-}
+});
+
+export default MessageLog;

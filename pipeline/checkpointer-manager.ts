@@ -1,5 +1,4 @@
 import { RunnableConfig } from "@langchain/core/runnables";
-import { GraphState } from "../pipeline/types"; 
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { Checkpoint } from "@langchain/langgraph";
 
@@ -22,6 +21,7 @@ export class CheckpointerManager {
    */
   public async init(): Promise<void> {
     const checkpointer = PostgresSaver.fromConnString(this.postgresUrl);
+    console.log("   Setting up Postgres Saver for state persistence.");
     await checkpointer.setup();
 
     this.checkpointer = checkpointer;
@@ -66,14 +66,4 @@ export class CheckpointerManager {
 
     await this.checkpointer.put(config, { ...existingCheckpoint, ...checkpoint }, {} as any, {});
   }
-}
-
-const POSTGRES_URL = process.env.POSTGRES_URL;
-if (!POSTGRES_URL) {
-  throw new Error("POSTGRES_URL is required for CheckpointerManager initialization in environment.");
-}
-
-const manager = new CheckpointerManager(POSTGRES_URL);
-await manager.init(); 
-
-export const checkpointerManager = manager;
+};

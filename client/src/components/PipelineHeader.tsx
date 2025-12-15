@@ -1,35 +1,55 @@
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, Moon, Sun, Square } from "lucide-react"; // Add Square icon for Stop
+import { Play, Pause, RotateCcw, Moon, Sun, Square } from "lucide-react";
 import type { PipelineStatus } from "@shared/pipeline-types";
 import StatusBadge from "./StatusBadge";
 import ConnectionStatus from "./ConnectionStatus";
+import { useStore } from "@/lib/store";
+import { startPipeline, stopPipeline, resumePipeline } from "@/lib/api";
+import { shallow } from "zustand/shallow";
+import { Scene } from "@shared/pipeline-types";
 
-interface PipelineHeaderProps {
-  title: string;
-  status: PipelineStatus;
-  connected: boolean;
-  progress?: { current: number; total: number };
-  isDark: boolean;
-  onToggleTheme: () => void;
-  onStart?: () => void;
-  onPause?: () => void;
-  onReset?: () => void;
-  onStop?: () => void; // Add onStop prop
-}
+export default function PipelineHeader() {
+  const {
+    pipelineState,
+    pipelineStatus,
+    connectionStatus,
+    selectedProject,
+    isDark,
+    setIsDark
+  } = useStore(state => ({
+    pipelineState: state.pipelineState,
+    pipelineStatus: state.pipelineStatus,
+    connectionStatus: state.connectionStatus,
+    selectedProject: state.selectedProject,
+    isDark: state.isDark,
+    setIsDark: state.setIsDark,
+  }));
 
-export default function PipelineHeader({
-  title,
-  status,
-  connected,
-  progress,
-  isDark,
-  onToggleTheme,
-  onStart,
-  onPause,
-  onReset,
-  onStop, // Destructure onStop
-}: PipelineHeaderProps) {
-  const isRunning = status === "analyzing" || status === "generating" || status === "evaluating";
+  const handleStart = async () => {
+    if (!selectedProject || !pipelineState?.creativePrompt) return;
+    await startPipeline({
+      projectId: selectedProject,
+      creativePrompt: pipelineState.creativePrompt,
+      audioUrl: pipelineState.audioGcsUri
+    });
+  };
+
+  const handleStop = async () => {
+    if (!selectedProject) return;
+    await stopPipeline({ projectId: selectedProject });
+  };
+
+  const handleResume = async () => {
+    if (!selectedProject) return;
+    await resumePipeline({ projectId: selectedProject });
+  };
+
+  const isRunning = pipelineStatus === "running" || pipelineStatus === "generating" || pipelineStatus === "analyzing" || pipelineStatus === "evaluating";
+  const title = pipelineState?.storyboard?.metadata.title || "Untitled Project";
+  const progress = pipelineState?.storyboardState ? {
+    current: pipelineState.storyboardState.scenes.filter((s: Scene) => s.generatedVideo).length,
+    total: pipelineState.storyboardState.scenes.length,
+  } : undefined;
 
   return (
     <header className="h-14 border-b bg-background px-4 flex items-center justify-between gap-4 shrink-0" data-testid="pipeline-header">
@@ -39,43 +59,34 @@ export default function PipelineHeader({
           <span className="text-sm text-muted-foreground font-mono pr-2">
             Pipeline Status:
           </span>
-          <StatusBadge status={status} />
+          <StatusBadge status={ pipelineStatus } />
         </div>
-        {progress && (
+        { progress && (
           <span className="text-sm text-muted-foreground font-mono" data-testid="text-progress">
-            {progress.current}/{progress.total} scenes
+            { progress.current }/{ progress.total } scenes
           </span>
-        )}
+        ) }
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
-        <ConnectionStatus connected={connected} />
-        
+        <ConnectionStatus connected={ connectionStatus === 'connected' } />
+
         <div className="flex items-center gap-1">
-          {!isRunning ? (
-            <Button size="sm" onClick={onStart} disabled={status === "complete" || status === "error"} data-testid="button-start">
+          { !isRunning ? (
+            <Button size="sm" onClick={ pipelineStatus === 'paused' ? handleResume : handleStart } disabled={ pipelineStatus === "complete" || pipelineStatus === "error" }>
               <Play className="w-4 h-4 mr-1" />
-              Start
+              { pipelineStatus === 'paused' ? 'Resume' : 'Start' }
             </Button>
           ) : (
-            <>
-              <Button size="sm" variant="secondary" onClick={onPause} data-testid="button-pause">
-                <Pause className="w-4 h-4 mr-1" />
-                Pause
-              </Button>
-              <Button size="sm" variant="destructive" onClick={onStop} data-testid="button-stop">
-                <Square className="w-4 h-4 mr-1" />
-                Stop
-              </Button>
-            </>
-          )}
-          <Button size="icon" variant="ghost" onClick={onReset} data-testid="button-reset">
-            <RotateCcw className="w-4 h-4" />
-          </Button>
+            <Button size="sm" variant="destructive" onClick={ handleStop }>
+              <Square className="w-4 h-4 mr-1" />
+              Stop
+            </Button>
+          ) }
         </div>
 
-        <Button size="icon" variant="ghost" onClick={onToggleTheme} data-testid="button-theme">
-          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        <Button size="icon" variant="ghost" onClick={ () => setIsDark(!isDark) } data-testid="button-theme">
+          { isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" /> }
         </Button>
       </div>
     </header>

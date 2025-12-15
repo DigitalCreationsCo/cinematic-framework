@@ -3,6 +3,7 @@ import { Users, User as UserIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { Character } from "@shared/pipeline-types";
 import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton
+import { memo } from "react";
 
 interface CharacterCardProps {
   character: Character;
@@ -10,7 +11,7 @@ interface CharacterCardProps {
   isLoading?: boolean; // Added isLoading prop
 }
 
-export default function CharacterCard({ character, onSelect, isLoading = false }: CharacterCardProps) {
+const CharacterCard = memo(function CharacterCard({ character, onSelect, isLoading = false }: CharacterCardProps) {
   const characterId = character.id;
   const cardTitle = isLoading ? <Skeleton className="h-4 w-3/4" /> : character.name;
 
@@ -42,11 +43,13 @@ export default function CharacterCard({ character, onSelect, isLoading = false }
         ) : (
           <>
             <div className="relative w-full h-20 bg-muted rounded-md overflow-hidden">
-              { character.referenceImages?.[0]?.publicUri ? (
+              { character.referenceImages?.[ 0 ]?.publicUri ? (
                 <img
-                  src={ character.referenceImages[0].publicUri }
+                  src={ character.referenceImages[ 0 ].publicUri }
                   alt={ character.name }
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
@@ -66,4 +69,6 @@ export default function CharacterCard({ character, onSelect, isLoading = false }
       </CardContent>
     </Card>
   );
-}
+});
+
+export default CharacterCard;

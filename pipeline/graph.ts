@@ -13,20 +13,17 @@ ffmpeg.setFfprobePath(ffprobeBin.path);
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { GoogleGenAI } from "@google/genai";
 import { StateGraph, END, START, Command } from "@langchain/langgraph";
 import {
-  Character,
-  Scene,
   Storyboard,
   GraphState,
-  QualityEvaluationResult,
   GeneratedScene,
   InitialGraphState,
   SceneGenerationMetric,
   WorkflowMetrics,
   AttemptMetric,
-} from "./types";
+} from "../shared/pipeline-types";
+import { PipelineEvent } from "../shared/pubsub-types";
 import { SceneGeneratorAgent } from "./agents/scene-generator";
 import { CompositionalAgent } from "./agents/compositional-agent";
 import { ContinuityManagerAgent } from "./agents/continuity-manager";
@@ -40,8 +37,10 @@ import { defaultCreativePrompt } from "./prompts/default-creative-prompt";
 import { imageModelName, textModelName, videoModelName } from "./llm/google/models";
 import { calculateLearningTrends } from "./utils";
 import { QualityCheckAgent } from "./agents/quality-check-agent";
+import { CheckpointerManager } from "./checkpointer-manager";
 
 export class CinematicVideoWorkflow {
+  public publishEvent: (event: PipelineEvent) => Promise<void> = async () => { };
   public graph: StateGraph<GraphState>;
   private compositionalAgent: CompositionalAgent;
   private continuityAgent: ContinuityManagerAgent;
@@ -96,6 +95,26 @@ export class CinematicVideoWorkflow {
     );
 
     this.graph = this.buildGraph();
+  }
+
+  private async performIncrementalStitching(
+    storyboardState: Storyboard,
+    audioGcsUri: string | undefined
+  ): Promise<string | undefined> {
+    const videoPaths = storyboardState.scenes
+      .map(s => s.generatedVideo?.storageUri)
+      .filter((url): url is string => !!url);
+
+    if (videoPaths.length === 0) return undefined;
+
+    try {
+      return audioGcsUri
+        ? await this.sceneAgent.stitchScenes(videoPaths, audioGcsUri)
+        : await this.sceneAgent.stitchScenesWithoutAudio(videoPaths);
+    } catch (error) {
+      console.warn("   ⚠️ Incremental stitching failed:", error);
+      return undefined;
+    }
   }
 
   private buildGraph(): StateGraph<GraphState> {
@@ -315,9 +334,33 @@ export class CinematicVideoWorkflow {
         `\n🎬 PHASE 3: Processing Scene ${scene.id}/${state.storyboardState.scenes.length}`
       );
 
+      await this.publishEvent({
+        type: "SCENE_STARTED",
+        projectId: this.videoId,
+        payload: {
+          sceneId: scene.id,
+          sceneIndex: state.currentSceneIndex,
+          totalScenes: state.storyboardState.scenes.length,
+        },
+        timestamp: new Date().toISOString(),
+      });
+
       const sceneVideoPath = await this.storageManager.getGcsObjectPath({ type: "scene_video", sceneId: scene.id });
-      if (await this.storageManager.fileExists(sceneVideoPath)) {
+      const shouldForceRegenerate = state.forceRegenerateSceneId === scene.id;
+
+      if (!shouldForceRegenerate && await this.storageManager.fileExists(sceneVideoPath)) {
         console.log(`   ... Scene video already exists at ${sceneVideoPath}, skipping.`);
+
+        await this.publishEvent({
+          type: "SCENE_SKIPPED",
+          projectId: this.videoId,
+          payload: {
+            sceneId: scene.id,
+            reason: "Video already exists",
+            videoUrl: this.storageManager.buildObjectData(sceneVideoPath).publicUri,
+          },
+          timestamp: new Date().toISOString(),
+        });
 
         const generatedScene = {
           ...scene,
@@ -329,10 +372,38 @@ export class CinematicVideoWorkflow {
           state.storyboardState
         );
 
+        // Conditional Incremental Stitching:
+        // Only stitch if we are at the end of the existing chain or this is the final scene.
+        const isLastScene = state.currentSceneIndex === state.storyboardState.scenes.length - 1;
+        let shouldStitch = isLastScene;
+
+        if (!shouldStitch) {
+          // Check if the next scene already exists in storage.
+          // If it does, we can skip stitching now and wait for the next iteration.
+          // If it doesn't, we should stitch so the user has the latest view up to this point.
+          const nextSceneId = state.storyboardState.scenes[ state.currentSceneIndex + 1 ].id;
+          const nextScenePath = await this.storageManager.getGcsObjectPath({ type: "scene_video", sceneId: nextSceneId });
+          const nextExists = await this.storageManager.fileExists(nextScenePath);
+          if (!nextExists) {
+            shouldStitch = true;
+          } else {
+            console.log(`   ... Next scene (${nextSceneId}) also exists, skipping redundant stitch.`);
+          }
+        }
+
+        let renderedVideoUrl = state.renderedVideoUrl;
+        if (shouldStitch) {
+          renderedVideoUrl = await this.performIncrementalStitching(
+            updatedStoryboardState,
+            state.audioGcsUri
+          );
+        }
+
         return {
           ...state,
           currentSceneIndex: state.currentSceneIndex + 1,
-          storyboardState: updatedStoryboardState
+          storyboardState: updatedStoryboardState,
+          renderedVideoUrl: renderedVideoUrl || state.renderedVideoUrl,
         };
       }
 
@@ -412,6 +483,22 @@ export class CinematicVideoWorkflow {
 
       currentMetrics.sceneMetrics.push(sceneMetric);
 
+      const renderedVideoUrl = await this.performIncrementalStitching(
+        updatedStoryboardState,
+        state.audioGcsUri
+      );
+
+      await this.publishEvent({
+        type: "SCENE_COMPLETED",
+        projectId: this.videoId,
+        payload: {
+          sceneId: scene.id,
+          sceneIndex: state.currentSceneIndex,
+          videoUrl: result.scene.generatedVideo.publicUri,
+        },
+        timestamp: new Date().toISOString(),
+      });
+
       return {
         ...state,
         currentSceneIndex: state.currentSceneIndex + 1,
@@ -419,6 +506,7 @@ export class CinematicVideoWorkflow {
         generationRules: newGenerationRules,
         refinedRules: refinedRules,
         metrics: currentMetrics,
+        renderedVideoUrl: renderedVideoUrl || state.renderedVideoUrl,
       };
     });
 
@@ -488,7 +576,7 @@ export class CinematicVideoWorkflow {
     return workflow;
   }
 
-  async execute(localAudioPath: string | undefined, creativePrompt: string): Promise<GraphState> {
+  async execute(localAudioPath: string | undefined, creativePrompt: string, postgresUrl: string): Promise<GraphState> {
     console.log(`🚀 Executing Cinematic Video Generation Workflow for videoId: ${this.videoId}`);
     console.log(` Text generation model: ${textModelName}`);
     console.log(` Image generation model: ${imageModelName}`);
@@ -509,46 +597,68 @@ export class CinematicVideoWorkflow {
       console.log("   No audio file provided - generating video from creative prompt only.");
     }
 
-    try {
-      console.log("   Checking for existing storyboard...");
-      const storyboardPath = await this.storageManager.getGcsObjectPath({ type: "storyboard" });
-      const storyboard = await this.storageManager.downloadJSON<Storyboard>(storyboardPath);
-      console.log("   Found existing storyboard. Resuming workflow.");
+    const checkpointerManager = new CheckpointerManager(postgresUrl);
+    await checkpointerManager.init();
+
+    let checkpointer = checkpointerManager.getCheckpointer();
+    if (false) {
+      console.log("   Persistence enabled via Checkpointer. Bypassing GCS load for initial state.");
 
       initialState = {
         initialPrompt: localAudioPath || '',
-        creativePrompt: creativePrompt || '',
+        creativePrompt, // Must be provided if starting fresh, checkpointer will override if resuming
         hasAudio,
-        storyboard,
-        storyboardState: storyboard,
-        currentSceneIndex: 0,
         audioGcsUri,
-        errors: [],
-        generationRules: [],
-        refinedRules: [],
-      };
-    } catch (error) {
-      console.error("Error: ", error);
-      console.log("   No existing storyboard found or error loading it. Starting fresh workflow.");
-      if (!creativePrompt) {
-        throw new Error("Cannot start new workflow without creativePrompt.");
-      }
-
-      initialState = {
-        initialPrompt: localAudioPath || '',
-        creativePrompt,
-        hasAudio,
         currentSceneIndex: 0,
         errors: [],
         generationRules: [],
         refinedRules: [],
       };
+    } else {
+      console.log("   No checkpointer found. Checking GCS for existing storyboard.");
+      try {
+        console.log("   Checking for existing storyboard...");
+        const storyboardPath = await this.storageManager.getGcsObjectPath({ type: "storyboard" });
+        const storyboard = await this.storageManager.downloadJSON<Storyboard>(storyboardPath);
+        console.log("   Found existing storyboard. Resuming workflow.");
+
+        initialState = {
+          initialPrompt: localAudioPath || '',
+          creativePrompt: creativePrompt || '',
+          hasAudio,
+          storyboard,
+          storyboardState: storyboard,
+          currentSceneIndex: 0,
+          audioGcsUri,
+          errors: [],
+          generationRules: [],
+          refinedRules: [],
+        };
+      } catch (error) {
+        console.error("Error loading from GCS: ", error);
+        console.log("   No existing storyboard found or error loading it. Starting fresh workflow.");
+        if (!creativePrompt) {
+          throw new Error("Cannot start new workflow without creativePrompt.");
+        }
+
+        initialState = {
+          initialPrompt: localAudioPath || '',
+          creativePrompt,
+          hasAudio,
+          currentSceneIndex: 0,
+          errors: [],
+          generationRules: [],
+          refinedRules: [],
+        };
+      }
     }
 
-    const compiledGraph = this.graph.compile();
+    const compiledGraph = this.graph.compile({ checkpointer });
     const result = await compiledGraph.invoke(initialState, {
+      configurable: { thread_id: this.videoId },
       recursionLimit: 100,
     });
+
     return result as GraphState;
   }
 }
@@ -560,6 +670,10 @@ export class CinematicVideoWorkflow {
 async function main() {
   const projectId = process.env.GCP_PROJECT_ID!;
   const bucketName = process.env.GCP_BUCKET_NAME!;
+  const postgresUrl = process.env.POSTGRES_URL;
+  if (!postgresUrl) {
+    throw new Error("Postgres URL is required for CheckpointerManager initialization");
+  }
   const LOCAL_AUDIO_PATH = process.env.LOCAL_AUDIO_PATH;
 
   const argv = await yargs(hideBin(process.argv))
@@ -589,7 +703,7 @@ async function main() {
   const creativePrompt = argv.prompt || defaultCreativePrompt;
 
   try {
-    const result = await workflow.execute(audioPath, creativePrompt);
+    const result = await workflow.execute(audioPath, creativePrompt, postgresUrl);
     console.log("\n" + "=".repeat(60));
     console.log("✅ Workflow completed successfully!");
     console.log(`   Generated ${result.storyboardState.scenes.length} scenes`);

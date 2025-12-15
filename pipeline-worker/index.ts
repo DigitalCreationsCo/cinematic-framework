@@ -1,14 +1,32 @@
+import * as dotenv from "dotenv";
+dotenv.config();
+
+console.log(' projectId: ', process.env.GCP_PROJECT_ID);
+console.log('apiEndpoint: ', process.env.PUBSUB_EMULATOR_HOST);
+
 import { PubSub } from "@google-cloud/pubsub";
-import { Command, PipelineEvent } from "../shared/pubsub-types";
-import { GraphState, InitialGraphState } from "../shared/pipeline-types";
+import { PipelineCommand, PipelineEvent } from "../shared/pubsub-types";
+import { GraphState, InitialGraphState, Storyboard } from "../shared/pipeline-types";
 import { CinematicVideoWorkflow } from "../pipeline/graph";
-import { checkpointerManager } from "./checkpointer-manager";
+import { Storage } from "@google-cloud/storage";
+import { CheckpointerManager } from "../pipeline/checkpointer-manager";
 import { RunnableConfig } from "@langchain/core/runnables";
 
+const gcpProjectId = process.env.GCP_PROJECT_ID;
+if (!gcpProjectId) throw Error("A projectId was not provided");
+
+const postgresUrl = process.env.POSTGRES_URL;
+if (!postgresUrl) throw Error("Postgres URL is required for CheckpointerManager initialization");
+
 const pubsub = new PubSub({
-    projectId: process.env.PUBSUB_PROJECT_ID,
+    projectId: gcpProjectId,
     apiEndpoint: process.env.PUBSUB_EMULATOR_HOST,
 });
+
+const checkpointerManager = new CheckpointerManager(postgresUrl);
+await checkpointerManager.init();
+
+const storage = new Storage({ projectId: gcpProjectId });
 
 const VIDEO_COMMANDS_TOPIC_NAME = "video-commands";
 const VIDEO_EVENTS_TOPIC_NAME = "video-events";
@@ -21,7 +39,7 @@ async function publishPipelineEvent(event: PipelineEvent) {
     await videoEventsTopic.publishMessage({ data: dataBuffer });
 }
 
-async function handleStartPipelineCommand(command: Extract<Command, { type: "START_PIPELINE"; }>) {
+async function handleStartPipelineCommand(command: Extract<PipelineCommand, { type: "START_PIPELINE"; }>) {
     const { projectId, payload } = command;
 
     const bucketName = process.env.GCP_BUCKET_NAME;
@@ -63,7 +81,7 @@ async function handleStartPipelineCommand(command: Extract<Command, { type: "STA
         console.log("Starting new pipeline for projectId:", projectId);
 
         initialState = {
-            initialPrompt: payload.audioUrl,
+            initialPrompt: payload.audioUrl || "",
             creativePrompt: payload.creativePrompt,
             audioGcsUri: payload.audioUrl, // Assuming audioUrl is the GCS URI
             hasAudio: !!payload.audioUrl,
@@ -89,33 +107,65 @@ async function handleStartPipelineCommand(command: Extract<Command, { type: "STA
     }
 }
 
-async function handleRequestFullStateCommand(command: Extract<Command, { type: "REQUEST_FULL_STATE"; }>) {
+async function handleRequestFullStateCommand(command: Extract<PipelineCommand, { type: "REQUEST_FULL_STATE"; }>) {
     const { projectId } = command;
     const runnableConfig: RunnableConfig = {
         configurable: { thread_id: projectId },
     };
 
-    const checkpointer = await checkpointerManager.getCheckpointer();
-    if (!checkpointer) {
-        throw new Error("Checkpointer not initialized");
-    }
-
-    const checkpoint = await checkpointerManager.loadCheckpoint(runnableConfig);
-    if (checkpoint && checkpoint.channel_values) {
+    const existingCheckpoint = await checkpointerManager.loadCheckpoint(runnableConfig);
+    if (existingCheckpoint && existingCheckpoint.channel_values) {
         await publishPipelineEvent({
             type: "FULL_STATE",
             projectId,
-            payload: { state: checkpoint.channel_values as GraphState },
+            payload: { state: existingCheckpoint.channel_values as GraphState },
             timestamp: new Date().toISOString(),
         });
     } else {
         console.warn(`No checkpoint found for projectId: ${projectId}`);
+        console.warn(`Retrieveing recent state from storage`);
+
+        const bucketName = process.env.GCP_BUCKET_NAME;
+        if (!bucketName) {
+            throw new Error("GCP_BUCKET_NAME environment variable not set.");
+        }
+
+        const storyboardPath = `${projectId}/scenes/storyboard.json`;
+        const [ contents ] = await storage.bucket(bucketName).file(storyboardPath).download();
+        if (contents.length) {
+            const storyboard = JSON.parse(contents.toString());
+
+            console.log("   Found existing storyboard. Resuming workflow.");
+
+            const state: GraphState = {
+                initialPrompt: "",
+                creativePrompt: "",
+                hasAudio: false,
+                storyboard,
+                storyboardState: storyboard,
+                currentSceneIndex: 0,
+                audioGcsUri: "",
+                errors: [],
+                generationRules: [],
+                refinedRules: [],
+            };
+
+            await publishPipelineEvent({
+                type: "FULL_STATE",
+                projectId,
+                payload: { state: state as GraphState },
+                timestamp: new Date().toISOString(),
+            });
+
+        } else {
+            console.warn(`No state found in storage. ProjectId: ${projectId}`);
+        }
     }
 }
 
-async function handleRetrySceneCommand(command: Extract<Command, { type: "RETRY_SCENE"; }>) {
-    const { projectId, payload } = command;
-    console.log(`Retrying scene ${payload.sceneId} for projectId: ${projectId}`);
+async function handleResumePipelineCommand(command: Extract<PipelineCommand, { type: "RESUME_PIPELINE"; }>) {
+    const { projectId } = command;
+    console.log(`Resuming pipeline for projectId: ${projectId}`);
 
     const bucketName = process.env.GCP_BUCKET_NAME;
     if (!bucketName) {
@@ -133,44 +183,93 @@ async function handleRetrySceneCommand(command: Extract<Command, { type: "RETRY_
 
     const existingCheckpoint = await checkpointerManager.loadCheckpoint(runnableConfig);
     if (!existingCheckpoint) {
-        console.warn(`No checkpoint found to retry scene for projectId: ${projectId}`);
+        console.warn(`No checkpoint found to resume for projectId: ${projectId}`);
+        // Optionally send a FAILURE event back to client
+        await publishPipelineEvent({
+            type: "WORKFLOW_FAILED",
+            projectId,
+            payload: { error: "No existing pipeline found to resume." },
+            timestamp: new Date().toISOString(),
+        });
+        return;
+    }
+
+    const workflow = new CinematicVideoWorkflow(process.env.GCP_PROJECT_ID!, projectId, bucketName);
+    workflow.publishEvent = publishPipelineEvent;
+    workflow.publishEvent = publishPipelineEvent;
+    workflow.publishEvent = publishPipelineEvent;
+    workflow.publishEvent = publishPipelineEvent;
+    const compiledGraph = workflow.graph.compile({ checkpointer });
+
+    console.log(`Pipeline for projectId: ${projectId} resuming.`);
+    const stream = await compiledGraph.stream(null, runnableConfig);
+
+    for await (const step of stream) {
+        const [ state ] = Object.values(step);
+        await publishPipelineEvent({
+            type: "FULL_STATE",
+            projectId,
+            payload: { state: state as GraphState },
+            timestamp: new Date().toISOString(),
+        });
+    }
+}
+
+async function handleRegenerateSceneCommand(command: Extract<PipelineCommand, { type: "REGENERATE_SCENE"; }>) {
+    const { projectId, payload } = command;
+    console.log(`Regenerating scene ${payload.sceneId} for projectId: ${projectId}`);
+
+    const bucketName = process.env.GCP_BUCKET_NAME;
+    if (!bucketName) {
+        throw new Error("GCP_BUCKET_NAME environment variable not set.");
+    }
+
+    const runnableConfig: RunnableConfig = {
+        configurable: { thread_id: projectId },
+    };
+
+    const checkpointer = await checkpointerManager.getCheckpointer();
+    if (!checkpointer) {
+        throw new Error("Checkpointer not initialized");
+    }
+
+    const existingCheckpoint = await checkpointerManager.loadCheckpoint(runnableConfig);
+    if (!existingCheckpoint) {
+        console.warn(`No checkpoint found to regenerate scene for projectId: ${projectId}`);
         return;
     }
 
     let currentState = existingCheckpoint.channel_values as GraphState;
+    const sceneId = payload.sceneId;
 
-    // Modify the state to retry the specified scene
-    // This typically means setting the currentSceneIndex back to the scene to retry
-    // and potentially clearing out any generated data for that scene if it's meant to be re-generated.
-    const sceneIndexToRetry = currentState.storyboardState?.scenes.findIndex(s => s.id === parseInt(payload.sceneId, 10));
+    const sceneIndexToRetry = currentState.storyboardState?.scenes.findIndex(s => s.id === sceneId);
 
     if (sceneIndexToRetry !== undefined && sceneIndexToRetry !== -1) {
+        // Prepare overrides
+        const promptOverrides = currentState.scenePromptOverrides || {};
+        if (payload.promptModification) {
+            promptOverrides[sceneId] = payload.promptModification;
+        }
+
         currentState = {
             ...currentState,
             currentSceneIndex: sceneIndexToRetry,
-            // Optionally, clear generated video/frames for the retried scene to force regeneration
-            storyboardState: currentState.storyboardState ? {
-                ...currentState.storyboardState,
-                scenes: currentState.storyboardState.scenes.map((scene, index) => {
-                    if (index >= sceneIndexToRetry) {
-                        return { ...scene, generatedVideo: undefined, startFrame: undefined, endFrame: undefined, evaluation: undefined };
-                    }
-                    return scene;
-                })
-            } : undefined as any,
+            forceRegenerateSceneId: payload.forceRegenerate ? sceneId : undefined,
+            scenePromptOverrides: promptOverrides,
+            // We do NOT clear generatedVideo here, because process_scene logic handles skipping based on existence
+            // UNLESS forceRegenerateSceneId matches.
+            // If we want to support "soft" regeneration (only if missing), we wouldn't set forceRegenerateSceneId.
+            // But REGENERATE_SCENE implies intention to re-do it.
         };
 
-        // Save the modified state to the checkpointer
-        // The `put` method needs the full state, not just a partial object
         const workflow = new CinematicVideoWorkflow(process.env.GCP_PROJECT_ID!, projectId, bucketName);
         const compiledGraph = workflow.graph.compile({ checkpointer });
 
-        // LangGraph's checkpointer.put expects the *current* state of the graph. The LangGraph `stream` method will handle saving updates implicitly.
-        // So, we just need to ensure the checkpoint is updated, and then restart the stream.
+        // Update checkpoint with new state configuration
         await checkpointer.put(runnableConfig, { ...existingCheckpoint, channel_values: currentState }, {} as any, {});
 
-        console.log(`Pipeline for projectId: ${projectId} restarting from scene ${payload.sceneId}.`);
-        const stream = await compiledGraph.stream(null, runnableConfig); // Start from null input to resume from checkpoint
+        console.log(`Pipeline for projectId: ${projectId} restarting from scene ${sceneId} with forceRegenerate=${payload.forceRegenerate}`);
+        const stream = await compiledGraph.stream(null, runnableConfig);
 
         for await (const step of stream) {
             const [ state ] = Object.values(step);
@@ -182,11 +281,17 @@ async function handleRetrySceneCommand(command: Extract<Command, { type: "RETRY_
             });
         }
     } else {
-        console.warn(`Scene ${payload.sceneId} not found in pipeline for projectId: ${projectId}`);
+        console.warn(`Scene ${sceneId} not found in pipeline for projectId: ${projectId}`);
+        await publishPipelineEvent({
+            type: "WORKFLOW_FAILED",
+            projectId,
+            payload: { error: `Scene ${sceneId} not found.` },
+            timestamp: new Date().toISOString(),
+        });
     }
 }
 
-async function handleStopPipelineCommand(command: Extract<Command, { type: "STOP_PIPELINE"; }>) {
+async function handleStopPipelineCommand(command: Extract<PipelineCommand, { type: "STOP_PIPELINE"; }>) {
     const { projectId } = command;
     console.log(`Stopping pipeline for projectId: ${projectId}`);
 
@@ -201,10 +306,6 @@ async function handleStopPipelineCommand(command: Extract<Command, { type: "STOP
         configurable: { thread_id: projectId },
     };
     // Optionally, load and save to ensure latest state is persisted on explicit stop
-    const checkpointer = await checkpointerManager.getCheckpointer();
-    if (!checkpointer) {
-        throw new Error("Checkpointer not initialized");
-    }
     const currentCheckpoint = await checkpointerManager.loadCheckpoint(runnableConfig);
     if (currentCheckpoint) {
         await checkpointerManager.saveCheckpoint(runnableConfig, currentCheckpoint);
@@ -218,7 +319,6 @@ async function handleStopPipelineCommand(command: Extract<Command, { type: "STOP
 async function main() {
     console.log("Starting pipeline worker...");
 
-    // Initialize the checkpointer manager FIRST
     await checkpointerManager.getCheckpointer();
 
     const [ videoCommandsTopic ] = await pubsub.topic(VIDEO_COMMANDS_TOPIC_NAME).get({ autoCreate: true });
@@ -230,7 +330,7 @@ async function main() {
 
     pipelineCommandsSubscription.on("message", async (message) => {
         try {
-            const command = JSON.parse(message.data.toString()) as Command;
+            const command = JSON.parse(message.data.toString()) as PipelineCommand;
             console.log(`Received command: ${command.type} for projectId: ${command.projectId}`);
 
             switch (command.type) {
@@ -240,8 +340,11 @@ async function main() {
                 case "REQUEST_FULL_STATE":
                     await handleRequestFullStateCommand(command);
                     break;
-                case "RETRY_SCENE":
-                    await handleRetrySceneCommand(command);
+                case "RESUME_PIPELINE":
+                    await handleResumePipelineCommand(command);
+                    break;
+                case "REGENERATE_SCENE":
+                    await handleRegenerateSceneCommand(command);
                     break;
                 case "STOP_PIPELINE":
                     await handleStopPipelineCommand(command);
@@ -254,7 +357,6 @@ async function main() {
         }
     });
 
-    // Graceful shutdown
     process.on("SIGINT", () => {
         console.log("Shutting down worker...");
         pipelineCommandsSubscription.close();

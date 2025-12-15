@@ -2,37 +2,104 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Docker: Attach to Pipeline Worker",
             "type": "node",
-            "request": "launch",
-            "name": "Debug Pipeline",
+            "request": "attach",
+            "remoteRoot": "/usr/src/app",
+            "localRoot": "${workspaceFolder}/pipeline-worker",
+            "port": 9230,
+            "restart": true,
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${workspaceFolder}/dist/pipeline/graph.js",
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceFolder}/pipeline-worker/**/*.js",
+                "${workspaceFolder}/pipeline/**/*.js",
+                "${workspaceFolder}/audio/**/*.js",
+                "${workspaceFolder}/shared/**/*.js",
+                "!**/node_modules/**"
+            ],
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/pipeline-worker/**",
+                "${workspaceFolder}/pipeline/**",
+                "!**/node_modules/**"
+            ]
+        },
+        {
+            "name": "Docker: Attach to Server",
+            "type": "node",
+            "request": "attach",
+            "port": 9229,
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "remoteRoot": "/usr/src/app",
+            "restart": true,
+        },
+        {
+            "name": "Docker: Debug Client",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:8000",
+            "webRoot": "${workspaceFolder}/client",
+            "sourceMapPathOverrides": {
+                "/*": "${webRoot}/*"
+            }
+        },
+
+        {
+            "name": "Docker: Launch Server",
+            "type": "docker",
+            "request": "launch",
+            "preLaunchTask": "docker-run: debug",
+            "platform": "node"
+        },
+
+        {
+            "name": "Launch Pipeline",
+            "type": "node",
+            "request": "launch",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/pipeline/dist/graph.js",
             "preLaunchTask": "tsc: build - tsconfig.json",
             "outFiles": [
-                "${workspaceFolder}/dist/**/*.js"
+                "${workspaceFolder}/pipeline/dist/**/*.js"
             ],
             "sourceMaps": true,
             "smartStep": true,
             "internalConsoleOptions": "openOnSessionStart"
         },
         {
+            "name": "Launch Pipeline - Debug Existing Video",
             "type": "node",
             "request": "launch",
-            "name": "Debug Pipeline - Existing Video",
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${workspaceFolder}/dist/pipeline/graph.js",
-            "args": ["--id", "video_1765360860268"],
+            "program": "${workspaceFolder}/pipeline/dist/graph.js",
+            "args": [
+                "--id",
+                "video_1765360860268"
+            ],
             "preLaunchTask": "tsc: build - tsconfig.json",
             "outFiles": [
-                "${workspaceFolder}/dist/**/*.js"
+                "${workspaceFolder}/pipeline/dist/**/*.js"
             ],
             "sourceMaps": true,
             "smartStep": true,
             "internalConsoleOptions": "openOnSessionStart"
+        },
+    ],
+    "compounds": [
+        {
+            "name": "Docker: Debug Full-Stack",
+            "configurations": [
+                "Docker: Attach to Server",
+                "Docker: Debug Client"
+            ]
         }
     ]
 }

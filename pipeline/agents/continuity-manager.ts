@@ -9,7 +9,7 @@ import {
     Storyboard,
     GraphState,
     ObjectData,
-} from "../types";
+} from "../../shared/pipeline-types";
 import { GCPStorageManager } from "../storage-manager";
 import { ApiError, Modality } from "@google/genai";
 import { FrameCompositionAgent } from "./frame-composition-agent";
@@ -68,14 +68,22 @@ export class ContinuityManagerAgent {
         const locationInScene = locations.find(loc => loc.id === scene.locationId)!;
         const locationReferenceImages = locationInScene?.referenceImages || [];
 
-        // Use role-based prompt composition for scene enhancement
-        const enhancedPrompt = composeEnhancedSceneGenerationPrompt(
-            scene,
-            charactersInScene,
-            locationInScene!,
-            previousScene,
-            generationRules
-        );
+        // Use role-based prompt composition for scene enhancement, or override if provided
+        const promptOverride = state.scenePromptOverrides?.[ scene.id ];
+        let enhancedPrompt = "";
+
+        if (promptOverride) {
+            console.log(`   📝 Using prompt override for Scene ${scene.id}`);
+            enhancedPrompt = promptOverride;
+        } else {
+            enhancedPrompt = composeEnhancedSceneGenerationPrompt(
+                scene,
+                charactersInScene,
+                locationInScene!,
+                previousScene,
+                generationRules
+            );
+        }
 
         // Refined rules are now incorporated directly in the enhanced prompt
         // Previous evaluation feedback is used to inform global generation rules

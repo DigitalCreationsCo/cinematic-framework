@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -19,11 +19,14 @@ interface PlaybackControlsProps {
   totalDuration: number;
   audioUrl?: string;
   mainVideoRef?: React.RefObject<HTMLVideoElement>;
+  playbackOffset?: number;
   timelineVideoRefs?: React.RefObject<HTMLVideoElement>[];
   onSeekSceneChange?: (sceneId: number) => void;
   onTimeUpdate?: (time: number) => void;
   onPlayMainVideo?: () => void;
   isLoading?: boolean;
+  isPlaying: boolean;
+  setIsPlaying: (isPlaying: boolean) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -32,18 +35,20 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-export default function PlaybackControls({
+const PlaybackControls = memo(function PlaybackControls({
   scenes,
   totalDuration,
   audioUrl,
   mainVideoRef,
+  playbackOffset = 0,
   timelineVideoRefs,
   onSeekSceneChange,
   onTimeUpdate,
   onPlayMainVideo,
-  isLoading
+  isLoading,
+  isPlaying,
+  setIsPlaying,
 }: PlaybackControlsProps) {
-  const [ isPlaying, setIsPlaying ] = useState(false);
   const [ currentTime, setCurrentTime ] = useState(0);
   const [ volume, setVolume ] = useState(0.8);
   const [ isMuted, setIsMuted ] = useState(false);
@@ -103,73 +108,74 @@ export default function PlaybackControls({
     }
   }, [ audioUrl, mainVideoRef ]);
 
-  const startPlayback = useCallback(() => {
+  // Main animation loop
+  useEffect(() => {
+    if (!isPlaying) {
+      return;
+    }
+
     lastTimeRef.current = performance.now();
 
     const animate = (timestamp: number) => {
       const delta = (timestamp - lastTimeRef.current) / 1000;
       lastTimeRef.current = timestamp;
 
+      // Prevent large jumps or negative deltas
+      if (delta < 0 || delta > 0.5) {
+        animationRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
       setCurrentTime(prev => {
         const newTime = prev + delta;
-        let timeToSet = newTime;
-        let shouldStop = false;
 
         if (newTime >= totalDuration) {
           if (isLooping) {
-            timeToSet = 0;
-            if (audioRef.current) {
-              audioRef.current.currentTime = 0;
-            }
-            if (mainVideoRef?.current) {
-              mainVideoRef.current.currentTime = 0;
-            }
+            return 0;
           } else {
-            shouldStop = true;
+            // Need to stop
+            setTimeout(() => {
+                setIsPlaying(false);
+                setCurrentTime(0);
+            }, 0);
+            return totalDuration;
           }
         }
-
-        if (shouldStop) {
-            setIsPlaying(false);
-            return totalDuration;
-        }
-        return timeToSet;
+        return newTime;
       });
 
-      if (isPlaying) {
-        animationRef.current = requestAnimationFrame(animate);
-      }
+      animationRef.current = requestAnimationFrame(animate);
     };
 
     animationRef.current = requestAnimationFrame(animate);
-  }, [ totalDuration, isLooping, isPlaying, mainVideoRef ]);
 
-  useEffect(() => {
-    if (isPlaying) {
-      // Synchronize all media elements on play
-      if (audioRef.current) {
-        audioRef.current.currentTime = currentTime;
-        audioRef.current.play().catch(() => { });
-      }
-      if (mainVideoRef?.current) {
-        mainVideoRef.current.currentTime = currentTime;
-        mainVideoRef.current.play().catch(() => { });
-      }
-
-      startPlayback();
-    } else {
-      // Pause all media elements on pause
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-      if (mainVideoRef?.current) {
-        mainVideoRef.current.pause();
-      }
+    return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
+    };
+  }, [isPlaying, totalDuration, isLooping, setIsPlaying]);
+
+  // Synchronize media elements
+  useEffect(() => {
+    if (audioRef.current) {
+      if (Math.abs(audioRef.current.currentTime - currentTime) > 0.2) {
+        audioRef.current.currentTime = currentTime;
+      }
+      if (isPlaying) audioRef.current.play().catch(() => { });
+      else audioRef.current.pause();
     }
-  }, [ isPlaying, startPlayback, currentTime, mainVideoRef ]);
+
+    if (mainVideoRef?.current) {
+      const videoTime = Math.max(0, currentTime - playbackOffset);
+      // Sync if drift is significant (e.g. seek or scene change)
+      if (Math.abs(mainVideoRef.current.currentTime - videoTime) > 0.2) {
+        mainVideoRef.current.currentTime = videoTime;
+      }
+      if (isPlaying) mainVideoRef.current.play().catch(() => { });
+      else mainVideoRef.current.pause();
+    }
+  }, [currentTime, isPlaying, playbackOffset, mainVideoRef, audioUrl]);
 
   // Update time for external consumers (like Timeline) and trigger scene change notification
   useEffect(() => {
@@ -177,11 +183,11 @@ export default function PlaybackControls({
 
     // Seek all managed video elements (if they are not in a loop, they will react to currentTime change)
     if (timelineVideoRefs) {
-        timelineVideoRefs.forEach(ref => {
-            if (ref.current) {
-                ref.current.currentTime = currentTime;
-            }
-        })
+      timelineVideoRefs.forEach(ref => {
+        if (ref.current) {
+          ref.current.currentTime = currentTime;
+        }
+      });
     }
 
     if (playbackScene && playbackScene.id !== lastSceneIdRef.current) {
@@ -192,7 +198,7 @@ export default function PlaybackControls({
 
   const handlePlayPause = () => {
     if (onPlayMainVideo) {
-        onPlayMainVideo();
+      onPlayMainVideo();
     }
     setIsPlaying(!isPlaying);
   };
@@ -201,23 +207,15 @@ export default function PlaybackControls({
     const newTime = value[ 0 ];
     setCurrentTime(newTime);
 
-    // Seek custom audio
-    if (audioRef.current) {
-      audioRef.current.currentTime = newTime;
-    }
-
-    // Seek main video
-    if (mainVideoRef?.current) {
-      mainVideoRef.current.currentTime = newTime;
-    }
+    // Audio and Video sync handled by useEffect
 
     // Seek all timeline videos
     if (timelineVideoRefs) {
-        timelineVideoRefs.forEach(ref => {
-            if (ref.current) {
-                ref.current.currentTime = newTime;
-            }
-        })
+      timelineVideoRefs.forEach(ref => {
+        if (ref.current) {
+          ref.current.currentTime = newTime;
+        }
+      });
     }
   };
 
@@ -226,8 +224,6 @@ export default function PlaybackControls({
     if (!currentScene) {
       const newTime = 0;
       setCurrentTime(newTime);
-      if (audioRef.current) audioRef.current.currentTime = newTime;
-      if (mainVideoRef?.current) mainVideoRef.current.currentTime = newTime;
       return;
     }
 
@@ -239,8 +235,6 @@ export default function PlaybackControls({
     }
 
     setCurrentTime(newTime);
-    if (audioRef.current) audioRef.current.currentTime = newTime;
-    if (mainVideoRef?.current) mainVideoRef.current.currentTime = newTime;
   };
 
   const handleSkipForward = () => {
@@ -252,8 +246,6 @@ export default function PlaybackControls({
       const nextScene = scenes[ currentIndex + 1 ];
       const newTime = nextScene.startTime;
       setCurrentTime(newTime);
-      if (audioRef.current) audioRef.current.currentTime = newTime;
-      if (mainVideoRef?.current) mainVideoRef.current.currentTime = newTime;
     }
   };
 
@@ -265,7 +257,7 @@ export default function PlaybackControls({
     }
     // Also apply volume to intrinsic video audio if no user audio is present
     if (!audioUrl && mainVideoRef?.current) {
-        mainVideoRef.current.volume = isMuted ? 0 : newVolume;
+      mainVideoRef.current.volume = isMuted ? 0 : newVolume;
     }
   };
 
@@ -418,4 +410,6 @@ export default function PlaybackControls({
       </div>
     </div>
   );
-}
+});
+
+export default PlaybackControls;

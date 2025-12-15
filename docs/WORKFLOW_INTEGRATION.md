@@ -8,7 +8,7 @@
 
 ## Overview
 
-The role-based prompt architecture remains fully integrated throughout the cinematic video generation workflow, ensuring detailed, role-specific specifications are used at every stage. This architecture is now underpinned by a **command-driven orchestration layer** utilizing **Google Cloud Pub/Sub** for communication between the API server and the stateless `pipeline-wrapper` worker service. Persistent state management via **PostgreSQL checkpoints** guarantees reliable execution, enabling features like pipeline resume, explicit stop, and scene retries.
+The role-based prompt architecture remains fully integrated throughout the cinematic video generation workflow, ensuring detailed, role-specific specifications are used at every stage. This architecture is now underpinned by a **command-driven orchestration layer** utilizing **Google Cloud Pub/Sub** for communication between the API server and the stateless `pipeline-worker` worker service. Persistent state management via **PostgreSQL checkpoints** guarantees reliable execution, enabling features like pipeline resume, explicit stop, and scene retries.
 
 ---
 
@@ -20,7 +20,7 @@ Execution is no longer initiated by a single monolithic script call. It is now m
 
 1.  **Client Action**: User triggers an action (e.g., Start, Stop) via the UI, which calls the stateless API server (`/api/video/start`).
 2.  **Command Publishing**: The API server validates the request and publishes a structured **Command** (e.g., `START_PIPELINE`) to the `video-commands` topic.
-3.  **Worker Subscription**: The `pipeline-wrapper` service subscribes to this topic and executes the command using the LangGraph instance, referencing the `projectId` as the run ID/thread ID.
+3.  **Worker Subscription**: The `pipeline-worker` service subscribes to this topic and executes the command using the LangGraph instance, referencing the `projectId` as the run ID/thread ID.
 4.  **State Persistence**: The worker saves the graph state to PostgreSQL after every significant step (or on command).
 5.  **State Broadcasting**: The worker publishes events (e.g., `FULL_STATE`, `SCENE_COMPLETED`) to the `video-events` topic.
 6.  **Client Feedback**: The API server streams relevant events back to the connected client via project-specific SSE connections.
@@ -149,13 +149,13 @@ All prompts now incorporate location temporal state via `formatLocationTemporalS
 
 ## File Structure Updates
 
-The core workflow has been modularized across three services: `client`, `server` (API/SSE), and `pipeline-wrapper` (Worker).
+The core workflow has been modularized across three services: `client`, `server` (API/SSE), and `pipeline-worker` (Worker).
 
 ```
 /
 ├── client/                           # Frontend (React/Vite)
 ├── server/                           # Stateless API Gateway, Pub/Sub Publisher/Subscriber for SSE
-├── pipeline-wrapper/                 # Dedicated service running LangGraph (Worker)
+├── pipeline-worker/                 # Dedicated service running LangGraph (Worker)
 │   ├── Dockerfile                    # Worker build file
 │   ├── checkpointer-manager.ts       # Abstraction layer for Postgres Checkpointer
 │   └── index.ts                      # Main logic subscribing to commands
@@ -172,7 +172,7 @@ The core workflow has been modularized across three services: `client`, `server`
 ## Documentation References
 
 - [PROMPTS_ARCHITECTURE.md](PROMPTS_ARCHITECTURE.md) - Role-based architecture design
-- [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) - Details on the pipeline-wrapper service
+- [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) - Details on the pipeline-worker service
 - [SCHEMA_COMPOSITION_UPDATE.md](SCHEMA_COMPOSITION_UPDATE.md) - Type system improvements
 - [TEMPORAL_TRACKING.md](TEMPORAL_TRACKING.md) - Details on state evolution across scenes
 

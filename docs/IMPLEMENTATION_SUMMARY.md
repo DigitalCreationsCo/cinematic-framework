@@ -30,8 +30,8 @@ This system integrates the role prompts and temporal state into the final action
 
 This phase introduced a distributed, fault-tolerant execution model:
 
-1.  **New Service: `pipeline-wrapper/`**: A dedicated worker service running on **Node.js v20+**. It subscribes to Pub/Sub commands (`START_PIPELINE`, `STOP_PIPELINE`, etc.) published by the API server and executes the workflow using `node pipeline-wrapper/index.ts` instead of `tsx`. Audio assets are now copied into this container.
-2.  **State Management Abstraction: `pipeline-wrapper/checkpointer-manager.ts`**: Implements persistent state saving and loading using LangChain's PostgreSQL integration:
+1.  **New Service: `pipeline-worker/`**: A dedicated worker service running on **Node.js v20+**. It subscribes to Pub/Sub commands (`START_PIPELINE`, `STOP_PIPELINE`, etc.) published by the API server and executes the workflow using `node pipeline-worker/index.ts` instead of `tsx`. Audio assets are now copied into this container.
+2.  **State Management Abstraction: `pipeline-worker/checkpointer-manager.ts`**: Implements persistent state saving and loading using LangChain's PostgreSQL integration:
     *   Uses **`@langchain/langgraph-postgres`** via the `PostgresCheckpointer`.
     *   Persists the state via `checkpointer.put` and loads it using `channel_values` directly, bypassing stringified JSON state handling.
     *   Enables reliable resume, stop, and **scene retry capabilities**.
@@ -59,7 +59,7 @@ A new synchronization layer coordinates the main video, timeline preview videos,
 ### 5. Modularization
 The responsibilities are cleanly separated:
 - **`pipeline/`**: Core logic (Agents, Prompts, Graph definition).
-- **`pipeline-wrapper/`**: Execution engine, state persistence interface.
+- **`pipeline-worker/`**: Execution engine, state persistence interface.
 - **`server/`**: Request routing, command dispatch, and client streaming.
 
 ---
@@ -70,7 +70,7 @@ The project now includes the following new/modified directories:
 
 ```
 /
-├── pipeline-wrapper/                 # Service running the LangGraph worker
+├── pipeline-worker/                 # Service running the LangGraph worker
 │   ├── Dockerfile
 │   ├── checkpointer-manager.ts
 │   └── index.ts

@@ -1,69 +1,53 @@
-import { Command } from "@shared/pubsub-types";
+import { PipelineCommand } from "@shared/pubsub-types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
-interface StartPipelineArgs {
-  projectId: string;
-  audioUrl: string;
-  creativePrompt: string;
-}
-
-export async function startPipeline(args: StartPipelineArgs): Promise<{ projectId: string; message: string }> {
-  const response = await fetch(`${API_BASE_URL}/video/start`, {
+async function sendCommand<T>(endpoint: string, body: T): Promise<{ projectId: string; message: string; }> {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(args),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to start pipeline.");
+    throw new Error(errorData.error || `Failed to send command to ${endpoint}.`);
   }
 
   return response.json();
 }
 
-interface StopPipelineArgs {
-  projectId: string;
-}
+// ============================================================================
+// Pipeline Control Commands
+// ============================================================================
 
-export async function stopPipeline(args: StopPipelineArgs): Promise<{ projectId: string; message: string }> {
-  const response = await fetch(`${API_BASE_URL}/video/stop`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(args),
-  });
+export const startPipeline = (args: Extract<PipelineCommand, { type: "START_PIPELINE"; }>[ 'payload' ] & { projectId: string; }) =>
+  sendCommand("/video/start", args);
 
+export const stopPipeline = (args: { projectId: string; }) =>
+  sendCommand("/video/stop", args);
+
+export const resumePipeline = (args: { projectId: string; }) =>
+  sendCommand(`/video/${args.projectId}/resume`, args);
+
+export const regenerateScene = (args: Extract<PipelineCommand, { type: "REGENERATE_SCENE"; }>[ 'payload' ] & { projectId: string; }) =>
+  sendCommand(`/video/${args.projectId}/regenerate-scene`, args);
+
+
+// ============================================================================
+// Data Fetching
+// ============================================================================
+
+export const requestFullState = (args: { projectId: string; }) =>
+  sendCommand(`/video/${args.projectId}/request-state`, args);
+
+export const getProjects = async (): Promise<{ id: string; createdAt: string; }[]> => {
+  const response = await fetch(`${API_BASE_URL}/projects`);
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to stop pipeline.");
+    throw new Error(errorData.error || "Failed to fetch projects.");
   }
-
   return response.json();
-}
-
-interface RetrySceneArgs {
-    projectId: string;
-    sceneId: string;
-}
-
-export async function retryScene(args: RetrySceneArgs): Promise<{ projectId: string; message: string }> {
-    const response = await fetch(`${API_BASE_URL}/video/${args.projectId}/retry-scene`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(args),
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to retry scene.");
-    }
-
-    return response.json();
-}
+};

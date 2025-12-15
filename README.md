@@ -29,12 +29,12 @@ Cinematic Framework leverages Google's Vertex AI (Gemini models) and LangGraph t
 
 ## Architecture
 
-The framework uses a **LangGraph state machine** running in a dedicated `pipeline-wrapper` service (using Node 20+). Execution is controlled via commands published to a Pub/Sub topic (`video-commands`). State changes are broadcast via another Pub/Sub topic (`video-events`), which the API server relays to connected clients via SSE.
+The framework uses a **LangGraph state machine** running in a dedicated `pipeline-worker` service (using Node 20+). Execution is controlled via commands published to a Pub/Sub topic (`video-commands`). State changes are broadcast via another Pub/Sub topic (`video-events`), which the API server relays to connected clients via SSE.
 
 ```mermaid
 graph TD
     A[Client/API] -->|Publish Command (START/STOP/RETRY)| B(Pub/Sub: video-commands);
-    B --> C[Pipeline Worker: pipeline-wrapper];
+    B --> C[Pipeline Worker: pipeline-worker];
     C -->|Check/Save State| D[(PostgreSQL Checkpoint)];
     C -->|Execute Graph| E[LangGraph Workflow];
     C -->|Publish State Update| F(Pub/Sub: video-events);
@@ -56,7 +56,7 @@ graph TD
 5.  **QualityCheckAgent**: Evaluates generated scenes for quality and consistency, feeding back into the prompt/rule refinement loop.
 6.  **Prompt CorrectionInstruction**: Guides the process for refining prompts based on quality feedback.
 7.  **Generation Rules Presets**: Proactive domain-specific rules that can be automatically added to guide generation quality.
-8.  **Pipeline Worker (`pipeline-wrapper/`)**: A dedicated service running the LangGraph instance using Node.js v20+. It handles command execution (`START_PIPELINE`, `STOP_PIPELINE`, `RETRY_SCENE`) and uses the `PostgresCheckpointer` for reliable state management. It now uses `node` directly for execution, replacing `tsx`.
+8.  **Pipeline Worker (`pipeline-worker/`)**: A dedicated service running the LangGraph instance using Node.js v20+. It handles command execution (`START_PIPELINE`, `STOP_PIPELINE`, `RETRY_SCENE`) and uses the `PostgresCheckpointer` for reliable state management. It now uses `node` directly for execution, replacing `tsx`.
 9.  **API Server (`server/`)**: Now stateless, it acts as a proxy, publishing client requests as Pub/Sub commands and streaming Pub/Sub events back to the client via project-specific SSE connections managed via temporary Pub/Sub subscriptions. It initializes a Google Cloud Storage client upon startup to support project listing and metadata retrieval.
 
 ## Prerequisites
@@ -85,13 +85,13 @@ docker-compose up --build -d
 ## Configuration
 
 ### Environment Variables
-Update `.env` (or environment variables in deployment). **The API Server now explicitly loads environment variables using `dotenv` upon startup.** Note that `GCP_PROJECT_ID`, `GCP_BUCKET_NAME`, `PUBSUB_PROJECT_ID`, and `POSTGRES_URL` are required for full operation.
+Update `.env` (or environment variables in deployment). **The API Server now explicitly loads environment variables using `dotenv` upon startup.** Note that `GCP_PROJECT_ID`, `GCP_BUCKET_NAME`, `GCP_PROJECT_ID`, and `POSTGRES_URL` are required for full operation.
 
 ```bash
 # Google Cloud Platform Configuration
 GCP_PROJECT_ID="your-gcp-project-id"
 GCP_BUCKET_NAME="your-gcp-bucket-name"
-PUBSUB_PROJECT_ID="test-project" # Required for Pub/Sub operations
+GCP_PROJECT_ID="test-project" # Required for Pub/Sub operations
 # GOOGLE_APPLICATION_CREDENTIALS is often omitted when using ADC or Workload Identity
 # POSTGRES_URL must point to the database accessible by the pipeline worker
 POSTGRES_URL="postgres://postgres:example@postgres-db:5432/cinematiccanvas"
@@ -131,7 +131,6 @@ curl -X POST http://localhost:8000/api/video/stop \
 ```
 
 ### Retrieving Current State
-Use GET to `/api/state`. This retrieves the current snapshot of storyboard elements, metrics, and progress from storage, decoupled from the SSE stream.
 
 ### Listing Available Projects
 Use GET to `/api/projects`. This queries the configured GCS bucket directly to list existing project directories (prefixes). **The listing now excludes any project directory named 'audio' to prevent accessing raw audio assets.**
@@ -147,7 +146,7 @@ cinematic-canvas/
 ├── audio/                            # Local audio files for testing
 ├── client/                           # Frontend application (React/Vite)
 ├── docs/                             # Documentation files
-├── pipeline-wrapper/                 # Dedicated service for running LangGraph/Checkpointer (Uses Node 20, runs via 'node index.ts')
+├── pipeline-worker/                 # Dedicated service for running LangGraph/Checkpointer (Uses Node 20, runs via 'node index.ts')
 │   ├── Dockerfile
 │   ├── checkpointer-manager.ts       # Abstraction for Postgres checkpointer (LangGraph state serialization change)
 │   └── index.ts                      # Main worker logic subscribing to Pub/Sub commands
@@ -194,7 +193,7 @@ When running locally via `docker-compose.yml`, the following variables are impli
 - `PUBSUB_EMULATOR_HOST`: Points to the local Pub/Sub emulator container.
 - `POSTGRES_URL`: Connection string for the service database.
 - `GCP_PROJECT_ID`, `GCP_BUCKET_NAME`: GCP resource identifiers.
-- `PUBSUB_PROJECT_ID`: Project ID for Pub/Sub operations (used by worker/server if not using emulator host).
+- `GCP_PROJECT_ID`: Project ID for Pub/Sub operations (used by worker/server if not using emulator host).
 
 ## Testing
 
@@ -219,15 +218,15 @@ npm run coverage
 
 ### Common Issues (Updated)
 - **Issue: "Failed to connect to database"**
-  - Solution: Ensure the `pipeline-wrapper` service can access PostgreSQL. If running locally, check the `POSTGRES_URL` in `.env` or passed to the worker environment. The `postgres-db` service might need manual verification if not running via compose.
+  - Solution: Ensure the `pipeline-worker` service can access PostgreSQL. If running locally, check the `POSTGRES_URL` in `.env` or passed to the worker environment. The `postgres-db` service might need manual verification if not running via compose.
 - **Issue: "Pipeline did not resume / Ran from beginning"**
-  - Solution: Verify that the `projectId` used matches the `thread_id` saved in the database, and that the `pipeline-wrapper` service is correctly deserializing checkpoint state (`channel_values`).
+  - Solution: Verify that the `projectId` used matches the `thread_id` saved in the database, and that the `pipeline-worker` service is correctly deserializing checkpoint state (`channel_values`).
 - **Issue: "Video generation timed out"**
   - Solution: Increase timeout settings configured within the pipeline agents or pipeline worker environment.
 - **Issue: "Safety filter triggered"**
   - Solution: The framework automatically sanitizes prompts. Review safety error codes in pipeline agents.
 - **Issue: "FFmpeg errors"**
-  - Solution: Verify FFmpeg is installed and accessible in the `pipeline-wrapper` container's PATH.
+  - Solution: Verify FFmpeg is installed and accessible in the `pipeline-worker` container's PATH.
 
 ## Performance Considerations
 - **Scene generation**: ~2-5 minutes per scene (API dependent)
@@ -244,7 +243,7 @@ Contributions are welcome! Please ensure:
 - All tests pass (`npm test`)
 - Code coverage remains above 90% (`npm run coverage`)
 - TypeScript strict mode compliance
-- New services (e.g., `pipeline-wrapper`) are properly containerized (Node 20+) and configured in `docker-compose.yml`.
+- New services (e.g., `pipeline-worker`) are properly containerized (Node 20+) and configured in `docker-compose.yml`.
 
 ## License
 

@@ -4,18 +4,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import type { Scene, SceneStatus } from "@shared/pipeline-types";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, memo } from "react";
 
 interface TimelineProps {
   scenes: Scene[];
   sceneStatuses: Record<number, SceneStatus>;
   selectedSceneId?: number;
   totalDuration: number;
-  currentTime: number;
   isPlaying: boolean;
   audioUrl?: string;
   onSceneSelect?: (sceneId: number) => void;
-  onSetTimelineVideoRefs: (refs: (HTMLVideoElement | null)[]) => void;
+  onSetTimelineVideoRefs?: (refs: (HTMLVideoElement | null)[]) => void;
   isLoading?: boolean;
 }
 
@@ -35,34 +34,23 @@ const intensityOpacity: Record<string, string> = {
   extreme: "opacity-100",
 };
 
-export default function Timeline({ scenes, sceneStatuses, selectedSceneId, totalDuration, currentTime, isPlaying, audioUrl, onSceneSelect, onSetTimelineVideoRefs, isLoading }: TimelineProps) {
+const Timeline = memo(function Timeline({ scenes, sceneStatuses, selectedSceneId, totalDuration, isPlaying, audioUrl, onSceneSelect, onSetTimelineVideoRefs, isLoading }: TimelineProps) {
   const pixelsPerSecond = 20;
   const timelineWidth = totalDuration * pixelsPerSecond;
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
 
   // Propagate refs up to parent (PlaybackControls)
-  useEffect(() => {
-    onSetTimelineVideoRefs(videoRefs.current);
-  }, [ onSetTimelineVideoRefs, scenes.length ]);
+  // useEffect(() => {
+  //   onSetTimelineVideoRefs(videoRefs.current);
+  // }, [ onSetTimelineVideoRefs, scenes.length ]);
 
   // Handle local play/pause for timeline videos (only if user audio is NOT present, otherwise they rely on global play state)
-  useEffect(() => {
-    if (audioUrl === undefined) {
-      if (isPlaying) {
-        videoRefs.current.forEach(video => {
-          if (video) {
-            video.play().catch(() => { });
-          }
-        });
-      } else {
-        videoRefs.current.forEach(video => {
-          if (video) {
-            video.pause();
-          }
-        });
-      }
-    }
-  }, [ isPlaying, audioUrl ]);
+  // useEffect(() => {
+  //     const video = videoRefs.current.find(video => video?.id === selectedSceneId?.toString());
+  //     if (video) {
+  //       isPlaying === true ? video.pause() : video.play();
+  //     }
+  // }, [ isPlaying, audioUrl ]);
 
   if (isLoading) {
     return (
@@ -122,13 +110,15 @@ export default function Timeline({ scenes, sceneStatuses, selectedSceneId, total
                     <video
                       ref={ el => videoRefs.current[ index ] = el }
                       src={ scene.generatedVideo?.publicUri }
-                      className="h-full flex items-center justify-center overflow-hidden"
+                      className="h-full w-full object-cover hidden"
                       controls={ false }
-                    >
-                      <span className="text-[10px] font-mono text-white/80 truncate">
+                      muted
+                    />
+                    <div className="h-full flex items-center justify-center overflow-hidden">
+                      <span className="text-[10px] font-mono text-white/80 truncate drop-shadow-md">
                         { scene.id }
                       </span>
-                    </video>
+                    </div>
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-xs">
@@ -161,4 +151,6 @@ export default function Timeline({ scenes, sceneStatuses, selectedSceneId, total
       </div>
     </div>
   );
-}
+});
+
+export default Timeline;

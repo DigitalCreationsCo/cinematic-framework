@@ -3,8 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Play, RefreshCw, Camera, Sun, Music, Users, MapPin, FileText } from "lucide-react";
-import { useRef, useEffect, useCallback, RefObject } from "react";
+import { Play, Pause, RefreshCw, Camera, Sun, Music, Users, MapPin, FileText } from "lucide-react";
+import { useRef, useState, useEffect, useCallback, RefObject, memo } from "react";
 import type { Scene, SceneStatus, Character, Location } from "@shared/pipeline-types";
 import StatusBadge from "./StatusBadge";
 import QualityEvaluationPanel from "./QualityEvaluationPanel";
@@ -16,78 +16,94 @@ interface SceneDetailPanelProps {
   status: SceneStatus;
   characters?: Character[];
   location?: Location;
-  currentTime: number;
-  isPlaying: boolean;
-  audioUrl?: string;
   onRegenerate?: () => void;
-  onPlayMainVideo?: () => void; // Renamed from onPlayVideo to match PlaybackControls
-  mainVideoRef?: RefObject<HTMLVideoElement>;
   isLoading?: boolean;
+  mainVideoRef?: RefObject<HTMLVideoElement>;
+  mainVideoSrc?: string;
+  currentPlaybackTime?: number;
+  isGlobalPlaying?: boolean;
+  onGlobalPause?: () => void;
+  onMainVideoEnded?: () => void;
 }
 
-export default function SceneDetailPanel({
+const SceneDetailPanel = memo(function SceneDetailPanel({
   scene,
   status,
   characters = [],
   location,
-  currentTime,
-  isPlaying,
-  audioUrl,
   onRegenerate,
-  onPlayMainVideo,
+  isLoading = false,
   mainVideoRef,
-  isLoading = false
+  mainVideoSrc,
+  currentPlaybackTime,
+  isGlobalPlaying = false,
+  onGlobalPause,
+  onMainVideoEnded
 }: SceneDetailPanelProps) {
   const hasVideo = !!scene.generatedVideo?.publicUri;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isLocalPlaying, setIsLocalPlaying] = useState(false);
+  const [activePlayer, setActivePlayer] = useState<'local' | 'main'>('local');
 
-  // Effect to sync time and handle intrinsic video audio muting based on global state/audioUrl
+  // Switch to main player if global playback starts or time changes (seeking)
   useEffect(() => {
-    if (mainVideoRef?.current) {
-      // 1. Time Synchronization
-      mainVideoRef.current.currentTime = currentTime;
-
-      // 2. Audio Muting logic: if user audio exists, mute local video audio.
-      if (audioUrl) {
-        mainVideoRef.current.muted = true;
-      } else {
-        mainVideoRef.current.muted = false;
+    if (isGlobalPlaying || (currentPlaybackTime !== undefined)) {
+      // Only switch if we are strictly playing or if time changed while not playing local
+      // But simpler: if global state changes significantly, show global.
+      // We check if currentPlaybackTime actually changed to trigger this via dependency array.
+      // However, we only want to switch to main if we are not already main?
+      // Or if we are playing locally and then global time changes (seek), we switch.
+      
+      // If global is playing, definitely show main
+      if (isGlobalPlaying) {
+        setActivePlayer('main');
+      }
+      // If not playing, but time changed, it implies seeking.
+      // Since we can't easily distinguish "time changed due to play" vs "time changed due to seek"
+      // without looking at isPlaying, but isPlaying covers the play case.
+      // This useEffect runs on isGlobalPlaying change OR currentPlaybackTime change.
+      
+      // If we are just seeking (isGlobalPlaying is false), we want to show main.
+      // But we need to avoid this firing on mount/initial render if we want to default to local?
+      // Actually, if we seek, we want to see it.
+      
+      if (!isLocalPlaying && mainVideoRef?.current) {
+          setActivePlayer('main');
       }
     }
-  }, [ currentTime, audioUrl, mainVideoRef ]);
-
-  // Effect to handle play/pause based on global state
-  useEffect(() => {
-    if (mainVideoRef?.current) {
-      if (isPlaying) {
-        mainVideoRef.current.play().catch(err => console.error("Error playing main video:", err));
-      } else {
-        mainVideoRef.current.pause();
-      }
+    
+    // If global playing started, ensure local is paused
+    if (isGlobalPlaying && videoRef.current && !videoRef.current.paused) {
+      videoRef.current.pause();
+      setIsLocalPlaying(false);
     }
-  }, [ isPlaying, mainVideoRef ]);
+  }, [isGlobalPlaying, currentPlaybackTime, isLocalPlaying, mainVideoRef]);
 
   // Ensure video loads/reloads if scene changes (and thus src changes)
   useEffect(() => {
-    if (mainVideoRef?.current) {
-      mainVideoRef.current.load();
+    if (videoRef?.current) {
+      videoRef.current.load();
+      setIsLocalPlaying(false);
     }
-  }, [ scene.generatedVideo?.publicUri, mainVideoRef ]);
+  }, [ scene.generatedVideo?.publicUri ]);
 
   const handleLocalPlay = useCallback(() => {
-    if (mainVideoRef?.current) {
-      // If paused globally, press local play initiates global play sequence from current scene's start time
-      if (!isPlaying) {
-        // Seek to start of current scene to ensure correct start point for sequential play if time is off
-        mainVideoRef.current.currentTime = scene.startTime;
-        onPlayMainVideo?.(); // Triggers global play state change
+    // If we're starting local playback, stop global playback and switch to local view
+    if (videoRef?.current?.paused) {
+      onGlobalPause?.();
+      setActivePlayer('local');
+    }
+
+    if (videoRef?.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play().catch(err => console.error("Error playing scene video:", err));
       } else {
-        // If already playing globally, just ensure the local video plays from current time if it paused locally
-        if (mainVideoRef.current.paused) {
-          mainVideoRef.current.play().catch(err => console.error("Error playing main video locally:", err));
-        }
+        videoRef.current.pause();
       }
     }
-  }, [ isPlaying, onPlayMainVideo, scene.startTime, mainVideoRef ]);
+  }, [onGlobalPause]);
+
+  const showMainVideo = activePlayer === 'main' && mainVideoRef;
 
   return (
     <div className="h-full flex flex-col" data-testid={ `panel-scene-detail-${scene.id}` }>
@@ -110,8 +126,8 @@ export default function SceneDetailPanel({
             <Skeleton className="h-8 w-16" />
           ) : hasVideo && (
             <Button size="sm" onClick={ handleLocalPlay } data-testid="button-play-video">
-              <Play className="w-4 h-4 mr-1" />
-              Play
+              { isLocalPlaying ? <Pause className="w-4 h-4 mr-1" /> : <Play className="w-4 h-4 mr-1" /> }
+              { isLocalPlaying ? "Pause" : "Play" }
             </Button>
           ) }
           { isLoading ? (
@@ -136,17 +152,36 @@ export default function SceneDetailPanel({
             <Card>
               <Skeleton className="w-full aspect-video bg-muted rounded-md" />
             </Card>
-          ) : hasVideo && (
+          ) : (hasVideo || showMainVideo) && (
             <Card>
-              <CardContent className="p-3">
-                <video
-                  ref={ mainVideoRef }
-                  src={ scene.generatedVideo?.publicUri }
-                  preload="auto"
-                  playsInline={ true }
-                  className="aspect-video bg-muted rounded-md flex items-center justify-center"
-                  controls={ false } // Custom controls used, disable native ones
-                />
+              <CardContent className="p-3 relative">
+                {/* Local Video */}
+                { hasVideo && (
+                  <video
+                    ref={ videoRef }
+                    src={ scene.generatedVideo?.publicUri }
+                    preload="auto"
+                    playsInline={ true }
+                    className={ `aspect-video bg-muted rounded-md flex items-center justify-center ${showMainVideo ? 'hidden' : 'block'}` }
+                    controls={ false }
+                    onPlay={ () => setIsLocalPlaying(true) }
+                    onPause={ () => setIsLocalPlaying(false) }
+                    onEnded={ () => setIsLocalPlaying(false) }
+                  />
+                ) }
+                
+                {/* Main Video (Global Playback) */}
+                { mainVideoRef && (
+                  <video
+                    ref={ mainVideoRef }
+                    src={ mainVideoSrc }
+                    preload="auto"
+                    playsInline={ true }
+                    className={ `aspect-video bg-muted rounded-md flex items-center justify-center ${showMainVideo ? 'block' : 'hidden'}` }
+                    controls={ false }
+                    onEnded={ onMainVideoEnded }
+                  />
+                ) }
               </CardContent>
             </Card>
           ) }
@@ -367,4 +402,6 @@ export default function SceneDetailPanel({
       </ScrollArea>
     </div>
   );
-}
+});
+
+export default SceneDetailPanel;

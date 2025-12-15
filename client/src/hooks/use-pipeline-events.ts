@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { PipelineEvent } from "@shared/pubsub-types"; // Import the new type
+import { useEffect } from "react";
+import { useStore } from "../lib/store";
+import { PipelineEvent } from "@shared/pubsub-types";
 import { GraphState } from "@shared/pipeline-types";
 
 interface UsePipelineEventsProps {
@@ -7,22 +8,45 @@ interface UsePipelineEventsProps {
 }
 
 export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
-  const [ connected, setConnected ] = useState(false);
-  const [ pipelineState, setPipelineState ] = useState<GraphState | null>(null);
-  const [ isHydrated, setIsHydrated ] = useState(false);
+  const {
+    setPipelineState,
+    setIsHydrated,
+    setIsLoading,
+    setError,
+    setConnectionStatus,
+    updateScene,
+    setPipelineStatus,
+  } = useStore(state => ({
+    setPipelineState: state.setPipelineState,
+    setIsHydrated: state.setIsHydrated,
+    setIsLoading: state.setIsLoading,
+    setError: state.setError,
+    setConnectionStatus: state.setConnectionStatus,
+    updateScene: state.updateScene,
+    setPipelineStatus: state.setPipelineStatus,
+  }));
+
+  const isHydrated = useStore(state => state.isHydrated);
 
   useEffect(() => {
     if (!projectId) {
-      setConnected(false);
+      setConnectionStatus("disconnected");
       setPipelineState(null);
       setIsHydrated(false);
+      setIsLoading(false);
+      setError(null);
       return;
     }
+
+    setIsLoading(true);
+    setError(null);
+    setConnectionStatus("connecting");
 
     const eventSource = new EventSource(`/api/events/${projectId}`);
 
     eventSource.onopen = () => {
-      setConnected(true);
+      setConnectionStatus("connected");
+      setError(null);
       console.log(`SSE Connected for projectId: ${projectId}`);
     };
 
@@ -30,35 +54,68 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
       try {
         const parsedEvent = JSON.parse(event.data) as PipelineEvent;
 
-        if (parsedEvent.type === "FULL_STATE") {
-          if (!isHydrated) {
+        switch (parsedEvent.type) {
+          case "FULL_STATE":
             setPipelineState(parsedEvent.payload.state);
-            setIsHydrated(true);
-            console.log(`Pipeline state fully hydrated from FULL_STATE event for projectId: ${projectId}`);
-          } else {
-            // Subsequent FULL_STATE messages update state
-            setPipelineState(parsedEvent.payload.state);
-            console.log(`Pipeline state updated from FULL_STATE event for projectId: ${projectId}`);
-          }
+            if (!isHydrated) {
+              setIsHydrated(true);
+              setIsLoading(false);
+              console.log(`Pipeline state fully hydrated for projectId: ${projectId}`);
+            }
+            break;
+
+          case "WORKFLOW_STARTED":
+            if (parsedEvent.payload && 'initialState' in parsedEvent.payload) {
+              setPipelineState(parsedEvent.payload.initialState as GraphState);
+              setIsLoading(false);
+              setPipelineStatus("running");
+            }
+            break;
+
+          case "SCENE_STARTED":
+            updateScene(parsedEvent.payload.sceneId, { status: "generating" });
+            break;
+
+          case "SCENE_COMPLETED":
+            // Here we would ideally get the updated scene object in the payload
+            // For now, we just update the status. The next FULL_STATE will sync the data.
+            updateScene(parsedEvent.payload.sceneId, { status: "complete", generatedVideo: { publicUri: parsedEvent.payload.videoUrl || "", storageUri: '' } });
+            break;
+
+          case "SCENE_SKIPPED":
+            updateScene(parsedEvent.payload.sceneId, { status: "skipped" });
+            break;
+
+          case "WORKFLOW_COMPLETED":
+            setPipelineState(parsedEvent.payload.finalState);
+            setPipelineStatus("complete");
+            break;
+
+          case "WORKFLOW_FAILED":
+            setError(parsedEvent.payload.error);
+            setPipelineStatus("error");
+            setIsLoading(false);
+            break;
+
+          case "PIPELINE_STATUS":
+            setPipelineStatus(parsedEvent.payload.status);
+            break;
         }
-        // TODO: Handle other event types like SCENE_COMPLETED, WORKFLOW_COMPLETED, etc.
       } catch (e) {
         console.error("Failed to parse SSE event", e);
       }
     };
 
-    eventSource.onerror = (error) => {
-      console.error(`SSE Error for projectId ${projectId}:`, error);
-      setConnected(false);
-      // EventSource tries to reconnect automatically
+    eventSource.onerror = (err) => {
+      console.error(`SSE Error for projectId ${projectId}:`, err);
+      setConnectionStatus("disconnected");
+      setError("Connection to event stream failed");
     };
 
     return () => {
       eventSource.close();
-      setConnected(false);
+      setConnectionStatus("disconnected");
       console.log(`SSE Disconnected for projectId: ${projectId}`);
     };
-  }, [ projectId, isHydrated ]);
-
-  return { connected, pipelineState, isHydrated };
+  }, [ projectId, isHydrated, setConnectionStatus, setError, setIsLoading, setIsHydrated, setPipelineState, updateScene, setPipelineStatus ]);
 }
