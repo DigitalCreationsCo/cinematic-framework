@@ -13,11 +13,8 @@ const mockCharacter: Character = {
     accessories: ["Ancient medallion", "Twin daggers"],
     distinctiveFeatures: ["Scar on left cheek", "Blue eyes", "Athletic build"],
   },
-  appearanceNotes: ["Always wears the medallion", "Hair loose in combat scenes"],
-  state: {
-    lastSeen: 3,
-    emotionalState: "Determined",
-  },
+  appearanceNotes: [ "Always wears the medallion", "Hair loose in combat scenes" ],
+  referenceImages: []
 };
 
 export default function CharacterCardExample() {

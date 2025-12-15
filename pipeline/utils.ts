@@ -1,4 +1,4 @@
-import { Character, Location, WorkflowMetrics, AttemptMetric, Trend, RegressionState, ValidDuration, VALID_DURATIONS } from "./types";
+import { Character, Location, WorkflowMetrics, AttemptMetric, Trend, RegressionState, ValidDuration, VALID_DURATIONS } from "../shared/pipeline-types";
 
 /**
  * Cleans the LLM output to extract the JSON string.

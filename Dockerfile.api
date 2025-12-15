@@ -1,0 +1,31 @@
+# Stage 1: Build the application (both server and client)
+FROM node:20-alpine AS builder
+
+WORKDIR /usr/src/app
+
+COPY package.json package-lock.json ./ 
+RUN npm install
+
+COPY . .
+
+# Build both client and server
+RUN npm run build
+
+# Stage 2: Create the production image for the API server (and serve client static files)
+FROM node:20-alpine
+
+WORKDIR /usr/src/app
+
+# Copy package files and install only production dependencies
+COPY package.json package-lock.json ./ 
+RUN npm install --omit=dev
+
+# Copy the built server and client assets from the builder stage
+COPY --from=builder /usr/src/app/dist ./dist
+
+EXPOSE 8000
+
+ENV NODE_ENV=production
+
+# Start the server (which also serves the client)
+CMD [ "node", "dist/index.cjs" ]

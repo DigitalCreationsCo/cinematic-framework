@@ -1,4 +1,4 @@
-import { Character, Location, Scene, CharacterState, LocationState } from "../types";
+import { Character, Location, Scene, CharacterState, LocationState } from "../../shared/pipeline-types";
 
 /**
  * State Evolution Helper
@@ -221,10 +221,10 @@ function accumulateDirtLevel(
     if (isDirtEvent) {
         // Escalate dirt level
         const levels: Array<"clean" | "slightly_dirty" | "dirty" | "very_dirty" | "covered"> =
-            ["clean", "slightly_dirty", "dirty", "very_dirty", "covered"];
+            [ "clean", "slightly_dirty", "dirty", "very_dirty", "covered" ];
         const currentIndex = levels.indexOf(currentLevel);
         const nextIndex = Math.min(currentIndex + 1, levels.length - 1);
-        return levels[nextIndex];
+        return levels[ nextIndex ];
     }
 
     return currentLevel;
@@ -252,19 +252,19 @@ function accumulateExhaustion(
     if (isRestEvent) {
         // Reduce exhaustion by one level
         const levels: Array<"fresh" | "slightly_tired" | "tired" | "exhausted" | "collapsing"> =
-            ["fresh", "slightly_tired", "tired", "exhausted", "collapsing"];
+            [ "fresh", "slightly_tired", "tired", "exhausted", "collapsing" ];
         const currentIndex = levels.indexOf(currentLevel);
         const prevIndex = Math.max(currentIndex - 1, 0);
-        return levels[prevIndex];
+        return levels[ prevIndex ];
     }
 
     if (isExhaustingEvent) {
         // Escalate exhaustion
         const levels: Array<"fresh" | "slightly_tired" | "tired" | "exhausted" | "collapsing"> =
-            ["fresh", "slightly_tired", "tired", "exhausted", "collapsing"];
+            [ "fresh", "slightly_tired", "tired", "exhausted", "collapsing" ];
         const currentIndex = levels.indexOf(currentLevel);
         const nextIndex = Math.min(currentIndex + 1, levels.length - 1);
-        return levels[nextIndex];
+        return levels[ nextIndex ];
     }
 
     return currentLevel;
@@ -295,10 +295,10 @@ function accumulateSweat(
     if (isSweatEvent) {
         // Escalate sweat level
         const levels: Array<"dry" | "slight" | "moderate" | "heavy" | "drenched"> =
-            ["dry", "slight", "moderate", "heavy", "drenched"];
+            [ "dry", "slight", "moderate", "heavy", "drenched" ];
         const currentIndex = levels.indexOf(currentLevel);
         const nextIndex = Math.min(currentIndex + 1, levels.length - 1);
-        return levels[nextIndex];
+        return levels[ nextIndex ];
     }
 
     return currentLevel;
@@ -319,7 +319,7 @@ function detectInjuries(
     severity: "minor" | "moderate" | "severe";
     acquiredInScene: number;
 }> {
-    const injuries = [...current];
+    const injuries = [ ...current ];
 
     // Detect new injuries
     const injuryKeywords = [
@@ -402,7 +402,7 @@ function detectCostumeDamage(
     }
 
     // Detect stains
-    const stainKeywords = ["blood", "mud", "oil", "grease", "dirt", "wine", "food"];
+    const stainKeywords = [ "blood", "mud", "oil", "grease", "dirt", "wine", "food" ];
     for (const stain of stainKeywords) {
         if (desc.includes(stain)) {
             const garment = detectGarment(desc);
@@ -491,7 +491,7 @@ function detectHairCondition(
 }
 
 function generatePhysicalConditionSummary(
-    injuries: Array<{ type: string; location: string; severity: string }>,
+    injuries: Array<{ type: string; location: string; severity: string; }>,
     dirtLevel: string,
     exhaustionLevel: string
 ): string {
@@ -518,13 +518,13 @@ function generatePhysicalConditionSummary(
 
 function parseTimeOfDay(desc: string, current: string): string {
     const timeKeywords = [
-        { keywords: ["dawn", "sunrise", "early morning"], time: "dawn" },
-        { keywords: ["morning", "a.m.", "am"], time: "morning" },
-        { keywords: ["noon", "midday", "mid-day"], time: "noon" },
-        { keywords: ["afternoon", "p.m.", "pm"], time: "afternoon" },
-        { keywords: ["dusk", "sunset", "twilight"], time: "dusk" },
-        { keywords: ["evening", "night", "nighttime"], time: "night" },
-        { keywords: ["midnight", "late night"], time: "midnight" },
+        { keywords: [ "dawn", "sunrise", "early morning" ], time: "dawn" },
+        { keywords: [ "morning", "a.m.", "am" ], time: "morning" },
+        { keywords: [ "noon", "midday", "mid-day" ], time: "noon" },
+        { keywords: [ "afternoon", "p.m.", "pm" ], time: "afternoon" },
+        { keywords: [ "dusk", "sunset", "twilight" ], time: "dusk" },
+        { keywords: [ "evening", "night", "nighttime" ], time: "night" },
+        { keywords: [ "midnight", "late night" ], time: "midnight" },
     ];
 
     for (const { keywords, time } of timeKeywords) {
@@ -538,13 +538,13 @@ function parseTimeOfDay(desc: string, current: string): string {
 
 function parseWeather(desc: string, current: string): string {
     const weatherKeywords = [
-        { keywords: ["clear", "sunny", "bright"], weather: "Clear" },
-        { keywords: ["cloudy", "overcast"], weather: "Cloudy" },
-        { keywords: ["rain", "raining", "rainy", "downpour"], weather: "Rain" },
-        { keywords: ["storm", "stormy", "thunderstorm"], weather: "Storm" },
-        { keywords: ["snow", "snowing", "snowy", "blizzard"], weather: "Snow" },
-        { keywords: ["fog", "foggy", "mist", "misty"], weather: "Fog" },
-        { keywords: ["wind", "windy", "gust"], weather: "Windy" },
+        { keywords: [ "clear", "sunny", "bright" ], weather: "Clear" },
+        { keywords: [ "cloudy", "overcast" ], weather: "Cloudy" },
+        { keywords: [ "rain", "raining", "rainy", "downpour" ], weather: "Rain" },
+        { keywords: [ "storm", "stormy", "thunderstorm" ], weather: "Storm" },
+        { keywords: [ "snow", "snowing", "snowy", "blizzard" ], weather: "Snow" },
+        { keywords: [ "fog", "foggy", "mist", "misty" ], weather: "Fog" },
+        { keywords: [ "wind", "windy", "gust" ], weather: "Windy" },
     ];
 
     for (const { keywords, weather } of weatherKeywords) {
@@ -648,11 +648,11 @@ function evolveGroundCondition(
             "damp": "dry",
             "dry": "dry"
         };
-        ground.wetness = dryingMap[ground.wetness] || ground.wetness;
+        ground.wetness = dryingMap[ ground.wetness ] || ground.wetness;
     }
 
     // Detect debris
-    const debrisKeywords = ["glass", "rubble", "debris", "trash", "wreckage", "fragments"];
+    const debrisKeywords = [ "glass", "rubble", "debris", "trash", "wreckage", "fragments" ];
     for (const debris of debrisKeywords) {
         if (desc.includes(debris) && !ground.debris.includes(debris)) {
             ground.debris.push(debris);
@@ -660,7 +660,7 @@ function evolveGroundCondition(
     }
 
     // Detect damage
-    const damageKeywords = ["crater", "burn marks", "scorch", "explosion", "impact", "hole"];
+    const damageKeywords = [ "crater", "burn marks", "scorch", "explosion", "impact", "hole" ];
     for (const damage of damageKeywords) {
         if (desc.includes(damage) && !ground.damage.includes(damage)) {
             ground.damage.push(damage);
@@ -683,7 +683,7 @@ function detectBrokenObjects(
     description: string;
     brokenInScene: number;
 }> {
-    const broken = [...current];
+    const broken = [ ...current ];
 
     // Detect breaking events
     const breakKeywords = [
@@ -734,11 +734,11 @@ function evolveAtmosphericEffects(
 
     // Detect new atmospheric effects
     const effectKeywords = [
-        { keywords: ["smoke", "smoking"], type: "smoke" },
-        { keywords: ["fog", "foggy"], type: "fog" },
-        { keywords: ["dust cloud", "dust"], type: "dust" },
-        { keywords: ["steam", "steaming"], type: "steam" },
-        { keywords: ["mist", "misty"], type: "mist" },
+        { keywords: [ "smoke", "smoking" ], type: "smoke" },
+        { keywords: [ "fog", "foggy" ], type: "fog" },
+        { keywords: [ "dust cloud", "dust" ], type: "dust" },
+        { keywords: [ "steam", "steaming" ], type: "steam" },
+        { keywords: [ "mist", "misty" ], type: "mist" },
     ];
 
     for (const { keywords, type } of effectKeywords) {

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LlmController } from './controller';
 import { GoogleProvider } from './google/google-provider';
-import { LlmProvider } from './types';
 
 // Mock the GoogleProvider module
 vi.mock('./google/google-provider', () => {

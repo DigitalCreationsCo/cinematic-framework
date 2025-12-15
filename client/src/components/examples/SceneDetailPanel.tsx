@@ -7,6 +7,7 @@ const mockScene: Scene = {
   startTime: 0,
   endTime: 6,
   duration: 6,
+  musicalDescription: "",
   type: "lyrical",
   lyrics: "Rising from the ashes of yesterday",
   description: "Epic opening shot establishing the world",
@@ -17,7 +18,13 @@ const mockScene: Scene = {
   transitionType: "Fade",
   shotType: "Wide Shot",
   cameraMovement: "Crane Up",
-  lighting: "Dramatic backlight with golden rays",
+  lighting: {
+    quality: "Dappled sunlight",
+    colorTemperature: "5500K",
+    intensity: "medium",
+    motivatedSources: "sunlight",
+    direction: "Front-frame"
+  },
   audioSync: "Beat Sync",
   continuityNotes: [
     "Match previous scene color grade",
@@ -46,21 +53,36 @@ const mockCharacter: Character = {
   name: "Elena Vance",
   aliases: [],
   description: "Battle-hardened warrior",
+  age: "", 
   physicalTraits: {
+    build: "",
+    ethnicity: "",
     hair: "Silver-white, braided",
     clothing: "Dark leather armor",
     accessories: ["Ancient medallion"],
     distinctiveFeatures: ["Scar on left cheek"],
   },
   appearanceNotes: [],
+  referenceImages: [],
 };
 
 const mockLocation: Location = {
   id: "loc_1",
   name: "Ancient Forest Temple",
   description: "Crumbling stone temple overgrown with vines",
-  lightingConditions: "Dappled sunlight",
+  lightingConditions: {
+    quality: "Dappled sunlight",
+    colorTemperature: "5500K",
+    intensity: "medium",
+    motivatedSources: "sunlight",
+    direction: "Front-frame"
+  },
   timeOfDay: "Late afternoon",
+  weather: "Clear",
+  colorPalette: ["Warm tones, browns"],
+  naturalElements: [],
+  manMadeObjects: [],
+  referenceImages: []
 };
 
 export default function SceneDetailPanelExample() {

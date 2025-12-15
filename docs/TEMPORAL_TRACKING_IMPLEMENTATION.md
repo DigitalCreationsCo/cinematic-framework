@@ -2,7 +2,7 @@
 
 ## What Was Implemented
 
-The Cinematic Framework now features a **comprehensive temporal state tracking system** that monitors and evolves character appearances and location conditions as the story progresses.
+The Cinematic Framework now features a **comprehensive temporal state tracking system** that monitors and evolves character appearances and location conditions as the story progresses. This is now augmented by a robust **Media Synchronization Layer** ensuring all visual playback components align perfectly with the master audio timeline.
 
 ---
 
@@ -15,7 +15,7 @@ The Cinematic Framework now features a **comprehensive temporal state tracking s
 - ❌ Dirt and exhaustion building up during action sequences
 - ❌ Environmental damage (broken objects, debris) remaining across scenes
 
-**After**: All progressive changes are now explicitly tracked in data structures and automatically evolved scene-by-scene based on narrative content.
+**After**: All progressive changes are now explicitly tracked in data structures and automatically evolved scene-by-scene based on narrative. Furthermore, client-side playback is now tightly synchronized across multiple video elements.
 
 ---
 
@@ -289,201 +289,36 @@ Scene 10: (Much later, same character)
 
 ---
 
-## Files Modified
+## Media Synchronization Layer (Client-Side Implementation) ✨ NEW
 
-### 1. [pipeline/types.ts](pipeline/types.ts)
-**Changes:**
-- Enhanced `CharacterStateSchema` with 10+ new fields (lines 50-93)
-- Created `LocationStateSchema` with comprehensive tracking (lines 117-170)
-- Added `state: LocationStateSchema.optional()` to `LocationSchema` (line 196)
+Significant changes were made to client components to synchronize playback across multiple `<video>` elements (main view and timeline previews) based on the master audio track's timeline.
 
-### 2. [pipeline/agents/continuity-manager.ts](pipeline/agents/continuity-manager.ts)
-**Changes:**
-- Imported state evolution functions (line 26)
-- Updated character initialization with complete state (lines 217-243)
-- Updated location initialization with complete state (lines 466-490)
-- Replaced simple state updates with evolution logic (lines 499-521)
+### 1. Component Prop Changes
 
-### 3. [pipeline/prompts/prompt-composer.ts](pipeline/prompts/prompt-composer.ts)
-**Changes:**
-- Added `formatCharacterTemporalState()` helper (lines 19-72)
-- Added `formatLocationTemporalState()` helper (lines 77-127)
-- Injected character state into scene prompts (line 279)
-- Injected location state into scene prompts (line 323)
-- Injected state into frame generation prompts (lines 223, 228)
+- **`PlaybackControls.tsx`**:
+  - Now accepts `mainVideoRef: React.RefObject<HTMLVideoElement>` and `timelineVideoRefs: React.RefObject<HTMLVideoElement>[]`.
+  - Added `onPlayMainVideo` callback.
+  - Implemented logic for audio source switching: mutes intrinsic video audio if `audioUrl` is present, un-mutes otherwise.
+  - Extended `animate` loop and `useEffect` hooks to synchronize `.currentTime` and call `.play()`/`.pause()` on all managed refs if global state changes.
+  - Seeking logic (`handleSeek`) now calls `.currentTime = newTime` on all three video destinations (audio source, main video, timeline videos).
 
-### 4. [pipeline/agents/state-evolution.ts](pipeline/agents/state-evolution.ts) ✨ NEW
-**Purpose:** Core state evolution engine with heuristic-based detection
-**Functions:**
-- `evolveCharacterState()` - Main character evolution logic
-- `evolveLocationState()` - Main location evolution logic
-- 20+ detection helper functions for parsing scene descriptions
+- **`SceneDetailPanel.tsx`**:
+  - Props updated to receive `currentTime`, `isPlaying`, `audioUrl`, and `mainVideoRef`.
+  - Implemented `useEffect` hooks to listen to `currentTime` and `isPlaying` to control its intrinsic video element, including muting based on `audioUrl`.
+  - Play button now calls `onPlayMainVideo()` to trigger global playback start.
 
----
+- **`Timeline.tsx`**:
+  - Props updated to receive `currentTime`, `isPlaying`, `audioUrl` and a new callback `onSetTimelineVideoRefs` for ref propagation.
+  - Introduced `videoRefs = useRef<(HTMLVideoElement | null)[]>(new Array(scenes.length))` to capture individual scene video element references.
+  - Added `useEffect` to propagate these refs up via `onSetTimelineVideoRefs`.
+  - Added logic to control timeline videos directly (via `.play()`/`.pause()`) *only* when `audioUrl` is undefined, otherwise they follow the global time update.
 
-## Files Created
+### 2. Video Element Attribute Changes
 
-1. **[TEMPORAL_TRACKING.md](TEMPORAL_TRACKING.md)** - Comprehensive documentation (550+ lines)
-   - Architecture overview
-   - Complete API reference
-   - Usage examples
-   - Detection heuristics reference
-   - Troubleshooting guide
-
-2. **[TEMPORAL_TRACKING_IMPLEMENTATION.md](TEMPORAL_TRACKING_IMPLEMENTATION.md)** - This file
-   - Implementation summary
-   - Code changes overview
-   - Quick reference
-
-3. **[pipeline/agents/state-evolution.ts](pipeline/agents/state-evolution.ts)** - State evolution engine (650+ lines)
-   - Character state evolution
-   - Location state evolution
-   - Heuristic detection logic
-
----
-
-## Testing the Implementation
-
-### Basic Test
-```typescript
-// Run a simple storyboard generation
-const storyboard = await workflow.run({
-  creativePrompt: "Action hero fights through warehouse, gets injured, escapes in rain"
-});
-
-// Check character state after Scene 2 (fight scene)
-const character = storyboard.characters[0];
-console.log(character.state.injuries);
-// Expected: [{ type: "bruise", location: "body", severity: "moderate" }]
-
-// Check location state after Scene 3 (rain scene)
-const location = storyboard.locations[0];
-console.log(location.state.weather);
-// Expected: "Rain"
-console.log(location.state.groundCondition.wetness);
-// Expected: "wet" or "soaked"
-```
-
-### Verify Prompt Injection
-```typescript
-// Generate a frame for Scene 5
-const prompt = composeFrameGenerationPrompt(
-  scene5,
-  "start",
-  characters,
-  locations,
-  previousScene,
-  generationRules
-);
-
-console.log(prompt);
-// Should contain:
-// "CURRENT STATE (MUST MAINTAIN):
-//   - Injuries: bruise on face (moderate)
-//   - Dirt Level: slightly dirty
-//   - Exhaustion: tired"
-```
-
----
-
-## Benefits Realized
-
-### ✅ Realistic Continuity
-- Injuries persist across scenes
-- Costume damage accumulates naturally
-- Weather evolves logically
-- Environmental damage remains visible
-
-### ✅ Reduced Manual Work
-- Automatic state tracking (no manual tracking needed)
-- Prompt engineering handled by system
-- Quality checks validate state maintenance
-
-### ✅ Narrative Consistency
-- Story "feels real" with proper progression
-- Visual coherence across scenes
-- Logical environmental evolution
-
-### ✅ Production Quality
-- Film-grade continuity standards
-- Professional attention to detail
-- Believable character journeys
-
----
-
-## Comparison: Before vs After
-
-| Aspect | Before | After |
-|--------|--------|-------|
-| **Character Injuries** | Not tracked (rely on LLM memory) | Explicitly tracked with type, location, severity |
-| **Costume Damage** | Not tracked | Tears, stains, wetness, damage all tracked |
-| **Exhaustion** | Not tracked | 5-level progressive scale with accumulation |
-| **Dirt Level** | Not tracked | 5-level scale with event-based accumulation |
-| **Weather** | Hardcoded to "neutral" | Fully evolved with history timeline |
-| **Time of Day** | Hardcoded to "neutral" | Evolved with progression tracking |
-| **Ground Wetness** | Not tracked | 5-level scale based on weather |
-| **Broken Objects** | Not tracked | Persisted with scene origin tracking |
-| **Atmospheric Effects** | Not tracked | Tracked with dissipation logic |
-| **Prompt Injection** | Static baseline only | Dynamic current state injected |
-| **State History** | None | Full timeline for weather, time, emotions |
-
----
-
-## Future Enhancement Opportunities
-
-While the current implementation provides comprehensive tracking, future enhancements could include:
-
-1. **LLM-Powered State Analysis**
-   - Use LLM to validate heuristic detections
-   - Semantic understanding of state changes
-   - More nuanced progression (e.g., "slightly more exhausted")
-
-2. **Temporal Recovery Models**
-   - Gradual healing of injuries over time
-   - Fatigue recovery rates
-   - Costume damage worsening patterns
-
-3. **Multi-Level Location States**
-   - Per-room state tracking
-   - Location sub-area management
-   - State branching for different zones
-
-4. **State Visualization**
-   - Timeline graphs of character condition
-   - Weather progression charts
-   - Injury/damage accumulation visualizations
-
-5. **Historical State Queries**
-   - "What did Character X look like in Scene 5?"
-   - "When did the window get broken?"
-   - Generate temporal state reports
+- In both `SceneDetailPanel.tsx` and `Timeline.tsx`, the `<video>` elements now use `controls={false}` because playback is entirely controlled by the `PlaybackControls` component via reference manipulation.
 
 ---
 
 ## Conclusion
 
-The Cinematic Framework now tracks and evolves character and location states throughout the story, ensuring realistic continuity and narrative consistency. This transforms the framework from generating isolated scenes to creating cohesive, believable stories with proper progression and attention to detail.
-
-**Key Principle**: *Every change persists until the narrative provides a reason for it to revert.*
-
----
-
-## Quick Reference
-
-**To see state tracking in action:**
-1. Check character state: `storyboard.characters[0].state`
-2. Check location state: `storyboard.locations[0].state`
-3. View prompt injection: Look for "CURRENT STATE (MUST MAINTAIN)" sections
-
-**To modify detection logic:**
-- Edit: [pipeline/agents/state-evolution.ts](pipeline/agents/state-evolution.ts)
-- Add keywords to detection heuristics
-- Adjust escalation/de-escalation rates
-
-**For detailed documentation:**
-- Read: [TEMPORAL_TRACKING.md](TEMPORAL_TRACKING.md)
-- Contains full API reference, examples, and troubleshooting
-
-**For type definitions:**
-- See: [pipeline/types.ts](pipeline/types.ts) lines 50-198
-- `CharacterStateSchema` and `LocationStateSchema`
+The temporal tracking system is now extended with a robust Media Synchronization Layer, ensuring visual consistency across all playback components precisely aligned with the master audio timeline, while state tracking for narrative elements is fully materialized.

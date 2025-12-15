@@ -2,9 +2,21 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { Storage } from "@google-cloud/storage";
+import * as dotenv from "dotenv";
+dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
+
+const gcpProjectId = process.env.GCP_PROJECT_ID;
+const bucketName = process.env.GCP_BUCKET_NAME;
+
+if (!gcpProjectId) throw Error("A projectId was not provided");
+
+if (!bucketName) throw Error("A bucket name was not provided");
+
+const bucket = new Storage({ projectId: gcpProjectId }).bucket(bucketName);
 
 declare module "http" {
   interface IncomingMessage {
@@ -36,23 +48,23 @@ export function log(message: string, source = "express") {
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+  let responsePayloadJson: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
   res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
+    responsePayloadJson = bodyJson;
+    return originalResJson.apply(res, [ bodyJson, ...args ]);
   };
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      let apiLogMessage = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      if (responsePayloadJson) {
+        apiLogMessage += ` :: ${JSON.stringify(responsePayloadJson)}`;
       }
 
-      log(logLine);
+      log(apiLogMessage);
     }
   });
 
@@ -60,7 +72,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await registerRoutes(httpServer, app);
+  await registerRoutes(httpServer, app, bucket);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -84,7 +96,7 @@ app.use((req, res, next) => {
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
+  const port = parseInt(process.env.PORT || "8000", 10);
   httpServer.listen(
     {
       port,

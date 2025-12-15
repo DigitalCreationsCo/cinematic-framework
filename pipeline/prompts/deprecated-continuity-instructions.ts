@@ -1,5 +1,5 @@
 // deprecated
-import { Scene } from "../types";
+import { Scene } from "../../shared/pipeline-types";
 
 export const continuitySystemPrompt = `You are the continuity supervisor for a high-budget cinematic production. Your job is critical: ensure that every frame feels like it belongs to the same carefully crafted world.
 

@@ -3,7 +3,7 @@
  * Eliminates code duplication between frame and scene generation
  */
 
-import { QualityEvaluationResult, QualityConfig } from "../types";
+import { QualityEvaluationResult, QualityConfig } from "../../shared/pipeline-types";
 import { RetryLogger, RetryContext } from "./retry-logger";
 
 export interface QualityRetryConfig {

@@ -1,4 +1,4 @@
-import { Scene, Character, Location } from "../types";
+import { Scene, Character, Location } from "../../shared/pipeline-types";
 import { composeFrameGenerationPrompt } from "./prompt-composer";
 
 /**

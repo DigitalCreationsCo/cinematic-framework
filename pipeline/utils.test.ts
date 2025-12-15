@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { calculateLearningTrends, cleanJsonOutput, formatTime, roundToValidDuration } from './utils';
-import { WorkflowMetrics, AttemptMetric } from './types';
+import { WorkflowMetrics, AttemptMetric } from '../shared/pipeline-types';
 
 describe('Utility Functions', () => {
   describe('cleanJsonOutput', () => {

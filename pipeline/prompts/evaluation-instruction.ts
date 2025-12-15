@@ -1,7 +1,7 @@
 export const promptVersion = "3.0.0-quality-control";
 
 import { z } from "zod";
-import { Character, Location, PromptCorrectionSchema, QualityEvaluationSchema, QualityIssueSchema, Scene, zodToJSONSchema } from "../types";
+import { Character, Location, PromptCorrectionSchema, QualityEvaluationSchema, QualityIssueSchema, Scene, zodToJSONSchema } from "../../shared/pipeline-types";
 import { formatCharacterSpecs, formatLocationSpecs } from "../utils";
 import { composeDepartmentSpecs } from "./prompt-composer";
 import { buildQualityControlVideoPrompt, buildQualityControlFramePrompt } from "./role-quality-control";
@@ -217,7 +217,7 @@ export const buildFrameEvaluationPrompt = (
   previousFrame?: any,
 ): string => {
   // Get location for department specs
-  const location = locations.find(l => l.id === scene.locationId) || locations[0];
+  const location = locations.find(l => l.id === scene.locationId) || locations[ 0 ];
 
   // Compose department specifications for evaluation
   const departmentSpecs = composeDepartmentSpecs(
@@ -253,7 +253,7 @@ const buildLegacyFrameEvaluationPrompt = (
   if (!scene.locationId) throw Error("No locations in this scene.");
   const sceneLocation = locations.find(l => l.id === scene.locationId);
   if (!sceneLocation) throw Error("[buildLegacyFrameEvaluationPrompt]: Location not found");
-  
+
   return `You are a professional cinematography and VFX specialist evaluating keyframes for high-end video production. Evaluate this generated still frame that will serve as a ${framePosition === "start" ? "starting" : "ending"} keyframe anchor for video generation.
 
 This frame must work both as a standalone cinematic image AND as a reliable anchor point for generating the video sequence described below.

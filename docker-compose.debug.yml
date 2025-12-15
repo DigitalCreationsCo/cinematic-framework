@@ -1,0 +1,67 @@
+services:
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:549.0.1-emulators
+    command: gcloud beta emulators pubsub start --project=test-project --host-port=0.0.0.0:8085 --log-http
+    ports:
+      - "8085:8085"
+    environment:
+      - DEBUG=true
+
+  pipeline-worker:
+    build:
+      context: .
+      dockerfile: pipeline-worker/Dockerfile
+    ports:
+      - "9230:9230"
+    environment:
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - POSTGRES_URL=${POSTGRES_URL}
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GCP_BUCKET_NAME=${GCP_BUCKET_NAME}
+      - ENABLE_QUALITY_CONTROL=true
+      - ACCEPT_THRESHOLD=0.90
+      - MINOR_ISSUE_THRESHOLD=0.85
+      - MAJOR_ISSUE_THRESHOLD=0.75
+      - FAILTHRESHOLD=0.75
+      - MAX_RETRIES=3
+      - SAFETY_RETRIES=2
+      - LLM_PROVIDER=google
+      - TEXT_MODEL_NAME=gemini-3-pro-preview
+      - IMAGE_MODEL_NAME=gemini-2.5-flash-image
+      - VIDEO_MODEL_NAME=veo-2.0-generate-exp
+      - LOCAL_AUDIO_PATH=audio/Day.mp3
+      - DEBUG=true
+    depends_on:
+      - pubsub-emulator
+    command: npx tsx --inspect=0.0.0.0:9230 pipeline-worker/index.ts
+
+  api-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+      - "9229:9229"
+    environment:
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - POSTGRES_URL=${POSTGRES_URL}
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GCP_BUCKET_NAME=${GCP_BUCKET_NAME}
+      - DEBUG=true
+      - PORT=8000
+    depends_on:
+      - pubsub-emulator
+    command: node --inspect=0.0.0.0:9229 dist/index.cjs
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    ports:
+      - "5173:5173" # Standard Vite development port
+    environment:
+      - DEBUG=true
+    depends_on:
+      - api-server

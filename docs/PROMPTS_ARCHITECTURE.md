@@ -70,14 +70,14 @@ This architecture replaces verbose, multi-purpose prompts with focused, composab
 - Lighting direction (key light position, shadow direction, contrast ratio)
 - Atmosphere (haze, fog, visible light beams)
 
-**Key Improvement**: Replaced "three-point lighting" jargon with model-friendly motivated sources. All light must have a visible or implied natural source.
+**Key Improvement**: Replaced jargon with model-friendly motivated sources. All light must have a visible or implied natural source.
 
 ---
 
 ### 📋 **SCRIPT SUPERVISOR** - Continuity Tracking
 **File**: [`pipeline/prompts/role-script-supervisor.ts`](pipeline/prompts/role-script-supervisor.ts)
 
-**Responsibility**: Maintaining visual continuity for characters, locations, props, spatial geography
+**Responsibility**: Maintaining visual continuity for characters, locations, props, spatial geography across the *entire workflow*.
 
 **Used In**:
 - Generation Point 3.1 & 3.2: Frame generation (continuity requirements)
@@ -90,7 +90,7 @@ This architecture replaces verbose, multi-purpose prompts with focused, composab
 - Location continuity (lighting direction, weather progression)
 - Carryforward notes for next scene
 
-**Key Improvement**: Replaced prose paragraphs with explicit checklists. "MUST MATCH EXACTLY" markers eliminate ambiguity.
+**Key Improvement**: Replaced prose paragraphs with explicit checklists. Continuity state is now reliably managed via **persistent PostgreSQL checkpoints**, ensuring that temporal context is accurate even across interrupted workflow steps or when processing `RETRY_SCENE` commands.
 
 ---
 
@@ -145,7 +145,7 @@ This architecture replaces verbose, multi-purpose prompts with focused, composab
 - Technical feasibility confirmation (duration valid, complexity appropriate)
 - Safety violation corrections with minimal changes
 
-**Key Improvement**: Prioritized top 3 violations (celebrity, children, violence) with find-and-replace rules. Proactive checking prevents API rejections.
+**Key Improvement**: Proactive checking prevents API rejections by enforcing safety rules before video generation submission.
 
 ---
 
@@ -165,7 +165,7 @@ This architecture replaces verbose, multi-purpose prompts with focused, composab
 - Accept/Retry decision
 - Generation rule suggestions (systemic improvements)
 
-**Key Improvement**: Rubric format (not essay). Weighted scoring with clear pass/fail thresholds. Issues trace directly to responsible department. Now includes enhanced evaluation guidelines and semantic understanding checklists.
+**Key Improvement**: Rubric format, weighted scoring, and clear issue traceability directly tied to the responsible role.
 
 ---
 
@@ -311,19 +311,19 @@ Output: Structured specs for Quality Control evaluation
 
 ## Benefits of Role-Based Architecture
 
-### 1. **Composability**
+### 1. Composability
 Prompts are modular building blocks. Combine different roles for different generation points. Reuse same role prompt across multiple stages.
 
-### 2. **Traceability**
+### 2. Traceability
 Quality issues trace to specific departments. Know exactly which prompt to fix. Accumulated generation rules improve over time.
 
-### 3. **Efficiency**
+### 3. Efficiency
 Only failing departments revise on retry. Working specs preserved across attempts. Reduced token usage (no redundant information).
 
-### 4. **Clarity**
+### 4. Clarity
 Each role has single responsibility. No conflicting instructions within a prompt. Clear menus/checklists instead of prose.
 
-### 5. **Scalability**
+### 5. Scalability
 Easy to add new roles (e.g., "Sound Designer"). Easy to update one role without affecting others. Easy to test individual role prompts.
 
 ---
@@ -333,7 +333,7 @@ Easy to add new roles (e.g., "Sound Designer"). Easy to update one role without 
 Old prompt files still exist for backward compatibility but are now wrappers around role-based prompts:
 
 | Old Prompt File | New Role-Based Implementation |
-|-----------------|-------------------------------|
+|---|---|
 | `character-image-instruction.ts` | Calls `buildCostumeAndMakeupPrompt()` |
 | `location-image-instruction.ts` | Calls `buildProductionDesignerPrompt()` |
 | `frame-generation-instruction.ts` | Calls `composeFrameGenerationPrompt()` |
@@ -343,27 +343,27 @@ Old prompt files still exist for backward compatibility but are now wrappers aro
 
 ## Key Optimizations Applied
 
-### 1. **Storyboard Composition**
+### 1. Storyboard Composition
 - **Before**: Verbose abstract concepts ("masterful human director touch")
 - **After**: Concrete shot menus, lighting options, structured scene beats
 - **Reduction**: ~60% token reduction
 
-### 2. **Character/Location References**
+### 2. Character/Location References
 - **Before**: "Three-point lighting", "8K detail", lengthy "why this matters" sections
 - **After**: "Soft even lighting", front-loaded specs, purpose section only
 - **Reduction**: ~30% token reduction
 
-### 3. **Continuity Instructions**
+### 3. Continuity Instructions
 - **Before**: Prose paragraphs explaining continuity principles
 - **After**: Explicit checklists with "MUST MATCH EXACTLY" markers
 - **Reduction**: ~40% token reduction
 
-### 4. **Evaluation Prompts**
+### 4. Evaluation Prompts
 - **Before**: 400+ line essay format with lengthy examples
 - **After**: Rubric format with 3 example corrections max
 - **Reduction**: ~50% token reduction
 
-### 5. **Safety Instructions**
+### 5. Safety Instructions
 - **Before**: All error codes listed, generic guidance
 - **After**: Top 3 violations prioritized, find-and-replace rules
 - **Reduction**: ~40% token reduction
@@ -383,7 +383,9 @@ Potential new roles to add:
 
 ## Version History
 
-- **v3.1.0** (Current): Enhanced quality evaluation and retry mechanisms, including new logging, unified retry handler, and domain-specific generation rules.
+- **v3.3.1** (Current): Consolidated type imports to use shared types. Implemented comprehensive real-time logging via worker console interception and `LOG` Pub/Sub events. Frontend supports new Theatre Mode playback.
+- **v3.3.0**: Refined pipeline worker execution runtime (Node.js v20, using `import.meta.main` for graph execution entry point). Integration with command-driven orchestration and persistent state management. Temporal state tracking guaranteed by PostgreSQL checkpoints.
+- **v3.1.0**: Enhanced quality evaluation and retry mechanisms, including new logging, unified retry handler, and domain-specific generation rules.
 - **v3.0.0**: Role-based prompt architecture implemented
 - **v2.0.0**: Continuity-focused prompts with global rules
 - **v1.0.0**: Initial monolithic prompt structure

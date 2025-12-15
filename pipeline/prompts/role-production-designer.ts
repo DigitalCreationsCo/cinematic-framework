@@ -1,6 +1,6 @@
 export const promptVersion = "3.0.0-production-designer";
 
-import { Location } from "../types";
+import { Location } from "../../shared/pipeline-types";
 
 /**
  * PRODUCTION DESIGNER - Location & Environment Specification

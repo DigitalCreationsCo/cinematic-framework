@@ -1,5 +1,5 @@
 
-import { Scene, Character, Location, QualityEvaluationResult, PromptCorrection, QualityConfig, QualityEvaluationSchema, zodToJSONSchema, ObjectData } from "../types";
+import { Scene, Character, Location, QualityEvaluationResult, PromptCorrection, QualityConfig, QualityEvaluationSchema, zodToJSONSchema, ObjectData } from "../../shared/pipeline-types";
 import { GCPStorageManager, GcsObjectPathParams } from "../storage-manager";
 import { buildFrameEvaluationPrompt, buildSceneVideoEvaluationPrompt } from "../prompts/evaluation-instruction";
 import { buildllmParams } from "../llm/google/llm-params";
@@ -214,7 +214,7 @@ export class QualityCheckAgent {
 
     this.logEvaluationResults(scene.id, evaluation, overallScore);
     await this.saveEvaluation(
-      { type: "scene_quality_evaluation", sceneId: scene.id, attempt }, 
+      { type: "scene_quality_evaluation", sceneId: scene.id, attempt },
       evaluation
     );
     return evaluation;

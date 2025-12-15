@@ -1,8 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { PipelineStatus, SceneStatus } from "@shared/pipeline-types";
+import type { PipelineStatus, SceneStatus, StatusType } from "@shared/pipeline-types";
 
-type StatusType = PipelineStatus | SceneStatus | "PASS" | "MINOR_ISSUES" | "MAJOR_ISSUES" | "FAIL" | "ACCEPT" | "ACCEPT_WITH_NOTES" | "REGENERATE_MINOR" | "REGENERATE_MAJOR";
 
 interface StatusBadgeProps {
   status: StatusType;
@@ -27,6 +26,16 @@ const statusConfig: Record<StatusType, { label: string; variant: "default" | "se
   ACCEPT_WITH_NOTES: { label: "Accept w/ Notes", variant: "default", className: "bg-chart-3/80 text-white" },
   REGENERATE_MINOR: { label: "Regen Minor", variant: "default", className: "bg-chart-4 text-white" },
   REGENERATE_MAJOR: { label: "Regen Major", variant: "default", className: "bg-chart-5 text-white" },
+  running: {
+    label: "",
+    variant: "default",
+    className: ""
+  },
+  paused: {
+    label: "",
+    variant: "default",
+    className: ""
+  }
 };
 
 export default function StatusBadge({ status, size = "default", className }: StatusBadgeProps) {

@@ -1,10 +1,11 @@
 import { PersonGeneration, Video, Image, VideoGenerationReferenceType, Operation, GenerateVideosResponse } from "@google/genai";
 import { GCPStorageManager } from "../storage-manager";
-import { Character, Location, GeneratedScene, QualityEvaluationResult, Scene, SceneGenerationResult, AttemptMetric, ObjectData } from "../types";
+import { Character, Location, GeneratedScene, QualityEvaluationResult, Scene, SceneGenerationResult, AttemptMetric, ObjectData } from "../../shared/pipeline-types";
 import { RAIError } from "../lib/errors";
 import ffmpeg from "fluent-ffmpeg";
 import { buildVideoGenerationParams, buildllmParams } from "../llm/google/llm-params";
 import fs from "fs";
+import path from "path";
 import { formatTime, roundToValidDuration } from "../utils";
 import { retryLlmCall } from "../lib/llm-retry";
 import { LlmController } from "../llm/controller";
@@ -555,11 +556,9 @@ export class SceneGeneratorAgent {
         }
     }
 
-    async stitchScenes(videoPaths: string[], audioPath: string): Promise<string> {
+    async stitchScenes(videoPaths: string[], audioPath: string): Promise<ObjectData> {
         console.log(`\n🎬 Stitching ${videoPaths.length} scenes...`);
 
-        const fs = require("fs");
-        const path = require("path");
         const tmpDir = "/tmp";
         const fileListPath = path.join(tmpDir, "concat_list.txt");
         const intermediateVideoPath = path.join(tmpDir, "intermediate_movie.mp4");
@@ -606,7 +605,9 @@ export class SceneGeneratorAgent {
             const gcsUri = await this.storageManager.uploadFile(finalVideoPath, objectPath);
 
             console.log(`   ✓ Rendered video uploaded: ${this.storageManager.getPublicUrl(gcsUri)}`);
-            return gcsUri;
+
+            const video = this.storageManager.buildObjectData(gcsUri);
+            return video;
 
         } catch (error) {
             console.error("   ✗ Failed to stitch scenes:", error);
@@ -623,11 +624,9 @@ export class SceneGeneratorAgent {
         }
     }
 
-    async stitchScenesWithoutAudio(videoPaths: string[]): Promise<string> {
+    async stitchScenesWithoutAudio(videoPaths: string[]): Promise<ObjectData> {
         console.log(`\n🎬 Stitching ${videoPaths.length} scenes (no audio)...`);
 
-        const fs = require("fs");
-        const path = require("path");
         const tmpDir = "/tmp";
         const fileListPath = path.join(tmpDir, "concat_list.txt");
         const finalVideoPath = path.join(tmpDir, "final_movie.mp4");
@@ -660,7 +659,9 @@ export class SceneGeneratorAgent {
             const gcsUri = await this.storageManager.uploadFile(finalVideoPath, objectPath);
 
             console.log(`   ✓ Rendered video uploaded: ${this.storageManager.getPublicUrl(gcsUri)}`);
-            return gcsUri;
+            
+            const video = this.storageManager.buildObjectData(gcsUri);
+            return video;
 
         } catch (error) {
             console.error("   ✗ Failed to stitch scenes:", error);

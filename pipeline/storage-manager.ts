@@ -1,7 +1,7 @@
 
 import { Storage } from "@google-cloud/storage";
 import path from "path";
-import { ObjectData } from "./types";
+import { ObjectData } from "../shared/pipeline-types";
 
 export type GcsObjectType =
   | 'storyboard'
@@ -27,7 +27,7 @@ export type GcsObjectPathParams =
   | { type: 'scene_end_frame'; sceneId: number; attempt?: number | 'latest'; }
   | { type: 'composite_frame'; sceneId: number; attempt?: number | 'latest'; }
   | { type: 'scene_quality_evaluation'; sceneId: number; attempt?: number | 'latest'; }
-  | { type: 'frame_quality_evaluation'; sceneId: number; framePosition: "start" | "end";  attempt?: number | 'latest'; };
+  | { type: 'frame_quality_evaluation'; sceneId: number; framePosition: "start" | "end"; attempt?: number | 'latest'; };
 
 // ============================================================================
 // GCP STORAGE MANAGER
@@ -51,7 +51,7 @@ export class GCPStorageManager {
    */
   async initialize(): Promise<void> {
     console.log("   ... Initializing storage manager and syncing state from GCS...");
-    
+
     // We need to scan for several types of versioned assets
     await this.syncLatestAttempts('scene_video', 'scenes', /scene_\d{3}_(\d{2})\.mp4$/);
     await this.syncLatestAttempts('scene_start_frame', 'images/frames', /scene_\d{3}_lastframe_(\d{2})\.png$/);
@@ -68,17 +68,17 @@ export class GCPStorageManager {
   private async syncLatestAttempts(type: GcsObjectType, subDir: string, regex: RegExp) {
     const prefix = path.posix.join(this.videoId, subDir);
     try {
-      const [files] = await this.storage.bucket(this.bucketName).getFiles({ prefix });
-      
+      const [ files ] = await this.storage.bucket(this.bucketName).getFiles({ prefix });
+
       for (const file of files) {
         const match = file.name.match(regex);
-        if (match && match[1]) {
+        if (match && match[ 1 ]) {
           // Extract sceneId from filename (assuming standard format scene_XXX_...)
           const sceneIdMatch = file.name.match(/scene_(\d{3})_/);
-          if (sceneIdMatch && sceneIdMatch[1]) {
-            const sceneId = parseInt(sceneIdMatch[1], 10);
-            const attempt = parseInt(match[1], 10);
-            
+          if (sceneIdMatch && sceneIdMatch[ 1 ]) {
+            const sceneId = parseInt(sceneIdMatch[ 1 ], 10);
+            const attempt = parseInt(match[ 1 ], 10);
+
             const key = `${type}_${sceneId}`;
             const current = this.latestAttempts.get(key) || 0;
             if (attempt > current) {
@@ -146,12 +146,12 @@ export class GCPStorageManager {
         const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
         return path.posix.join(basePath, 'images', 'frames', `scene_${params.sceneId.toString().padStart(3, '0')}_frame_start_${attemptNum.toString().padStart(2, '0')}.png`);
       }
-      
+
       case 'scene_end_frame': {
         const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
         return path.posix.join(basePath, 'images', 'frames', `scene_${params.sceneId.toString().padStart(3, '0')}_frame_end_${attemptNum.toString().padStart(2, '0')}.png`);
       }
-        
+
       case 'frame_quality_evaluation': {
         const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
         return path.posix.join(basePath, 'images', 'frames', `scene_${params.sceneId.toString().padStart(3, '0')}_frame_${params.framePosition}_evaluation_${attemptNum.toString().padStart(2, '0')}.json`);
@@ -189,7 +189,7 @@ export class GCPStorageManager {
   ): Promise<string> {
     const bucket = this.storage.bucket(this.bucketName);
     const normalizedDest = this.normalizePath(destination);
-    
+
     await bucket.upload(localPath, {
       destination: normalizedDest,
       metadata: {
@@ -207,7 +207,7 @@ export class GCPStorageManager {
     const bucket = this.storage.bucket(this.bucketName);
     const normalizedDest = this.normalizePath(destination);
     const file = bucket.file(normalizedDest);
-    
+
     await file.save(buffer, {
       contentType,
       metadata: {
@@ -291,11 +291,11 @@ export class GCPStorageManager {
     return `gs://${this.bucketName}/${normalizedPath}`;
   }
 
-  buildObjectData(uri: string):ObjectData {
+  buildObjectData(uri: string): ObjectData {
     return {
       storageUri: this.getGcsUrl(uri),
       publicUri: this.getPublicUrl(uri)
-    }
+    };
   }
   async getObjectMimeType(gcsPath: string): Promise<string | undefined> {
     const path = this.parsePathFromUri(gcsPath);

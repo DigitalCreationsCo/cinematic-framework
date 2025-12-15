@@ -4,7 +4,7 @@ import { LlmController } from "../llm/controller";
 import { buildllmParams } from "../llm/google/llm-params";
 import { imageModelName } from "../llm/google/models";
 import { QualityCheckAgent } from "./quality-check-agent";
-import { Character, Location, ObjectData, QualityEvaluationResult, Scene } from "../types";
+import { Character, Location, ObjectData, QualityEvaluationResult, Scene } from "../../shared/pipeline-types";
 
 export class FrameCompositionAgent {
     private imageModel: LlmController;

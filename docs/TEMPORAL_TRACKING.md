@@ -183,6 +183,43 @@ temperatureIndicators: string[]  // ["frost on windows", "heat shimmer", "steam 
 
 ---
 
+## Media Synchronization Layer (New Feature)
+
+Building upon explicit temporal tracking, a new synchronization layer coordinates playback across multiple `<video>` elements: the main display video, and potentially multiple smaller timeline preview videos.
+
+### Core Synchronization Logic
+
+**1. External Audio Priority**: If an external `audioUrl` is provided (e.g., a music track), the framework prioritizes this audio source.
+   - The main video's intrinsic audio source is **muted** (`mainVideoRef.current.muted = true;`).
+   - The external audio track controls the master time progression via animation frame loop.
+
+**2. Intrinsic Audio Fallback**: If no `audioUrl` is present, the main video's intrinsic audio controls the timing.
+   - The intrinsic video's audio track is **unmuted** (`mainVideoRef.current.muted = false;`).
+
+**3. Multi-Video Time Sync**: The global `currentTime` derived from the master audio source is forcefully applied to all managed video elements:
+   - **Main Video**: Synchronized on play/pause/seek/time update.
+   - **Timeline Videos**: Each scene's preview video element (referenced via `timelineVideoRefs`) is updated to match `currentTime`.
+
+**4. Playback Control Integration** (`PlaybackControls.tsx`):
+   - The component now manages refs for all associated video elements (`mainVideoRef`, `timelineVideoRefs`).
+   - Global play/pause toggles the playing state of all associated videos simultaneously.
+   - Seeking updates all video elements instantly.
+   - Looping logic now correctly resets `currentTime`, `audioRef.current.currentTime`, and `mainVideoRef.current.currentTime`.
+
+**5. Scene Detail Panel Integration** (`SceneDetailPanel.tsx`):
+   - Now uses `mainVideoRef` to directly control the video element it renders, managing its play/pause state based on global context (`isPlaying`).
+   - Also handles muting logic relative to the presence of an external `audioUrl`.
+
+### Component Interfaces Impacted
+
+- `PlaybackControlsProps`: Added `mainVideoRef`, `timelineVideoRefs`, `onPlayMainVideo`.
+- `SceneDetailPanelProps`: Renamed `onPlayVideo` to `onPlayMainVideo`, added video refs and time context.
+- `TimelineProps`: Added `currentTime`, `isPlaying`, `audioUrl`, and added `onSetTimelineVideoRefs` for ref propagation.
+
+**Key Concept**: Playback is now centrally managed by time, decoupling play state from individual video element controls, ensuring all visual representations align perfectly with the master audio track.
+
+---
+
 ## State Evolution Workflow
 
 ### 1. Initialization (First Scene)
@@ -263,6 +300,15 @@ CURRENT STATE (MUST MAINTAIN):
   - Costume Tears: sleeve torn
 ```
 
+**Example Location Output:**
+```
+LOCATION CURRENT STATE (MUST MAINTAIN):
+  - Time of Day: dusk
+  - Weather: Rain
+  - Precipitation: moderate
+  - Ground: wet
+```
+
 ---
 
 ## Detection Heuristics Reference
@@ -274,7 +320,7 @@ CURRENT STATE (MUST MAINTAIN):
 | **Dirt** | mud, dirt, dust, soil, crawl, roll | Increases `dirtLevel` |
 | **Cleaning** | clean, wash, shower, bath, wipe | Resets `dirtLevel` to "clean" |
 | **Exhaustion** | run, sprint, chase, fight, climb | Increases `exhaustionLevel` |
-| **Rest** | rest, sleep, sit, relax, recover | Decreases `exhaustionLevel` |
+| **Rest** | sit, relax, recover | Decreases `exhaustionLevel` |
 | **Injuries** | cut, slash, punch, stab, shot, burn | Adds to `injuries` array |
 | **Costume Tears** | tear, rip, torn, ripped | Adds to `costumeCondition.tears` |
 | **Costume Wetness** | soak, drench, wet, rain, splash | Updates `costumeCondition.wetness` |
@@ -287,9 +333,9 @@ CURRENT STATE (MUST MAINTAIN):
 | **Weather** | rain, storm, snow, fog, clear, sunny | Updates `weather` |
 | **Time** | dawn, morning, noon, afternoon, dusk, night | Updates `timeOfDay` |
 | **Precipitation** | heavy rain, downpour, drizzle, sprinkle | Updates `precipitation` level |
-| **Visibility** | fog, haze, obscured, can't see | Updates `visibility` |
+| **Visibility** | haze, obscured, can't see | Updates `visibility` |
 | **Ground Wetness** | (derived from weather + precipitation) | Updates `groundCondition.wetness` |
-| **Debris** | glass, rubble, debris, trash, wreckage | Adds to `groundCondition.debris` |
+| **Debris** | glass, rubble, trash, wreckage | Adds to `groundCondition.debris` |
 | **Damage** | crater, burn marks, explosion, impact | Adds to `groundCondition.damage` |
 | **Broken Objects** | shatter, break, smash, destroy, collapse | Adds to `brokenObjects` |
 | **Atmospheric** | smoke, fog, dust cloud, steam, mist | Adds to `atmosphericEffects` |
@@ -300,7 +346,7 @@ CURRENT STATE (MUST MAINTAIN):
 
 ### 1. Asset Generation
 - **When**: Before first scene generation
-- **Where**: [continuity-manager.ts:116-244](pipeline/agents/continuity-manager.ts#L116-L244)
+- **Where**: [continuity-manager.ts:217-243](pipeline/agents/continuity-manager.ts#L217-L243)
 - **Action**: Initialize baseline states for all characters and locations
 
 ### 2. State Update
@@ -450,7 +496,7 @@ LOCATION CURRENT STATE (MUST MAINTAIN):
 1. **Heuristic-Based Detection**
    - Relies on keyword matching rather than semantic understanding
    - May miss implicit state changes not explicitly mentioned
-   - Cannot detect nuanced changes (e.g., "slightly more tired")
+   - Can't detect nuanced changes (e.g., "slightly more tired")
 
 2. **No Healing/Recovery Progression**
    - Injuries don't gradually heal over many scenes

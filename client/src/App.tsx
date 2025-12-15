@@ -7,8 +7,8 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import { ProjectSelectionModal } from "@/components/ProjectSelectionModal";
 import { useStore } from "./lib/store";
-import { useAppData } from "./hooks/use-swr-api";
 import { useEffect, useState } from "react";
+import { useProjects } from "./hooks/use-swr-api";
 
 function Router() {
   return (
@@ -24,7 +24,7 @@ function App() {
   const [ modalOpen, setModalOpen ] = useState(false);
   const [ projectToLoad, setProjectToLoad ] = useState<string | undefined>(undefined);
 
-  const { data, isLoading, isError } = useAppData(selectedProject);
+  const { data, isLoading, isError } = useProjects();
 
   useEffect(() => {
     if (!isLoading && !isError && data?.projects && data.projects.length > 0 && !selectedProject) {

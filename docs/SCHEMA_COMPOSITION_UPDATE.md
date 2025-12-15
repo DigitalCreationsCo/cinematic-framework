@@ -33,9 +33,9 @@ ScriptSupervisorSceneSchema = z.object({
 // Scene generation outputs (populated during workflow)
 SceneGenerationOutputSchema = z.object({
   enhancedPrompt: string,
-  generatedVideoUrl: string,
-  startFrameUrl: string,
-  endFrameUrl: string,
+  generatedVideo: ObjectDataSchema, // Now uses ObjectData for GCS/public URIs
+  startFrame: ObjectDataSchema, // Now uses ObjectData for GCS/public URIs
+  endFrame: ObjectDataSchema, // Now uses ObjectData for GCS/public URIs
   evaluation: QualityEvaluationResult
 });
 ```
@@ -229,13 +229,17 @@ const ScenePreviewSchema = z.intersection(
 
 ## Migration Guide
 
-### No Breaking Changes ✅
-
-All existing code continues to work unchanged because:
-1. `SceneSchema` produces the same type as before
-2. All field names and types remain identical
-3. Additional exports (`DepartmentEnum`, etc.) are additive
-
+### Breaking Changes Introduced ⚠️
+ 
+The change from `string` URLs to the structured `ObjectData` type for video/frame references is a breaking change for external clients that interact with the `GraphState.renderedVideo` field.
+ 
+**Key Breaking Change**:
+- `GraphState.renderedVideoUrl: string` is replaced by `GraphState.renderedVideo: ObjectData` (which has `storageUri` and `publicUri` fields).
+ 
+**Additive Enhancements**:
+- `StatusType` union added for unified status representation (`PipelineStatus` | `SceneStatus` | `EvaluationStatus`).
+- `PipelineMessage` interface added for structured, real-time logging events.
+ 
 ### Enhanced Usage (Optional)
 
 You can now optionally use the new schemas:
@@ -317,13 +321,15 @@ With this foundation, we can now:
 
 ### What Changed
 - ✅ Scene schema now composed from role-specific schemas
-- ✅ Shared enums extracted and exported
+- ✅ Shared enums extracted and exported, plus new `StatusType` union.
 - ✅ New role-specific scene schemas created
+- ✅ All GCS video/frame references changed from `string` URLs to `ObjectData` (GCS URI + Public URI)
+- ✅ Added `PipelineMessage` interface for real-time logging.
 
 ### What Stayed the Same
-- ✅ Scene type remains identical
-- ✅ All field names unchanged
-- ✅ 100% backward compatible
+- ✅ Scene type remains largely identical (internal fields for video/frame now use ObjectData)
+- ✅ Most field names unchanged
+- ✅ Scene schema composition structure preserved
 
 ### Benefits Achieved
 - ✅ 70% reduction in field definition duplication
@@ -335,5 +341,5 @@ With this foundation, we can now:
 ---
 
 **Status**: ✅ Complete and production-ready
-**Version**: 3.0.1 (schema composition enhancement)
-**Compatibility**: 100% backward compatible with 3.0.0
+**Version**: 3.3.1 (video reference object structure, status types, and logging message schema)
+**Compatibility**: **BREAKING CHANGE**: Changed `renderedVideoUrl: string` to `renderedVideo: ObjectData` in `GraphStateSchema`. Client side requires update to handle `ObjectData`.

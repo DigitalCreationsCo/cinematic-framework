@@ -13,6 +13,7 @@ const mockEvaluation: QualityEvaluationResult = {
   },
   issues: [
     {
+      department: "costume",
       category: "Character Appearance",
       severity: "minor",
       description: "Hero's jacket appears slightly darker than reference",
@@ -20,6 +21,7 @@ const mockEvaluation: QualityEvaluationResult = {
       suggestedFix: "Adjust color grading in post or regenerate with explicit color instruction",
     },
     {
+      department: "gaffer",
       category: "Lighting",
       severity: "major",
       description: "Backlight intensity inconsistent with previous scene",
