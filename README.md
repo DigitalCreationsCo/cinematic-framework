@@ -34,11 +34,11 @@ The framework uses a **LangGraph state machine** running in a dedicated `pipelin
 
 ```mermaid
 graph TD
-    A[Client/API] -->|Publish Command (START/STOP/RETRY)| B(Pub/Sub: video-commands);
+    A[Client/API] -->|Publish Command [START/STOP/RETRY]| B[Pub/Sub: video-commands];
     B --> C[Pipeline Worker: pipeline-worker];
-    C -->|Check/Save State| D[(PostgreSQL Checkpoint)];
+    C -->|Check/Save State| D[PostgreSQL Checkpoint];
     C -->|Execute Graph| E[LangGraph Workflow];
-    C -->|Publish State Update| F(Pub/Sub: video-events);
+    C -->|Publish State Update| F[Pub/Sub: video-events];
     F --> G[API Server];
     G -->|SSE Stream| A;
     
