@@ -1,3 +1,4 @@
+```mermaid
 graph TD
     A[START] --> B{Resume / Regenerate?};
     B -- Has Scenes / Regenerating --> G[process_scene];
@@ -16,3 +17,4 @@ graph TD
     K -- Yes --> L[render_video];
     L --> M[finalize];
     M --> N[END];
+```
