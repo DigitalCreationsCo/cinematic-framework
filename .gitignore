@@ -21,3 +21,7 @@ coverage/
 .DS_Store
 
 .keeper
+
+terraform/.terraform*
+terraform/terraform.tfvars
+!terraform/.terraform.lock.hcl
