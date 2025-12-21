@@ -72,7 +72,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (pipelineState) {
-      setPipelineStatus(pipelineState.currentSceneIndex < (pipelineState.storyboardState?.scenes.length || 0) ? "generating" : "complete");
+      setPipelineStatus(pipelineState.currentSceneIndex < (pipelineState.storyboardState?.scenes.length || 0) ? "idle" : "complete");
     }
   }, [ pipelineState, setPipelineStatus ]);
 

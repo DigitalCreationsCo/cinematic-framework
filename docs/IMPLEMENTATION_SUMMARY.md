@@ -34,7 +34,7 @@ This phase introduced a distributed, fault-tolerant execution model:
 2.  **State Management Abstraction: `pipeline-worker/checkpointer-manager.ts`**: Implements persistent state saving and loading using LangChain's PostgreSQL integration:
     *   Uses **`@langchain/langgraph-postgres`** via the `PostgresCheckpointer`.
     *   Persists the state via `checkpointer.put` and loads it using `channel_values` directly, bypassing stringified JSON state handling.
-    *   The core state (`GraphState`) now tracks the latest attempt number for all generated assets (`attempts: Record<string, number>`), replacing the volatile in-memory cache in the `GCPStorageManager`.
+    *   The core state (`GraphState`) now tracks the latest attempt number for all generated assets (`attempts: Record<string, number>`). This state is synced with the `GCPStorageManager`, which internally tracks both `latestAttempts` (for next write path) and `bestAttempts` (for preferred read path).
     *   Enables reliable resume, stop, and **scene/frame retry capabilities**.
 3.  **Communication Layer**: The system now relies on **Pub/Sub topics** (`video-commands`, `video-events`) for all internal communication.
 4.  **API Server (`server/routes.ts`)**: Refactored to be stateless, only responsible for publishing commands and relaying state events via a single, shared, persistent SSE subscription.
@@ -84,7 +84,7 @@ The project now includes the following new/modified files/directories:
 ├── docs/DISTRIBUTED_COMPATIBILITY_REPORT.md # Analysis of local state issues
 ├── pipeline/utils/lock-manager.ts    # Postgres implementation of DistributedLockManager
 ├── shared/pipeline-types.ts          # Updated GraphState with 'attempts' tracking
-├── pipeline/storage-manager.ts       # Removed in-memory cache, now requires explicit attempt number
+├── pipeline/storage-manager.ts       # Updated to initialize state from GraphState and track `latestAttempts` and `bestAttempts` for seamless asset reading/writing.
 ├── docs/TEMPORAL_TRACKING.md         # Detailed documentation on state tracking
 ├── docs/TEMPORAL_TRACKING_IMPLEMENTATION.md # Implementation details on state tracking
 ├── docker-compose.yml                # Orchestration including Postgres and Pub/Sub emulator
@@ -95,6 +95,6 @@ The project now includes the following new/modified files/directories:
 
 ## Conclusion
 
-The shift to a command-driven, persistent state model is now fully distributed-compatible. The introduction of **PostgreSQL Distributed Locking** and **Externalized Asset Attempt Tracking** ensures reliability and scalability in a multi-worker environment, supporting new client control commands like `REGENERATE_FRAME` and `RESOLVE_INTERVENTION`.
+The shift to a command-driven, persistent state model is now fully distributed-compatible. The introduction of **PostgreSQL Distributed Locking** and **Enhanced Asset Attempt Tracking** (supporting latest and best attempts) ensures reliability and scalability in a multi-worker environment, supporting new client control commands like `REGENERATE_FRAME` and `RESOLVE_INTERVENTION`.
 
 **Implementation Status:** **✅ Complete** (All core architecture, persistence, command handling, temporal state tracking, real-time logging, and new media synchronization logic are implemented and documented.)

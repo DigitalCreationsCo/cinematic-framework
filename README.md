@@ -8,7 +8,7 @@ Cinematic Framework leverages Google's Vertex AI (Gemini models) and LangGraph t
 
 - **Analyzes audio tracks** to extract musical structure, timing, and emotional beats
 - **Generates detailed storyboards** with scenes, characters, locations, and cinematography
-- **Maintains visual continuity** across scenes using reference images and persistent state checkpoints, with asset versioning now managed in persistent state (`GraphState.attempts`).
+- **Maintains visual continuity** across scenes using reference images and persistent state checkpoints, with GCS asset tracking now supporting tracking of the latest and *best* attempt for each asset (`GraphState.attempts`).
 - **Produces cinematic videos** with proper shot composition, lighting, and camera movements
 - **Stitches scenes** into a final rendered video synchronized with audio
 - **Self-improves** its generation process by learning from quality-check feedback, utilizing enhanced evaluation guidelines.
