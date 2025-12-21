@@ -164,7 +164,29 @@ export class CinematicVideoWorkflow {
       },
     });
 
-    workflow.addConditionalEdges(START, (state: InitialGraphState) => {
+    workflow.addNode("sync_state", async (state: GraphState) => {
+      console.log("🔄 Syncing state with storage...");
+      const scannedAttempts = await this.storageManager.scanCurrentAttempts();
+
+      // Merge with existing state.attempts (max wins)
+      const currentAttempts = state.attempts || {};
+      const mergedAttempts = { ...currentAttempts };
+
+      for (const [ key, value ] of Object.entries(scannedAttempts)) {
+        if (!mergedAttempts[ key ] || value > mergedAttempts[ key ]) {
+          mergedAttempts[ key ] = value;
+        }
+      }
+
+      return {
+        ...state,
+        attempts: mergedAttempts
+      };
+    });
+
+    workflow.addEdge(START, "sync_state");
+
+    workflow.addConditionalEdges("sync_state", (state: InitialGraphState) => {
       if (state.storyboardState && state.storyboardState.scenes.some(s => s.generatedVideo)) {
         console.log("   Resuming workflow from process_scene...");
         return "process_scene";
@@ -190,7 +212,7 @@ export class CinematicVideoWorkflow {
         creativePrompt: expandedPrompt,
       };
 
-      await this.publishStateUpdate(newState, "expand_creative_prompt"); 
+      await this.publishStateUpdate(newState, "expand_creative_prompt");
       return newState;
     });
 
@@ -219,7 +241,7 @@ export class CinematicVideoWorkflow {
         currentSceneIndex: 0,
       };
 
-      await this.publishStateUpdate(newState, "generate_storyboard_exclusively_from_prompt"); 
+      await this.publishStateUpdate(newState, "generate_storyboard_exclusively_from_prompt");
       return newState;
     });
 
@@ -245,7 +267,7 @@ export class CinematicVideoWorkflow {
         } as Storyboard,
       };
 
-      await this.publishStateUpdate(newState, "create_scenes_from_audio"); 
+      await this.publishStateUpdate(newState, "create_scenes_from_audio");
       return newState;
     });
 
@@ -267,7 +289,7 @@ export class CinematicVideoWorkflow {
         currentSceneIndex: 0,
       };
 
-      await this.publishStateUpdate(newState, "enrich_storyboard_and_scenes"); 
+      await this.publishStateUpdate(newState, "enrich_storyboard_and_scenes");
       return newState;
     });
 
@@ -436,7 +458,7 @@ export class CinematicVideoWorkflow {
           ...state,
           currentSceneIndex: state.currentSceneIndex + 1,
           storyboardState: updatedStoryboardState,
-          forceRegenerateSceneId: undefined, 
+          forceRegenerateSceneId: undefined,
           renderedVideo: renderedVideo || state.renderedVideo,
         };
         await this.publishStateUpdate(newState, "process_scene");
@@ -476,6 +498,7 @@ export class CinematicVideoWorkflow {
         state.storyboardState.characters,
         location,
         state.storyboardState.scenes[ state.currentSceneIndex - 1 ], // Previous scene object
+        state.attempts?.[ `scene_video_${scene.id}` ] || 0,
         scene.startFrame, // Use pre-generated startFrame as previousFrameUrl for video generation
         scene.endFrame, // Pass pre-generated endFrame to scene generation
         characterReferenceImages,
@@ -536,7 +559,14 @@ export class CinematicVideoWorkflow {
       });
 
       delete state.scenePromptOverrides?.[ scene.id ];
-      
+
+      const newAttempts = { ...(state.attempts || {}) };
+      if (result.usedAttempt) {
+        newAttempts[ `scene_video_${scene.id}` ] = result.usedAttempt;
+        newAttempts[ `scene_start_frame_${scene.id}` ] = result.usedAttempt;
+        newAttempts[ `scene_end_frame_${scene.id}` ] = result.usedAttempt;
+      }
+
       const newState = {
         ...state,
         currentSceneIndex: state.currentSceneIndex + 1,
@@ -546,6 +576,7 @@ export class CinematicVideoWorkflow {
         refinedRules: refinedRules,
         metrics: currentMetrics,
         renderedVideo: renderedVideo || state.renderedVideo,
+        attempts: newAttempts,
       };
 
       await this.publishStateUpdate(newState, "process_scene");
@@ -666,6 +697,7 @@ export class CinematicVideoWorkflow {
         errors: [],
         generationRules: [],
         refinedRules: [],
+        attempts: await this.storageManager.scanCurrentAttempts(),
       };
     } else {
       console.log("   No checkpointer found. Checking GCS for existing storyboard.");
@@ -687,6 +719,7 @@ export class CinematicVideoWorkflow {
           errors: [],
           generationRules: [],
           refinedRules: [],
+          attempts: await this.storageManager.scanCurrentAttempts(),
         };
       } catch (error) {
         console.error("Error loading from GCS: ", error);
@@ -705,6 +738,7 @@ export class CinematicVideoWorkflow {
           errors: [],
           generationRules: [],
           refinedRules: [],
+          attempts: await this.storageManager.scanCurrentAttempts(),
         };
       }
     }

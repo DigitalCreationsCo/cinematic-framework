@@ -22,12 +22,12 @@ export type GcsObjectPathParams =
   | { type: 'stitched_video'; }
   | { type: 'character_image'; characterId: string; }
   | { type: 'location_image'; locationId: string; }
-  | { type: 'scene_video'; sceneId: number; attempt?: number | 'latest'; }
-  | { type: 'scene_start_frame'; sceneId: number; attempt?: number | 'latest'; }
-  | { type: 'scene_end_frame'; sceneId: number; attempt?: number | 'latest'; }
-  | { type: 'composite_frame'; sceneId: number; attempt?: number | 'latest'; }
-  | { type: 'scene_quality_evaluation'; sceneId: number; attempt?: number | 'latest'; }
-  | { type: 'frame_quality_evaluation'; sceneId: number; framePosition: "start" | "end"; attempt?: number | 'latest'; };
+  | { type: 'scene_video'; sceneId: number; attempt: number; }
+  | { type: 'scene_start_frame'; sceneId: number; attempt: number; }
+  | { type: 'scene_end_frame'; sceneId: number; attempt: number; }
+  | { type: 'composite_frame'; sceneId: number; attempt: number; }
+  | { type: 'scene_quality_evaluation'; sceneId: number; attempt: number; }
+  | { type: 'frame_quality_evaluation'; sceneId: number; framePosition: "start" | "end"; attempt: number; };
 
 // ============================================================================
 // GCP STORAGE MANAGER
@@ -37,7 +37,6 @@ export class GCPStorageManager {
   private storage: Storage;
   private bucketName: string;
   private videoId: string;
-  private latestAttempts: Map<string, number> = new Map();
 
   constructor(projectId: string, videoId: string, bucketName: string) {
     this.storage = new Storage({ projectId });
@@ -46,26 +45,41 @@ export class GCPStorageManager {
   }
 
   /**
-   * Initializes the storage manager by querying GCS for existing files
-   * and populating the in-memory attempt cache.
+   * Scans GCS for existing files and returns a map of the latest attempts.
+   * This is used to initialize or validate the GraphState attempts map.
    */
-  async initialize(): Promise<void> {
-    console.log("   ... Initializing storage manager and syncing state from GCS...");
+  async scanCurrentAttempts(): Promise<Record<string, number>> {
+    console.log("   ... Scanning GCS for existing assets to validate state...");
+    const attempts: Record<string, number> = {};
+
+    // Helper to update the local map
+    const updateMap = (type: GcsObjectType, id: number, attempt: number) => {
+      const key = `${type}_${id}`;
+      if (!attempts[ key ] || attempt > attempts[ key ]) {
+        attempts[ key ] = attempt;
+      }
+    };
 
     // We need to scan for several types of versioned assets
-    await this.syncLatestAttempts('scene_video', 'scenes', /scene_\d{3}_(\d{2})\.mp4$/);
-    await this.syncLatestAttempts('scene_start_frame', 'images/frames', /scene_\d{3}_lastframe_(\d{2})\.png$/);
-    await this.syncLatestAttempts('scene_end_frame', 'images/frames', /scene_\d{3}_lastframe_(\d{2})\.png$/);
-    await this.syncLatestAttempts('composite_frame', 'images/frames', /scene_\d{3}_composite_(\d{2})\.png$/);
-    // await this.syncLatestAttempts('frame_quality_evaluation', 'images/frames', /scene_\d{3}_evaluation_(\d{2})\.json$/);
-    await this.syncLatestAttempts('scene_quality_evaluation', 'scenes', /scene_\d{3}_evaluation_(\d{2})\.json$/);
-    console.log("   ... Storage state synced.");
+    await this.scanByType('scene_video', 'scenes', /scene_\d{3}_(\d{2})\.mp4$/, updateMap);
+    await this.scanByType('scene_start_frame', 'images/frames', /scene_\d{3}_lastframe_(\d{2})\.png$/, updateMap);
+    await this.scanByType('scene_end_frame', 'images/frames', /scene_\d{3}_lastframe_(\d{2})\.png$/, updateMap);
+    await this.scanByType('composite_frame', 'images/frames', /scene_\d{3}_composite_(\d{2})\.png$/, updateMap);
+    await this.scanByType('scene_quality_evaluation', 'scenes', /scene_\d{3}_evaluation_(\d{2})\.json$/, updateMap);
+    
+    console.log(`   ... Scan complete. Found ${Object.keys(attempts).length} tracked assets.`);
+    return attempts;
   }
 
   /**
-   * Helper to scan GCS prefix and update latestAttempts map
+   * Helper to scan GCS prefix and update the provided map
    */
-  private async syncLatestAttempts(type: GcsObjectType, subDir: string, regex: RegExp) {
+  private async scanByType(
+    type: GcsObjectType, 
+    subDir: string, 
+    regex: RegExp, 
+    updateCallback: (type: GcsObjectType, id: number, attempt: number) => void
+  ) {
     const prefix = path.posix.join(this.videoId, subDir);
     try {
       const [ files ] = await this.storage.bucket(this.bucketName).getFiles({ prefix });
@@ -78,51 +92,13 @@ export class GCPStorageManager {
           if (sceneIdMatch && sceneIdMatch[ 1 ]) {
             const sceneId = parseInt(sceneIdMatch[ 1 ], 10);
             const attempt = parseInt(match[ 1 ], 10);
-
-            const key = `${type}_${sceneId}`;
-            const current = this.latestAttempts.get(key) || 0;
-            if (attempt > current) {
-              this.latestAttempts.set(key, attempt);
-            }
+            updateCallback(type, sceneId, attempt);
           }
         }
       }
     } catch (error) {
-      console.warn(`   ⚠️ Failed to sync state for ${type}:`, error);
+      console.warn(`   ⚠️ Failed to scan state for ${type}:`, error);
     }
-  }
-
-  /**
-   * Records the latest attempt number for a given object type and sceneId.
-   * Call this after successfully uploading a file.
-   */
-  setLatestAttempt(type: GcsObjectType, sceneId: number, attempt: number): void {
-    const key = `${type}_${sceneId}`;
-    const current = this.latestAttempts.get(key) || 0;
-    if (attempt > current) {
-      this.latestAttempts.set(key, attempt);
-    }
-  }
-  
-  /**
-   * Retrieves the latest attempt number for a given object type and sceneId.
-   * Returns 1 if no attempt has been recorded.
-   */
-  getLatestAttempt(type: GcsObjectType, sceneId: number): number {
-    const key = `${type}_${sceneId}`;
-    return this.latestAttempts.get(key) || 1;
-  }
-
-  /**
-   * Resolves the attempt number to use for file operations.
-   * If attempt is 'latest' or undefined, returns the stored latest attempt.
-   * If attempt is a number, returns that number.
-   */
-  private resolveAttempt(type: GcsObjectType, sceneId: number, attempt?: number | 'latest'): number {
-    if (attempt === 'latest' || attempt === undefined) {
-      return this.getLatestAttempt(type, sceneId);
-    }
-    return attempt;
   }
 
   /**
@@ -143,32 +119,32 @@ export class GCPStorageManager {
         return path.posix.join(basePath, 'images', 'locations', `${params.locationId}_reference.png`);
 
       case 'scene_start_frame': {
-        const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
+        const attemptNum = params.attempt;
         return path.posix.join(basePath, 'images', 'frames', `scene_${params.sceneId.toString().padStart(3, '0')}_frame_start_${attemptNum.toString().padStart(2, '0')}.png`);
       }
 
       case 'scene_end_frame': {
-        const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
+        const attemptNum = params.attempt;
         return path.posix.join(basePath, 'images', 'frames', `scene_${params.sceneId.toString().padStart(3, '0')}_frame_end_${attemptNum.toString().padStart(2, '0')}.png`);
       }
 
       case 'frame_quality_evaluation': {
-        const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
+        const attemptNum = params.attempt;
         return path.posix.join(basePath, 'images', 'frames', `scene_${params.sceneId.toString().padStart(3, '0')}_frame_${params.framePosition}_evaluation_${attemptNum.toString().padStart(2, '0')}.json`);
       }
 
       case 'composite_frame': {
-        const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
+        const attemptNum = params.attempt;
         return path.posix.join(basePath, 'images', 'frames', `scene_${params.sceneId.toString().padStart(3, '0')}_composite_${attemptNum.toString().padStart(2, '0')}.png`);
       }
 
       case 'scene_video': {
-        const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
+        const attemptNum = params.attempt;
         return path.posix.join(basePath, 'scenes', `scene_${params.sceneId.toString().padStart(3, '0')}_${attemptNum.toString().padStart(2, '0')}.mp4`);
       }
 
       case 'scene_quality_evaluation': {
-        const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
+        const attemptNum = params.attempt;
         return path.posix.join(basePath, 'scenes', `scene_${params.sceneId.toString().padStart(3, '0')}_evaluation_${attemptNum.toString().padStart(2, '0')}.json`);
       }
 

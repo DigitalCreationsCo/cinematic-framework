@@ -354,6 +354,8 @@ export type SceneStatus = z.infer<typeof SceneStatusSchema>;
 // Scene generation outputs
 export const SceneGenerationOutputSchema = z.object({
   enhancedPrompt: z.string().optional().describe("composed prompt from all departments"),
+  startFramePrompt: z.string().optional().describe("The exact prompt used to generate the start frame"),
+  endFramePrompt: z.string().optional().describe("The exact prompt used to generate the end frame"),
   generatedVideo: ObjectDataSchema.optional().describe("GCS URL of generated video"),
   startFrame: ObjectDataSchema.optional().describe("GCS URL of start keyframe"),
   endFrame: ObjectDataSchema.optional().describe("GCS URL of end keyframe"),
@@ -489,6 +491,9 @@ export const InitialGraphStateSchema = z.object({
 
   // Production metrics
   metrics: WorkflowMetricsSchema.optional(),
+
+  // Distributed state tracking
+  attempts: z.record(z.string(), z.number()).describe("Map of resource IDs to their latest attempt count").default({}),
 });
 export type InitialGraphState = z.infer<typeof InitialGraphStateSchema>;
 
@@ -500,6 +505,7 @@ export const GraphStateSchema = z.intersection(
     storyboardState: StoryboardSchema.describe("current production state"),
     generationRules: z.array(z.string()).describe("raw generation rules"),
     refinedRules: z.array(z.string()).describe("consolidated rules"),
+    attempts: z.record(z.string(), z.number()).describe("Map of resource IDs to their latest attempt count"),
   })
 );
 export type GraphState = z.infer<typeof GraphStateSchema>;
@@ -540,6 +546,15 @@ export type GeneratedScene = Scene & {
 
 export interface SceneGenerationResult {
   scene: GeneratedScene;
+  attempts: number;
+  finalScore: number;
+  evaluation: QualityEvaluationResult | null;
+  warning?: string;
+  usedAttempt: number;
+}
+
+export interface FrameGenerationResult {
+  frame: ObjectData;
   attempts: number;
   finalScore: number;
   evaluation: QualityEvaluationResult | null;
@@ -657,7 +672,7 @@ export function requiresTransition(scene: Scene): boolean {
   return scene.transitionType !== "Cut" && scene.transitionType !== "none";
 }
 
-export type PipelineStatus = "idle" | "analyzing" | "generating" | "evaluating" | "complete" | "error" | "running" | "paused";
+export type PipelineStatus = "idle" | "analyzing" | "generating" | "evaluating" | "complete" | "error" | "paused";
 
 export interface PipelineMessage {
   id: string;
@@ -665,6 +680,14 @@ export interface PipelineMessage {
   message: string;
   timestamp: Date;
   sceneId?: number;
+}
+
+export interface LlmRetryInterruptValue {
+  type: "llm_retry_exhausted" | "llm_intervention";
+  error: string;
+  params: any;
+  retries?: number;
+  functionName?: string;
 }
 
 export type StatusType = PipelineStatus | SceneStatus | "PASS" | "MINOR_ISSUES" | "MAJOR_ISSUES" | "FAIL" | "ACCEPT" | "ACCEPT_WITH_NOTES" | "REGENERATE_MINOR" | "REGENERATE_MAJOR";

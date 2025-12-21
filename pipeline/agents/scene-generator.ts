@@ -38,6 +38,7 @@ export class SceneGeneratorAgent {
         characters: Character[],
         location: Location,
         previousScene: Scene | undefined,
+        currentAttempt: number = 0,
         startFrame?: ObjectData,
         endFrame?: ObjectData,
         characterReferenceImages?: ObjectData[],
@@ -49,14 +50,7 @@ export class SceneGeneratorAgent {
         console.log(`\n🎬 Generating Scene ${scene.id}: ${formatTime(scene.duration)}`);
         console.log(`   Duration: ${scene.duration}s | Shot: ${scene.shotType}`);
 
-        // // // Proactively sanitize the prompt to prevent common safety filter issues.
-        // const sanitizedPrompt = await this.sanitizePrompt(enhancedPrompt);
-        // if (sanitizedPrompt !== enhancedPrompt) {
-        //     console.log(`   🛡️ Prompt proactively sanitized.`);
-        //     enhancedPrompt = sanitizedPrompt;
-        // }
-
-        const prevAttempt = this.storageManager.getLatestAttempt("scene_video", scene.id);
+        const prevAttempt = currentAttempt;
 
         if (!this.qualityAgent.qualityConfig.enabled || !this.qualityAgent) {
             const generated = await this.generateScene(
@@ -83,7 +77,8 @@ export class SceneGeneratorAgent {
                 scene: generated,
                 attempts: 1,
                 finalScore: 1.0,
-                evaluation: null
+                evaluation: null,
+                usedAttempt: prevAttempt + 1
             };
         }
 
@@ -93,6 +88,7 @@ export class SceneGeneratorAgent {
             characters,
             location,
             previousScene,
+            prevAttempt,
             startFrame,
             endFrame,
             characterReferenceImages,
@@ -111,7 +107,8 @@ export class SceneGeneratorAgent {
         enhancedPrompt: string,
         characters: Character[],
         location: Location,
-        previousScene?: Scene,
+        previousScene: Scene | undefined,
+        currentAttempt: number,
         startFrame?: ObjectData,
         endFrame?: ObjectData,
         characterReferenceImages?: ObjectData[],
@@ -120,13 +117,16 @@ export class SceneGeneratorAgent {
         onAttemptComplete?: (metric: AttemptMetric) => void,
     ): Promise<SceneGenerationResult> {
 
+        const acceptanceThreshold = this.qualityAgent.qualityConfig.minorIssueThreshold;
+
         let bestScene: GeneratedScene | null = null;
         let bestEvaluation: QualityEvaluationResult | null = null;
         let bestScore = 0;
+        let bestAttemptNumber = 0;
         let totalAttempts = 0;
-
         let numAttempts = 1;
-        const prevAttempt = this.storageManager.getLatestAttempt("scene_video", scene.id);
+
+        const prevAttempt = currentAttempt;
 
         for (let lastestAttempt = prevAttempt + numAttempts; numAttempts <= this.qualityAgent.qualityConfig.maxRetries; numAttempts++) {
             totalAttempts = numAttempts;
@@ -175,13 +175,14 @@ export class SceneGeneratorAgent {
                     });
                 }
 
-                if (score >= this.qualityAgent.qualityConfig.minorIssueThreshold) {
+                if (score >= acceptanceThreshold) {
                     console.log(`   ✅ Quality acceptable (${(score * 100).toFixed(1)}%)`);
                     return {
                         scene: generated,
                         attempts: totalAttempts,
                         finalScore: score,
-                        evaluation
+                        evaluation,
+                        usedAttempt: lastestAttempt
                     };
                 }
 
@@ -207,6 +208,7 @@ export class SceneGeneratorAgent {
                         bestScore = score;
                         bestScene = generated;
                         bestEvaluation = evaluation;
+                        bestAttemptNumber = lastestAttempt;
                     }
                 }
                 if (numAttempts < this.qualityAgent.qualityConfig.maxRetries) {
@@ -219,7 +221,7 @@ export class SceneGeneratorAgent {
 
         if (bestScene && bestScore > 0) {
             const scorePercent = (bestScore * 100).toFixed(1);
-            const thresholdPercent = (this.qualityAgent.qualityConfig.acceptThreshold * 100).toFixed(0);
+            const thresholdPercent = (acceptanceThreshold * 100).toFixed(0);
             console.warn(`   ⚠️ Using best attempt: ${scorePercent}% (threshold: ${thresholdPercent}%)`);
 
             return {
@@ -227,7 +229,8 @@ export class SceneGeneratorAgent {
                 attempts: totalAttempts,
                 finalScore: bestScore,
                 evaluation: bestEvaluation!,
-                warning: `Quality below threshold after ${totalAttempts} attempts`
+                warning: `Quality below threshold after ${totalAttempts} attempts`,
+                usedAttempt: bestAttemptNumber
             };
         }
 
@@ -271,8 +274,8 @@ export class SceneGeneratorAgent {
             },
             async (error: any, attempt: number, currentPrompt: string) => {
                 if (error instanceof RAIError) {
-                    console.warn(`   ⚠️ Safety error${attemptLabel}. Sanitizing...`);
-                    return await this.sanitizePrompt(currentPrompt, error.message);
+                    console.warn(`   ⚠️ Safety error ${attemptLabel}. Sanitizing...`);
+                    return await this.qualityAgent.sanitizePrompt(currentPrompt, error.message);
                 }
             }
         );
@@ -318,38 +321,6 @@ export class SceneGeneratorAgent {
             }
             console.error(`   ✗ Failed to generate scene ${scene.id}:`, error);
             throw error;
-        }
-    }
-
-    private async sanitizePrompt(originalPrompt: string, errorMessage?: string): Promise<string> {
-        const logMessage = errorMessage
-            ? `   ⚠️ Safety filter triggered. Sanitizing prompt...`
-            : `   🛡️ Proactively sanitizing prompt...`;
-        console.log(logMessage);
-
-        try {
-            const instructions = errorMessage
-                ? `Read the error message carefully to understand what triggered the safety filter. Revise the original_prompt to ensure the prompt will not trigger safety filters.`
-                : `Review the prompt for potential violations of AI safety guidelines. `;
-
-            const prompt = buildSafetyGuidelinesPrompt(instructions, originalPrompt, errorMessage);
-
-            const response = await this.llm.generateContent(buildllmParams({
-                contents: [
-                    { role: "user", parts: [ { text: prompt } ] },
-                    { role: "user", parts: [ { text: 'Output ONLY the corrected prompt text, no JSON, no preamble.' } ] }
-                ],
-                config: {
-                    responseMimeType: 'text/plain'
-                }
-            }));
-
-            const sanitized = response.text;
-            console.log("   ✓ Prompt sanitized.");
-            return sanitized || originalPrompt;
-        } catch (e) {
-            console.warn("   ⚠️ Failed to sanitize prompt, using original:", e);
-            return originalPrompt;
         }
     }
 
@@ -664,7 +635,7 @@ export class SceneGeneratorAgent {
             const gcsUri = await this.storageManager.uploadFile(finalVideoPath, objectPath);
 
             console.log(`   ✓ Rendered video uploaded: ${this.storageManager.getPublicUrl(gcsUri)}`);
-            
+
             const video = this.storageManager.buildObjectData(gcsUri);
             return video;
 
