@@ -14,8 +14,8 @@ interface TimelineProps {
   isPlaying: boolean;
   audioUrl?: string;
   onSceneSelect?: (sceneId: number) => void;
-  onSetTimelineVideoRefs?: (refs: (HTMLVideoElement | null)[]) => void;
   isLoading?: boolean;
+  currentTime?: number;
 }
 
 const typeColors: Record<string, string> = {
@@ -34,23 +34,34 @@ const intensityOpacity: Record<string, string> = {
   extreme: "opacity-100",
 };
 
-const Timeline = memo(function Timeline({ scenes, sceneStatuses, selectedSceneId, totalDuration, isPlaying, audioUrl, onSceneSelect, onSetTimelineVideoRefs, isLoading }: TimelineProps) {
+const Timeline = memo(function Timeline({ scenes, sceneStatuses, selectedSceneId, totalDuration, isPlaying, audioUrl, onSceneSelect, isLoading, currentTime }: TimelineProps) {
   const pixelsPerSecond = 20;
   const timelineWidth = totalDuration * pixelsPerSecond;
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
 
-  // Propagate refs up to parent (PlaybackControls)
-  // useEffect(() => {
-  //   onSetTimelineVideoRefs(videoRefs.current);
-  // }, [ onSetTimelineVideoRefs, scenes.length ]);
+  // Sync video elements with global time
+  useEffect(() => {
+    if (currentTime === undefined) return;
 
-  // Handle local play/pause for timeline videos (only if user audio is NOT present, otherwise they rely on global play state)
-  // useEffect(() => {
-  //     const video = videoRefs.current.find(video => video?.id === selectedSceneId?.toString());
-  //     if (video) {
-  //       isPlaying === true ? video.pause() : video.play();
-  //     }
-  // }, [ isPlaying, audioUrl ]);
+    scenes.forEach((scene, index) => {
+      const video = videoRefs.current[ index ];
+      if (!video) return;
+
+      if (currentTime >= scene.startTime && currentTime < scene.endTime) {
+        const localTime = currentTime - scene.startTime;
+        // Sync video time if significantly different to avoid stuttering on small diffs
+        // But since we are driving this, we just set it.
+        video.currentTime = localTime;
+      } else {
+        // Reset to start or end if outside range
+        if (currentTime < scene.startTime) {
+          video.currentTime = 0;
+        } else {
+          video.currentTime = scene.duration;
+        }
+      }
+    });
+  }, [ currentTime, scenes ]);
 
   if (isLoading) {
     return (
@@ -110,7 +121,7 @@ const Timeline = memo(function Timeline({ scenes, sceneStatuses, selectedSceneId
                     <video
                       ref={ el => videoRefs.current[ index ] = el }
                       src={ scene.generatedVideo?.publicUri }
-                      className="h-full w-full object-cover hidden"
+                      className="h-full w-full object-cover"
                       controls={ false }
                       muted
                     />

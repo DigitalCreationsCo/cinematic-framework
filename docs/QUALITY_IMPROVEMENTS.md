@@ -273,7 +273,7 @@ const allRules = [...proactiveRules, ...domainRules, ...qualityRules];
 #### B. Frame Composition Agent (`frame-composition-agent.ts`)
 **Recommended Update** (not yet applied):
 ```typescript
-// Replace generateImageWithQualityCheck with:
+// Replace generateImageWithQualityRetry with:
 return await QualityRetryHandler.executeWithRetry(
   prompt,
   { qualityConfig: this.qualityAgent.qualityConfig, context },
@@ -432,7 +432,7 @@ When you're ready, refactor agents to use unified handler:
 import { QualityRetryHandler } from "../utils/quality-retry-handler";
 import { RetryLogger } from "../utils/retry-logger";
 
-// Replace generateImageWithQualityCheck method
+// Replace generateImageWithQualityRetry method
 ```
 
 **Scene Generator Agent**:

@@ -17,6 +17,7 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
     updateScene,
     setPipelineStatus,
     addMessage,
+    setInterruptionState,
   } = useStore();
 
   const isHydrated = useStore(state => state.isHydrated);
@@ -54,10 +55,10 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
             if (parsedEvent.payload && 'initialState' in parsedEvent.payload) {
               setPipelineState(parsedEvent.payload.initialState as GraphState);
               setIsLoading(false);
-              setPipelineStatus("running");
+              setPipelineStatus("analyzing");
             }
             break;
-          
+
           case "FULL_STATE":
             const newState = parsedEvent.payload.state;
             setPipelineState(newState);
@@ -65,7 +66,7 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
             if (newState.currentSceneIndex >= (newState.storyboardState?.scenes.length || 0)) {
               setPipelineStatus("complete");
             } else if (newState.currentSceneIndex > 0) {
-              setPipelineStatus("generating");
+              setPipelineStatus("idle");
             }
 
             if (!isHydrated) {
@@ -84,14 +85,14 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
             // Wait for next FULL_STATE to get complete scene data
             // Just update status for immediate UI feedback
             updateScene(parsedEvent.payload.sceneId, {
-              status: "complete" 
+              status: "complete"
             });
             break;
 
           case "SCENE_SKIPPED":
             // updateScene(parsedEvent.payload.sceneId, { status: "skipped" });
             break;
-          
+
           case "LOG":
             // Filter out noisy logs
             const level = parsedEvent.payload.level;
@@ -107,7 +108,7 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
               });
             }
             break;
-          
+
           case "WORKFLOW_COMPLETED":
             setPipelineState(parsedEvent.payload.finalState);
             setPipelineStatus("complete");
@@ -121,6 +122,22 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
               id: crypto.randomUUID(),
               type: "error",
               message: `Workflow failed: ${parsedEvent.payload.error}`,
+              timestamp: new Date(parsedEvent.timestamp)
+            });
+            break;
+
+          case "LLM_INTERVENTION_NEEDED":
+            console.log("Intervention needed - received event:", parsedEvent.payload);
+            setInterruptionState({
+              error: parsedEvent.payload.error,
+              functionName: parsedEvent.payload.functionName,
+              currentParams: parsedEvent.payload.params
+            });
+            setPipelineStatus("paused");
+            addMessage({
+              id: crypto.randomUUID(),
+              type: "warning",
+              message: `Pipeline paused. Intervention required: ${parsedEvent.payload.error}`,
               timestamp: new Date(parsedEvent.timestamp)
             });
             break;

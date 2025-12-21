@@ -15,7 +15,9 @@ export type PipelineCommand =
     | RequestFullStateCommand
     | ResumePipelineCommand
     | StopPipelineCommand
-    | RegenerateSceneCommand;
+    | RegenerateSceneCommand
+    | RegenerateFrameCommand
+    | ResolveInterventionCommand;
 
 export type StartPipelineCommand = PubSubMessage<
     "START_PIPELINE",
@@ -51,6 +53,23 @@ export type RegenerateSceneCommand = PubSubMessage<
     }
 >;
 
+export type RegenerateFrameCommand = PubSubMessage<
+    "REGENERATE_FRAME",
+    {
+        sceneId: number;
+        frameType: "start" | "end";
+        promptModification: string;
+    }
+>;
+
+export type ResolveInterventionCommand = PubSubMessage<
+    "RESOLVE_INTERVENTION",
+    {
+        action: "retry" | "cancel";
+        revisedParams?: any;
+    }
+>;
+
 
 // ===== EVENTS (Pipeline -> Server -> Client) =====
 
@@ -62,6 +81,7 @@ export type PipelineEvent =
     | SceneSkippedEvent
     | WorkflowCompletedEvent
     | WorkflowFailedEvent
+    | LlmInterventionNeededEvent
     | LogEvent;
 
 
@@ -128,5 +148,14 @@ export type WorkflowFailedEvent = PubSubMessage<
     "WORKFLOW_FAILED",
     {
         error: string;
+    }
+>;
+
+export type LlmInterventionNeededEvent = PubSubMessage<
+    "LLM_INTERVENTION_NEEDED",
+    {
+        error: string;
+        params: any;
+        functionName?: string;
     }
 >;

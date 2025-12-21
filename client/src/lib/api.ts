@@ -23,7 +23,7 @@ async function sendCommand<T>(endpoint: string, body: T): Promise<{ projectId: s
 // Pipeline Control Commands
 // ============================================================================
 
-export const startPipeline = (args: Extract<PipelineCommand, { type: "START_PIPELINE"; }>[ 'payload' ] & { projectId: string; }) =>
+export const startPipeline = (args: Extract<PipelineCommand, { type: "START_PIPELINE"; }>[ 'payload' ] & { projectId?: string; }) =>
   sendCommand("/video/start", args);
 
 export const stopPipeline = (args: { projectId: string; }) =>
@@ -35,6 +35,9 @@ export const resumePipeline = (args: { projectId: string; }) =>
 export const regenerateScene = (args: Extract<PipelineCommand, { type: "REGENERATE_SCENE"; }>[ 'payload' ] & { projectId: string; }) =>
   sendCommand(`/video/${args.projectId}/regenerate-scene`, args);
 
+export const regenerateFrame = (args: Extract<PipelineCommand, { type: "REGENERATE_FRAME"; }>[ 'payload' ] & { projectId: string; }) =>
+  sendCommand(`/video/${args.projectId}/regenerate-frame`, args);
+
 
 // ============================================================================
 // Data Fetching
@@ -42,6 +45,23 @@ export const regenerateScene = (args: Extract<PipelineCommand, { type: "REGENERA
 
 export const requestFullState = (args: { projectId: string; }) =>
   sendCommand(`/video/${args.projectId}/request-state`, args);
+
+export const uploadAudio = async (file: File): Promise<{ publicUrl: string; gsUri: string; }> => {
+  const formData = new FormData();
+  formData.append("audio", file);
+
+  const response = await fetch(`${API_BASE_URL}/upload-audio`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to upload audio.");
+  }
+
+  return response.json();
+};
 
 export const getProjects = async (): Promise<{ id: string; createdAt: string; }[]> => {
   const response = await fetch(`${API_BASE_URL}/projects`);

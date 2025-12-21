@@ -52,6 +52,9 @@ export class QualityRetryHandler {
   ): Promise<QualityRetryResult<T>> {
 
     const { qualityConfig, context } = config;
+
+    const acceptanceThreshold = qualityConfig.minorIssueThreshold;
+
     const { generate, evaluate, applyCorrections, calculateScore } = callbacks;
 
     let bestOutput: T | null = null;
@@ -86,9 +89,9 @@ export class QualityRetryHandler {
         }
 
         // Check if quality is acceptable
-        if (score >= qualityConfig.minorIssueThreshold) {
+        if (score >= acceptanceThreshold) {
           console.log(`   ✅ Quality acceptable (${(score * 100).toFixed(1)}%)`);
-          RetryLogger.logFinalResult(attemptContext, score, qualityConfig.acceptThreshold, totalAttempts);
+          RetryLogger.logFinalResult(attemptContext, score, acceptanceThreshold, totalAttempts);
 
           return {
             output,
@@ -141,13 +144,13 @@ export class QualityRetryHandler {
       RetryLogger.logFinalResult(
         { ...context, attempt: totalAttempts },
         bestScore,
-        qualityConfig.acceptThreshold,
+        acceptanceThreshold,
         totalAttempts,
         bestEvaluation!
       );
 
       const scorePercent = (bestScore * 100).toFixed(1);
-      const thresholdPercent = (qualityConfig.acceptThreshold * 100).toFixed(0);
+      const thresholdPercent = (acceptanceThreshold * 100).toFixed(0);
       console.warn(`   ⚠️  Using best attempt: ${scorePercent}% (threshold: ${thresholdPercent}%)`);
 
       return {

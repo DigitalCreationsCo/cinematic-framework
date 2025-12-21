@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import { ProjectSelectionModal } from "@/components/ProjectSelectionModal";
+import { InterventionModal } from "@/components/InterventionModal";
 import { useStore } from "./lib/store";
 import { useEffect, useState } from "react";
 import { useProjects } from "./hooks/use-swr-api";
@@ -13,8 +14,8 @@ import { useProjects } from "./hooks/use-swr-api";
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route component={NotFound} />
+      <Route path="/" component={ Dashboard } />
+      <Route component={ NotFound } />
     </Switch>
   );
 }
@@ -32,18 +33,20 @@ function App() {
     }
   }, [ data, isLoading, isError, selectedProject ]);
 
-  const handleConfirmProject = () => {
-    if (projectToLoad) {
-      setSelectedProject(projectToLoad);
+  const handleConfirmProject = (projectId?: string) => {
+    const id = typeof projectId === 'string' ? projectId : projectToLoad;
+    if (id) {
+      setSelectedProject(id);
       setModalOpen(false);
     }
   };
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={ queryClient }>
       <TooltipProvider>
         <Toaster />
-        {selectedProject ? (
+        <InterventionModal />
+        { selectedProject ? (
           <Router />
         ) : (
           <ProjectSelectionModal
@@ -53,7 +56,7 @@ function App() {
             onSelectProject={ setProjectToLoad }
             onConfirm={ handleConfirmProject }
           />
-        )}
+        ) }
       </TooltipProvider>
     </QueryClientProvider>
   );

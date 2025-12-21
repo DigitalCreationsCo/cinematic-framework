@@ -19,17 +19,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface PlaybackControlsProps {
   scenes: Scene[];
   totalDuration: number;
-  audioUrl?: string;
   videoSrc?: string;
-  mainVideoRef?: React.RefObject<HTMLVideoElement>;
   playbackOffset?: number;
-  timelineVideoRefs?: React.RefObject<HTMLVideoElement>[];
-  onSeekSceneChange?: (sceneId: number) => void;
   onTimeUpdate?: (time: number) => void;
   onPlayMainVideo?: () => void;
   isLoading?: boolean;
   isPlaying: boolean;
   setIsPlaying: (isPlaying: boolean) => void;
+  selectedSceneId?: number;
 }
 
 function formatTime(seconds: number): string {
@@ -41,85 +38,43 @@ function formatTime(seconds: number): string {
 const PlaybackControls = memo(function PlaybackControls({
   scenes,
   totalDuration,
-  audioUrl,
-  mainVideoRef,
   videoSrc,
   playbackOffset = 0,
-  timelineVideoRefs,
-  onSeekSceneChange,
   onTimeUpdate,
   onPlayMainVideo,
   isLoading,
   isPlaying,
   setIsPlaying,
+  selectedSceneId,
 }: PlaybackControlsProps) {
   const [ currentTime, setCurrentTime ] = useState(0);
   const [ volume, setVolume ] = useState(0.8);
   const [ isMuted, setIsMuted ] = useState(false);
   const [ isLooping, setIsLooping ] = useState(false);
   const [ isTheatreMode, setIsTheatreMode ] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const theatreVideoRef = useRef<HTMLVideoElement>(null);
   const animationRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
-  const lastSceneIdRef = useRef<number | null>(null);
 
   const getSceneAtTime = useCallback((time: number): Scene | undefined => {
     return scenes.find(s => time >= s.startTime && time < s.endTime);
   }, [ scenes ]);
 
-  const playbackScene = getSceneAtTime(currentTime);
+  const playbackScene = isPlaying
+    ? getSceneAtTime(currentTime)
+    : (scenes.find(s => s.id === selectedSceneId) || getSceneAtTime(currentTime));
 
   useEffect(() => {
-    if (audioUrl) {
-      if (!audioRef.current) {
-        audioRef.current = new Audio(audioUrl);
-      } else if (audioRef.current.src !== audioUrl && !audioUrl.endsWith(audioRef.current.src)) {
-        // Only update if different (handling relative vs absolute path differences if necessary)
-        // Simple check:
-        if (!audioRef.current.src.includes(audioUrl)) {
-          audioRef.current.src = audioUrl;
-        }
-      }
-      audioRef.current.volume = isMuted ? 0 : volume;
-    }
-
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
-      // Don't nullify audioRef here to allow persistence, but we should pause if component unmounts
-      // Actually, if we re-mount, we might want a new audio.
-      // But if audioUrl changes, we handle it above.
-    };
-  }, [ audioUrl ]);
-
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
     };
   }, []);
 
-  // Handle user audio volume/mute
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume;
-    }
-  }, [ volume, isMuted ]);
-
-  // Handle user audio loop
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.loop = isLooping;
-    }
-  }, [ isLooping ]);
-
   // Main animation loop
   useEffect(() => {
-    if (!isPlaying) {
+    if (!isPlaying || !videoSrc) {
       return;
     }
 
@@ -167,50 +122,22 @@ const PlaybackControls = memo(function PlaybackControls({
 
   // Synchronize media elements
   useEffect(() => {
-    if (audioRef.current) {
-      if (Math.abs(audioRef.current.currentTime - currentTime) > 0.2) {
-        audioRef.current.currentTime = currentTime;
-      }
-      if (isPlaying) audioRef.current.play().catch(() => { });
-      else audioRef.current.pause();
-    }
-
-    const activeVideoRef = isTheatreMode ? theatreVideoRef : mainVideoRef;
-    const inactiveVideoRef = isTheatreMode ? mainVideoRef : theatreVideoRef;
-
-    if (activeVideoRef?.current) {
+    // Only sync theatre video if in theatre mode
+    if (isTheatreMode && theatreVideoRef.current) {
       const videoTime = Math.max(0, currentTime - playbackOffset);
       // Sync if drift is significant (e.g. seek or scene change)
-      if (Math.abs(activeVideoRef.current.currentTime - videoTime) > 0.2) {
-        activeVideoRef.current.currentTime = videoTime;
+      if (Math.abs(theatreVideoRef.current.currentTime - videoTime) > 0.2) {
+        theatreVideoRef.current.currentTime = videoTime;
       }
-      if (isPlaying) activeVideoRef.current.play().catch(() => { });
-      else activeVideoRef.current.pause();
+      if (isPlaying) theatreVideoRef.current.play().catch(() => { });
+      else theatreVideoRef.current.pause();
     }
+  }, [ currentTime, isPlaying, playbackOffset, theatreVideoRef, isTheatreMode ]);
 
-    if (inactiveVideoRef?.current) {
-      inactiveVideoRef.current.pause();
-    }
-  }, [ currentTime, isPlaying, playbackOffset, mainVideoRef, theatreVideoRef, isTheatreMode, audioUrl ]);
-
-  // Update time for external consumers (like Timeline) and trigger scene change notification
+  // Update time for external consumers (like Timeline)
   useEffect(() => {
     onTimeUpdate?.(currentTime);
-
-    // Seek all managed video elements (if they are not in a loop, they will react to currentTime change)
-    if (timelineVideoRefs) {
-      timelineVideoRefs.forEach(ref => {
-        if (ref.current) {
-          ref.current.currentTime = currentTime;
-        }
-      });
-    }
-
-    if (playbackScene && playbackScene.id !== lastSceneIdRef.current) {
-      lastSceneIdRef.current = playbackScene.id;
-      onSeekSceneChange?.(playbackScene.id);
-    }
-  }, [ currentTime, playbackScene, onSeekSceneChange, onTimeUpdate, timelineVideoRefs ]);
+  }, [ currentTime, onTimeUpdate ]);
 
   const handlePlayPause = () => {
     if (onPlayMainVideo) {
@@ -222,17 +149,6 @@ const PlaybackControls = memo(function PlaybackControls({
   const handleSeek = (value: number[]) => {
     const newTime = value[ 0 ];
     setCurrentTime(newTime);
-
-    // Audio and Video sync handled by useEffect
-
-    // Seek all timeline videos
-    if (timelineVideoRefs) {
-      timelineVideoRefs.forEach(ref => {
-        if (ref.current) {
-          ref.current.currentTime = newTime;
-        }
-      });
-    }
   };
 
   const handleSkipBack = () => {
@@ -271,14 +187,9 @@ const PlaybackControls = memo(function PlaybackControls({
     if (newVolume > 0 && isMuted) {
       setIsMuted(false);
     }
-    // Also apply volume to intrinsic video audio if no user audio is present
-    if (!audioUrl) {
-      if (mainVideoRef?.current) {
-        mainVideoRef.current.volume = isMuted ? 0 : newVolume;
-      }
-      if (theatreVideoRef?.current) {
-        theatreVideoRef.current.volume = isMuted ? 0 : newVolume;
-      }
+
+    if (theatreVideoRef?.current) {
+      theatreVideoRef.current.volume = isMuted ? 0 : newVolume;
     }
   };
 
@@ -365,6 +276,7 @@ const PlaybackControls = memo(function PlaybackControls({
             size="icon"
             onClick={ handlePlayPause }
             data-testid="button-play-pause"
+            disabled={ !videoSrc || isLoading }
           >
             { isPlaying ? (
               <Pause className="w-4 h-4" />

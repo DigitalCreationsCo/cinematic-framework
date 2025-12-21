@@ -308,9 +308,7 @@ Significant changes were made to client components to synchronize playback acros
   - Play button now calls `onPlayMainVideo()` to trigger global playback start.
 
 - **`Timeline.tsx`**:
-  - Props updated to receive `currentTime`, `isPlaying`, `audioUrl` and a new callback `onSetTimelineVideoRefs` for ref propagation.
   - Introduced `videoRefs = useRef<(HTMLVideoElement | null)[]>(new Array(scenes.length))` to capture individual scene video element references.
-  - Added `useEffect` to propagate these refs up via `onSetTimelineVideoRefs`.
   - Added logic to control timeline videos directly (via `.play()`/`.pause()`) *only* when `audioUrl` is undefined, otherwise they follow the global time update.
 
 ### 2. Video Element Attribute Changes

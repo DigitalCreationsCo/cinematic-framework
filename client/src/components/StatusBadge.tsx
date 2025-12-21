@@ -25,11 +25,6 @@ const statusConfig: Record<StatusType, { label: string; variant: "default" | "se
   ACCEPT_WITH_NOTES: { label: "Accept w/ Notes", variant: "default", className: "bg-chart-3/80 text-white" },
   REGENERATE_MINOR: { label: "Regen Minor", variant: "default", className: "bg-chart-4 text-white" },
   REGENERATE_MAJOR: { label: "Regen Major", variant: "default", className: "bg-chart-5 text-white" },
-  running: {
-    label: "",
-    variant: "default",
-    className: ""
-  },
   paused: {
     label: "",
     variant: "default",

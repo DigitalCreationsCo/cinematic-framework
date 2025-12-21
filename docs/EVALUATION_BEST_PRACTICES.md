@@ -49,7 +49,7 @@ Update frame-composition-agent.ts:
 import { QualityRetryHandler } from "../utils/quality-retry-handler";
 import { RetryContext } from "../utils/retry-logger";
 
-private async generateImageWithQualityCheck(
+private async generateImageWithQualityRetry(
   scene: Scene,
   prompt: string,
   framePosition: "start" | "end",

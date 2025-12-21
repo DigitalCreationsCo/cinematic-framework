@@ -214,7 +214,7 @@ Building upon explicit temporal tracking, a new synchronization layer coordinate
 
 - `PlaybackControlsProps`: Added `mainVideoRef`, `timelineVideoRefs`, `onPlayMainVideo`.
 - `SceneDetailPanelProps`: Renamed `onPlayVideo` to `onPlayMainVideo`, added video refs and time context.
-- `TimelineProps`: Added `currentTime`, `isPlaying`, `audioUrl`, and added `onSetTimelineVideoRefs` for ref propagation.
+
 
 **Key Concept**: Playback is now centrally managed by time, decoupling play state from individual video element controls, ensuring all visual representations align perfectly with the master audio track.
 

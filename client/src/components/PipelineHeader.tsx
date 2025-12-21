@@ -24,7 +24,8 @@ export default function PipelineHeader({ title, handleStart, handleStop, handleR
     setIsDark
   } = useStore();
 
-  const isRunning = pipelineStatus === "running" || pipelineStatus === "generating" || pipelineStatus === "analyzing" || pipelineStatus === "evaluating";
+  const isRunning = pipelineStatus === "generating" || pipelineStatus === "analyzing" || pipelineStatus === "evaluating";
+
   title = title || pipelineState?.storyboard?.metadata.title || "Untitled Project";
   const progress = pipelineState?.storyboardState ? {
     current: pipelineState.storyboardState.scenes.filter((s: Scene) => s.generatedVideo).length,
@@ -55,12 +56,12 @@ export default function PipelineHeader({ title, handleStart, handleStop, handleR
 
         <div className="flex items-center gap-1">
           { !isRunning ? (
-            <Button size="sm" onClick={ pipelineStatus === 'paused' ? handleResume : handleStart } disabled={ pipelineStatus === "error" }>
+            <Button size="sm" onClick={ () => { confirm('Are you sure you want to execute this?') && pipelineStatus === 'paused' ? handleResume() : handleStart(); } } disabled={ pipelineStatus === "error" }>
               <Play className="w-4 h-4 mr-1" />
               { pipelineStatus === 'paused' ? 'Resume Pipeline' : 'Start Pipeline' }
             </Button>
           ) : (
-            <Button size="sm" variant="destructive" onClick={ handleStop }>
+              <Button size="sm" variant="destructive" onClick={ () => { confirm('Are you sure you want to execute this? Progress will be lost.') && handleStop(); } }>
               <Square className="w-4 h-4 mr-1" />
               Stop
             </Button>

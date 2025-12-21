@@ -4,6 +4,7 @@ import { PubSub, Subscription } from "@google-cloud/pubsub";
 import { PipelineCommand, PipelineEvent } from "../shared/pubsub-types";
 import { v4 as uuidv4 } from "uuid";
 import { Bucket } from "@google-cloud/storage";
+import multer from "multer";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -20,9 +21,16 @@ export async function registerRoutes(
   const VIDEO_EVENTS_TOPIC_NAME = "video-events";
   const videoCommandsTopicPublisher = pubsub.topic(VIDEO_COMMANDS_TOPIC_NAME);
 
-  let sharedEventsSubscription: any = null;
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 50 * 1024 * 1024, // 50MB limit
+    },
+  });
+
+  let sharedEventsSubscription: Subscription;
   const clientConnections = new Map<string, Set<Response>>();
-  
+
   async function ensureSharedSubscription() {
     if (!sharedEventsSubscription) {
       const VIDEO_EVENTS_SUBSCRIPTION = "server-events-subscription";
@@ -39,6 +47,10 @@ export async function registerRoutes(
           try {
             const event = JSON.parse(message.data.toString()) as PipelineEvent;
             const projectId = event.projectId;
+
+            if (event.type === 'LLM_INTERVENTION_NEEDED') {
+                console.log(`[Server] Forwarding LLM_INTERVENTION_NEEDED for projectId: ${projectId}`, event.payload);
+            }
 
             const clients = clientConnections.get(projectId);
             if (clients) {
@@ -92,13 +104,16 @@ export async function registerRoutes(
     try {
       const { projectId, audioUrl, creativePrompt } = req.body;
       console.log(`Received START_PIPELINE command for projectId: ${projectId}`);
-      if (!projectId || !creativePrompt) {
-        console.error("Validation error: projectId or creativePrompt missing.", { projectId, creativePrompt });
-        return res.status(400).json({ error: "projectId and creativePrompt are required." });
+      if (!creativePrompt) {
+        console.error("Validation error: creativePrompt missing.", { creativePrompt });
+        return res.status(400).json({ error: "creativePrompt is required." });
       }
-      await publishCommand({ type: "START_PIPELINE", projectId, payload: { audioUrl, creativePrompt } });
-      console.log(`Published START_PIPELINE command for projectId: ${projectId} to PubSub.`);
-      res.status(202).json({ message: "Pipeline start command issued.", projectId });
+
+      const effectiveProjectId = projectId || `project_${Date.now()}_${uuidv4().split('-')[ 0 ]}`;
+
+      await publishCommand({ type: "START_PIPELINE", projectId: effectiveProjectId, payload: { audioUrl, creativePrompt } });
+      console.log(`Published START_PIPELINE command for projectId: ${effectiveProjectId} to PubSub.`);
+      res.status(202).json({ message: "Pipeline start command issued.", projectId: effectiveProjectId });
     } catch (error) {
       console.error("Error publishing START_PIPELINE command:", error);
       res.status(500).json({ error: "Failed to issue start command." });
@@ -141,6 +156,52 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/video/:projectId/regenerate-frame", async (req: Request, res: Response) => {
+    try {
+      const { projectId } = req.params;
+      const { sceneId, frameType, promptModification } = req.body;
+
+      const missingParams = [];
+      if (!sceneId) missingParams.push('sceneId');
+      if (!frameType) missingParams.push('frameType');
+      if (!promptModification) missingParams.push('promptModification');
+
+      if (missingParams.length) {
+        return res.status(400).json({ error: `Required params are missing: ${missingParams.join(', ')}.` });
+      }
+
+      await publishCommand({
+        type: "REGENERATE_FRAME",
+        projectId,
+        payload: { sceneId, frameType, promptModification },
+      });
+      res.status(202).json({ message: "Frame regeneration command issued.", projectId });
+    } catch (error) {
+      console.error("Error publishing regenerate frame command:", error);
+      res.status(500).json({ error: "Failed to issue regenerate frame command." });
+    }
+  });
+
+  app.post("/api/video/:projectId/resolve-intervention", async (req: Request, res: Response) => {
+    try {
+      const { projectId } = req.params;
+      const { action, revisedParams } = req.body;
+
+      if (!projectId) return res.status(400).json({ error: "projectId is required." });
+      if (!action) return res.status(400).json({ error: "action is required." });
+
+      await publishCommand({
+        type: "RESOLVE_INTERVENTION",
+        projectId,
+        payload: { action, revisedParams }
+      });
+      res.status(202).json({ message: "Intervention resolution command issued.", projectId });
+    } catch (error) {
+      console.error("Error publishing resolve intervention command:", error);
+      res.status(500).json({ error: "Failed to issue resolve intervention command." });
+    }
+  });
+
   app.post("/api/video/:projectId/request-state", async (req: Request, res: Response) => {
     try {
       const { projectId } = req.params;
@@ -155,7 +216,6 @@ export async function registerRoutes(
   // SSE endpoint for a specific project
   app.get("/api/events/:projectId", async (req: Request, res: Response) => {
     const { projectId } = req.params;
-    const clientSseSubscriptionId = `server-sse-${projectId}-${uuidv4()}`;
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -192,6 +252,33 @@ export async function registerRoutes(
     } catch (error) {
       console.error(`Failed to establish SSE for ${projectId}:`, error);
       res.status(500).send({ error: "Failed to establish event stream." });
+    }
+  });
+
+  app.post("/api/upload-audio", upload.single("audio"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No audio file provided." });
+      }
+
+      const blob = bucket.file(`audio/${uuidv4()}-${req.file.originalname}`);
+      const blobStream = blob.createWriteStream();
+
+      blobStream.on("error", (err) => {
+        console.error("Blob stream error:", err);
+        res.status(500).json({ error: "Unable to upload audio." });
+      });
+
+      blobStream.on("finish", () => {
+        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+        const gsUri = `gs://${bucket.name}/${blob.name}`;
+        res.status(200).json({ publicUrl, gsUri });
+      });
+
+      blobStream.end(req.file.buffer);
+    } catch (error) {
+      console.error("Upload error:", error);
+      res.status(500).json({ error: "Upload failed." });
     }
   });
 

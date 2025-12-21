@@ -13,7 +13,6 @@ services:
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
       - GCP_PROJECT_ID=${GCP_PROJECT_ID}
       - POSTGRES_URL=${POSTGRES_URL}
-      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
       - GCP_BUCKET_NAME=${GCP_BUCKET_NAME}
       - ENABLE_QUALITY_CONTROL=true
       - ACCEPT_THRESHOLD="0.90"
@@ -40,7 +39,6 @@ services:
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
       - GCP_PROJECT_ID=${GCP_PROJECT_ID}
       - POSTGRES_URL=${POSTGRES_URL}
-      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
       - GCP_BUCKET_NAME=${GCP_BUCKET_NAME}
       - PORT=8000
     depends_on:

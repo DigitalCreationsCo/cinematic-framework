@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo, useRef } from "react";
+import { useEffect, useCallback, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -70,8 +70,6 @@ export default function Dashboard() {
 
   usePipelineEvents({ projectId: selectedProject || null });
 
-  const mainVideoRef = useRef<HTMLVideoElement>(null);
-
   useEffect(() => {
     if (pipelineState) {
       setPipelineStatus(pipelineState.currentSceneIndex < (pipelineState.storyboardState?.scenes.length || 0) ? "generating" : "complete");
@@ -119,9 +117,8 @@ export default function Dashboard() {
   }, [ currentScenes, currentPlaybackTime ]);
 
   const currentVideoSrc = useMemo(() => {
-    if (pipelineState?.renderedVideo?.publicUri) return pipelineState.renderedVideo.publicUri;
-    return activeScene?.generatedVideo?.publicUri;
-  }, [ pipelineState?.renderedVideo, activeScene ]);
+    return pipelineState?.renderedVideo?.publicUri;
+  }, [ pipelineState?.renderedVideo ]);
 
   const playbackOffset = useMemo(() => {
     if (pipelineState?.renderedVideo) return 0;
@@ -442,19 +439,18 @@ export default function Dashboard() {
                   onSceneSelect={ handleSceneSelect }
                   isLoading={ clientIsLoading }
                   isPlaying={ isPlaying }
+                  currentTime={ currentPlaybackTime }
                 />
                 <PlaybackControls
                   scenes={ currentScenes }
                   totalDuration={ currentMetadata?.duration || 0 }
-                  audioUrl={ audioUrl }
                   videoSrc={ currentVideoSrc }
-                  mainVideoRef={ mainVideoRef }
                   playbackOffset={ playbackOffset }
-                  onSeekSceneChange={ setSelectedSceneId }
                   onTimeUpdate={ setCurrentPlaybackTime }
                   isLoading={ clientIsLoading }
                   isPlaying={ isPlaying }
                   setIsPlaying={ setIsPlaying }
+                  selectedSceneId={ selectedSceneId ?? undefined }
                 />
               </div>
 
@@ -503,6 +499,7 @@ export default function Dashboard() {
           <ResizablePanel defaultSize={ 35 } minSize={ 25 }>
             { selectedScene ? (
               <SceneDetailPanel
+                projectId={ selectedProject! }
                 scene={ selectedScene }
                 status={ currentSceneStatuses[ selectedScene.id ] || "pending" }
                 characters={ selectedSceneCharacters }
@@ -510,18 +507,6 @@ export default function Dashboard() {
                 onRegenerate={ handleRegenerateScene }
                 isLoading={ clientIsLoading }
                 isGenerating={ selectedScene.status === "generating" || selectedScene.status === "evaluating" }
-                mainVideoRef={ mainVideoRef }
-                mainVideoSrc={ currentVideoSrc }
-                currentPlaybackTime={ currentPlaybackTime }
-                isGlobalPlaying={ isPlaying }
-                onGlobalPause={ () => setIsPlaying(false) }
-                onMainVideoEnded={ () => {
-                  // Only auto-stop from video event if we're playing the final render
-                  // Otherwise PlaybackControls manages the timeline
-                  if (pipelineState?.renderedVideo) {
-                    setIsPlaying(false);
-                  }
-                } }
               />
             ) : clientIsLoading ? (
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8">

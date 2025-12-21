@@ -7,6 +7,7 @@ import { buildCorrectionPrompt } from "../prompts/prompt-correction-instruction"
 import { LlmController } from "../llm/controller";
 import { z } from "zod";
 import { FileData } from "@google/genai";
+import { buildSafetyGuidelinesPrompt } from "../prompts/safety-instructions";
 
 const malformedJsonRepairPrompt = (malformedJson: string) => `
 The following string is not valid JSON. Please fix it and return only the valid JSON.
@@ -88,7 +89,7 @@ export class QualityCheckAgent {
   }
 
   async evaluateFrameQuality(
-    frame: string,
+    frame: ObjectData,
     scene: Scene,
     framePosition: "start" | "end",
     characters: Character[],
@@ -97,7 +98,7 @@ export class QualityCheckAgent {
   ): Promise<QualityEvaluationResult> {
     const evaluationPrompt = buildFrameEvaluationPrompt(
       scene,
-      frame,
+      frame.publicUri,
       framePosition,
       QualityEvaluationSchema,
       characters,
@@ -105,6 +106,7 @@ export class QualityCheckAgent {
       previousFrameUrl
     );
 
+    const frameUri = frame.storageUri;
     const response = await this.llm.generateContent(buildllmParams({
       contents: [
         {
@@ -114,15 +116,15 @@ export class QualityCheckAgent {
             {
               fileData: {
                 displayName: "frame",
-                fileUri: frame,
-                mimeType: await this.storageManager.getObjectMimeType(frame) || 'image/png'
+                fileUri: frameUri,
+                mimeType: await this.storageManager.getObjectMimeType(frameUri) || 'image/png'
               }
             },
             {
               fileData: {
                 displayName: "previous frame",
-                fileUri: frame,
-                mimeType: await this.storageManager.getObjectMimeType(frame) || 'image/png'
+                fileUri: frameUri,
+                mimeType: await this.storageManager.getObjectMimeType(frameUri) || 'image/png'
               }
             },
           ]
@@ -257,6 +259,38 @@ export class QualityCheckAgent {
     } catch (error) {
       console.error("   ✗ Failed to apply prompt corrections:", error);
       return originalPrompt; // Fallback to original
+    }
+  }
+
+  async sanitizePrompt(originalPrompt: string, errorMessage?: string): Promise<string> {
+    const logMessage = errorMessage
+        ? `   ⚠️ Safety filter triggered. Sanitizing prompt...`
+        : `   🛡️ Proactively sanitizing prompt...`;
+    console.log(logMessage);
+
+    try {
+      const instructions = errorMessage
+          ? `Read the error message carefully to understand what triggered the safety filter. Revise the original_prompt to ensure the prompt will not trigger safety filters.`
+          : `Review the prompt for potential violations of AI safety guidelines. `;
+
+      const prompt = buildSafetyGuidelinesPrompt(instructions, originalPrompt, errorMessage);
+
+      const response = await this.llm.generateContent(buildllmParams({
+          contents: [
+              { role: "user", parts: [ { text: prompt } ] },
+              { role: "user", parts: [ { text: 'Output ONLY the corrected prompt text, no JSON, no preamble.' } ] }
+          ],
+          config: {
+              responseMimeType: 'text/plain'
+          }
+      }));
+
+      const sanitized = response.text;
+      console.log("   ✓ Prompt sanitized.");
+      return sanitized || originalPrompt;
+    } catch (e) {
+        console.warn("   ⚠️ Failed to sanitize prompt, using original:", e);
+        return originalPrompt;
     }
   }
 

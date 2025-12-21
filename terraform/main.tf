@@ -252,7 +252,7 @@ resource "google_cloudbuild_trigger" "api_build" {
 # Monitoring: Log-based metric for tracking predictions
 resource "google_logging_metric" "prediction_count" {
   name   = "ltx_video_predictions"
-  filter = "resource.type=\"aiplatform.googleapis.com/Endpoint\" AND jsonPayload.endpoint_name=\"${google_vertex_ai_endpoint_with_model_garden_deployment.ltx_endpoint.endpoint_config[0].endpoint_name}\""
+  filter = "resource.type=\"aiplatform.googleapis.com/Endpoint\" AND jsonPayload.endpoint_display_name=\"${google_vertex_ai_endpoint_with_model_garden_deployment.ltx_endpoint.endpoint_config[0].endpoint_display_name}\""
   
   metric_descriptor {
     metric_kind = "DELTA"
@@ -267,14 +267,14 @@ output "endpoint_id" {
   value       = google_vertex_ai_endpoint_with_model_garden_deployment.ltx_endpoint.id
 }
 
-output "endpoint_name" {
+output "endpoint_display_name" {
   description = "Vertex AI endpoint resource name"
-  value       = google_vertex_ai_endpoint_with_model_garden_deployment.ltx_endpoint.endpoint_config[0].endpoint_name
+  value       = google_vertex_ai_endpoint_with_model_garden_deployment.ltx_endpoint.endpoint_config[0].endpoint_display_name
 }
 
 output "predict_url" {
   description = "Prediction endpoint URL (use with authentication)"
-  value       = "https://${var.region}-aiplatform.googleapis.com/v1/${google_vertex_ai_endpoint_with_model_garden_deployment.ltx_endpoint.endpoint_config[0].endpoint_name}:predict"
+  value       = "https://${var.region}-aiplatform.googleapis.com/v1/${google_vertex_ai_endpoint_with_model_garden_deployment.ltx_endpoint.endpoint}:predict"
 }
 
 output "default_output_bucket" {
@@ -305,7 +305,7 @@ output "deployment_instructions" {
     2. Wait for endpoint deployment (can take 15-30 minutes)
     
     3. Test the endpoint:
-       curl -X POST "${output.predict_url.value}" \
+       curl -X POST "https://${var.region}-aiplatform.googleapis.com/v1/${google_vertex_ai_endpoint_with_model_garden_deployment.ltx_endpoint.endpoint}:predict" \
          -H "Authorization: Bearer $(gcloud auth print-access-token)" \
          -H "Content-Type: application/json" \
          -d '{

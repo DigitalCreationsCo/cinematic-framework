@@ -14,6 +14,11 @@ interface AppState {
   isHydrated: boolean;
   isLoading: boolean;
   error: string | null;
+  interruptionState: {
+    error: string;
+    functionName?: string;
+    currentParams: any;
+  } | null;
 
   // UI State
   selectedSceneId: number | null;
@@ -30,6 +35,7 @@ interface AppState {
   setIsHydrated: (hydrated: boolean) => void;
   setIsLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  setInterruptionState: (state: AppState[ 'interruptionState' ]) => void;
   addMessage: (message: PipelineMessage) => void;
   clearMessages: () => void;
   removeMessage: (id: string) => void;
@@ -55,6 +61,7 @@ export const useStore = create<AppState>()(immer((set) => ({
   isHydrated: false,
   isLoading: false,
   error: null,
+  interruptionState: null,
 
   // UI State
   selectedSceneId: null,
@@ -71,6 +78,7 @@ export const useStore = create<AppState>()(immer((set) => ({
   setIsHydrated: (hydrated) => set({ isHydrated: hydrated }),
   setIsLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error: error }),
+  setInterruptionState: (state) => set({ interruptionState: state }),
   addMessage: (message) => set((state) => { state.messages.unshift(message); }),
   clearMessages: () => set({ messages: [] }),
   removeMessage: (id) => set((state) => { state.messages = state.messages.filter(m => m.id !== id); }),

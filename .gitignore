@@ -10,18 +10,63 @@ dist/
 
 .env
 
-cinematic-framework-04e9e982cba7.json
-
 tsconfig.tsbuildinfo
 
 latest_attempts.json
 
-coverage/
-
-.DS_Store
-
 .keeper
 
-terraform/.terraform*
-terraform/terraform.tfvars
-!terraform/.terraform.lock.hcl
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+.terraform.tfstate.lock.info
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local test files
+/tmp/
+test_videos/
+*.mp4
+*.avi
+coverage/
