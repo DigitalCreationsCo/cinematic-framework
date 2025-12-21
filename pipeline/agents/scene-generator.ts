@@ -339,6 +339,8 @@ export class SceneGeneratorAgent {
         console.log(`   Generating video with prompt: ${prompt.substring(0, 50)}...`);
 
         const outputMimeType = "video/mp4";
+        // Update storage state with the current attempt
+        this.storageManager.updateLatestAttempt('scene_video', sceneId, attempt);
         const objectPath = this.storageManager.getGcsObjectPath({ type: "scene_video", sceneId: sceneId, attempt });
 
         let durationSeconds = roundToValidDuration(duration);
@@ -464,6 +466,8 @@ export class SceneGeneratorAgent {
             await this.storageManager.downloadFile(videoUrl, tempVideoPath);
 
             return new Promise((resolve, reject) => {
+                // Update storage state for the end frame
+                this.storageManager.updateLatestAttempt('scene_end_frame', sceneId, attempt);
                 const framePath = this.storageManager.getGcsObjectPath({ type: "scene_end_frame", sceneId: sceneId, attempt });
                 let ffmpegError = '';
 

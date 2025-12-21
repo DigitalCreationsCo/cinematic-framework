@@ -81,7 +81,7 @@ export class CompositionalAgent {
 
     const updatedStoryboard: Storyboard = {
       ...initialContext,
-      scenes: enrichedScenes,
+      scenes: enrichedScenes.map((s, i) => ({ ...s, id: i })), // Ensure sequential IDs
       metadata: {
         ...initialContext.metadata,
         totalScenes: storyboard.scenes.length,
@@ -256,6 +256,9 @@ export class CompositionalAgent {
 
       const cleanedContent = cleanJsonOutput(content);
       const storyboard: Storyboard = JSON.parse(cleanedContent);
+
+      // Ensure sequential IDs
+      storyboard.scenes = storyboard.scenes.map((s, i) => ({ ...s, id: i }));
 
       // Validate that all scenes have valid durations
       for (const scene of storyboard.scenes) {

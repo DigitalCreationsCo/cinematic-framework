@@ -22,12 +22,12 @@ export type GcsObjectPathParams =
   | { type: 'stitched_video'; }
   | { type: 'character_image'; characterId: string; }
   | { type: 'location_image'; locationId: string; }
-  | { type: 'scene_video'; sceneId: number; attempt: number; }
-  | { type: 'scene_start_frame'; sceneId: number; attempt: number; }
-  | { type: 'scene_end_frame'; sceneId: number; attempt: number; }
-  | { type: 'composite_frame'; sceneId: number; attempt: number; }
-  | { type: 'scene_quality_evaluation'; sceneId: number; attempt: number; }
-  | { type: 'frame_quality_evaluation'; sceneId: number; framePosition: "start" | "end"; attempt: number; };
+  | { type: 'scene_video'; sceneId: number; attempt?: number; }
+  | { type: 'scene_start_frame'; sceneId: number; attempt?: number; }
+  | { type: 'scene_end_frame'; sceneId: number; attempt?: number; }
+  | { type: 'composite_frame'; sceneId: number; attempt?: number; }
+  | { type: 'scene_quality_evaluation'; sceneId: number; attempt?: number; }
+  | { type: 'frame_quality_evaluation'; sceneId: number; framePosition: "start" | "end"; attempt?: number; };
 
 // ============================================================================
 // GCP STORAGE MANAGER
@@ -37,11 +37,39 @@ export class GCPStorageManager {
   private storage: Storage;
   private bucketName: string;
   private videoId: string;
+  private latestAttempts: Record<string, number> = {};
+  private bestAttempts: Record<string, number> = {};
 
   constructor(projectId: string, videoId: string, bucketName: string) {
     this.storage = new Storage({ projectId });
     this.bucketName = bucketName;
     this.videoId = videoId;
+  }
+
+  /**
+   * Initialize internal state from GraphState
+   */
+  initializeAttempts(latest: Record<string, number>, best: Record<string, number> = {}) {
+    this.latestAttempts = { ...latest };
+    this.bestAttempts = { ...best };
+    console.log(`   ... StorageManager initialized with ${Object.keys(latest).length} latest attempts and ${Object.keys(best).length} best attempts.`);
+  }
+
+  registerBestAttempt(type: GcsObjectType, id: number | string, attempt: number) {
+    const key = `${type}_${id}`;
+    this.bestAttempts[ key ] = attempt;
+  }
+
+  updateLatestAttempt(type: GcsObjectType, id: number | string, attempt: number) {
+    const key = `${type}_${id}`;
+    if (!this.latestAttempts[ key ] || attempt > this.latestAttempts[ key ]) {
+      this.latestAttempts[ key ] = attempt;
+    }
+  }
+
+  getLatestAttempt(type: GcsObjectType, id: number | string): number {
+    const key = `${type}_${id}`;
+    return this.latestAttempts[ key ] || 0;
   }
 
   /**
@@ -66,7 +94,7 @@ export class GCPStorageManager {
     await this.scanByType('scene_end_frame', 'images/frames', /scene_\d{3}_lastframe_(\d{2})\.png$/, updateMap);
     await this.scanByType('composite_frame', 'images/frames', /scene_\d{3}_composite_(\d{2})\.png$/, updateMap);
     await this.scanByType('scene_quality_evaluation', 'scenes', /scene_\d{3}_evaluation_(\d{2})\.json$/, updateMap);
-    
+
     console.log(`   ... Scan complete. Found ${Object.keys(attempts).length} tracked assets.`);
     return attempts;
   }
@@ -75,9 +103,9 @@ export class GCPStorageManager {
    * Helper to scan GCS prefix and update the provided map
    */
   private async scanByType(
-    type: GcsObjectType, 
-    subDir: string, 
-    regex: RegExp, 
+    type: GcsObjectType,
+    subDir: string,
+    regex: RegExp,
     updateCallback: (type: GcsObjectType, id: number, attempt: number) => void
   ) {
     const prefix = path.posix.join(this.videoId, subDir);
@@ -102,6 +130,43 @@ export class GCPStorageManager {
   }
 
   /**
+   * Returns a path for the NEXT attempt (incrementing the counter).
+   * Used when generating new files.
+   */
+  getNextAttemptPath(params: GcsObjectPathParams): string {
+    if (!('sceneId' in params) || !('attempt' in params)) {
+      // For non-versioned resources, just return the path
+      return this.getGcsObjectPath(params);
+    }
+
+    const type = params.type;
+    const id = params.sceneId;
+    const key = `${type}_${id}`;
+
+    const currentLatest = this.latestAttempts[ key ] || 0;
+    const nextAttempt = currentLatest + 1;
+
+    // Update internal state
+    this.latestAttempts[ key ] = nextAttempt;
+
+    // Return path with explicit next attempt
+    return this.getGcsObjectPath({ ...params, attempt: nextAttempt });
+  }
+
+  private resolveAttempt(type: GcsObjectType, id: number, explicitAttempt?: number): number {
+    if (explicitAttempt !== undefined) return explicitAttempt;
+
+    const key = `${type}_${id}`;
+    // Prefer best attempt if known (for reading)
+    if (this.bestAttempts[ key ] !== undefined) return this.bestAttempts[ key ];
+
+    // Fallback to latest attempt (for reading when best is unknown, or continuation)
+    if (this.latestAttempts[ key ] !== undefined) return this.latestAttempts[ key ];
+
+    return 0;
+  }
+
+  /**
    * Generates a standardized relative GCS object path.
    * Structure: [videoId]/[category]/[filename]
    */
@@ -119,32 +184,32 @@ export class GCPStorageManager {
         return path.posix.join(basePath, 'images', 'locations', `${params.locationId}_reference.png`);
 
       case 'scene_start_frame': {
-        const attemptNum = params.attempt;
+        const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
         return path.posix.join(basePath, 'images', 'frames', `scene_${params.sceneId.toString().padStart(3, '0')}_frame_start_${attemptNum.toString().padStart(2, '0')}.png`);
       }
 
       case 'scene_end_frame': {
-        const attemptNum = params.attempt;
+        const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
         return path.posix.join(basePath, 'images', 'frames', `scene_${params.sceneId.toString().padStart(3, '0')}_frame_end_${attemptNum.toString().padStart(2, '0')}.png`);
       }
 
       case 'frame_quality_evaluation': {
-        const attemptNum = params.attempt;
+        const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
         return path.posix.join(basePath, 'images', 'frames', `scene_${params.sceneId.toString().padStart(3, '0')}_frame_${params.framePosition}_evaluation_${attemptNum.toString().padStart(2, '0')}.json`);
       }
 
       case 'composite_frame': {
-        const attemptNum = params.attempt;
+        const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
         return path.posix.join(basePath, 'images', 'frames', `scene_${params.sceneId.toString().padStart(3, '0')}_composite_${attemptNum.toString().padStart(2, '0')}.png`);
       }
 
       case 'scene_video': {
-        const attemptNum = params.attempt;
+        const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
         return path.posix.join(basePath, 'scenes', `scene_${params.sceneId.toString().padStart(3, '0')}_${attemptNum.toString().padStart(2, '0')}.mp4`);
       }
 
       case 'scene_quality_evaluation': {
-        const attemptNum = params.attempt;
+        const attemptNum = this.resolveAttempt(params.type, params.sceneId, params.attempt);
         return path.posix.join(basePath, 'scenes', `scene_${params.sceneId.toString().padStart(3, '0')}_evaluation_${attemptNum.toString().padStart(2, '0')}.json`);
       }
 

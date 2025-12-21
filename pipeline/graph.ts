@@ -144,6 +144,7 @@ export class CinematicVideoWorkflow {
         errors: null,
         generationRules: null,
         refinedRules: null,
+        attempts: null,
         metrics: {
           reducer: (x: any, y: any) => y,
           default: () => ({
@@ -178,15 +179,30 @@ export class CinematicVideoWorkflow {
         }
       }
 
+      // Populate best attempts from storyboard state if available
+      const bestAttempts: Record<string, number> = {};
+      if (state.storyboardState?.scenes) {
+        for (const scene of state.storyboardState.scenes) {
+          if (scene.bestAttempt) {
+            bestAttempts[ `scene_video_${scene.id}` ] = scene.bestAttempt;
+            bestAttempts[ `scene_start_frame_${scene.id}` ] = scene.bestAttempt;
+            bestAttempts[ `scene_end_frame_${scene.id}` ] = scene.bestAttempt;
+          }
+        }
+      }
+
+      // Initialize storage manager with synced state
+      this.storageManager.initializeAttempts(mergedAttempts, bestAttempts);
+
       return {
         ...state,
         attempts: mergedAttempts
       };
     });
 
-    workflow.addEdge(START, "sync_state");
+    workflow.addEdge(START, "sync_state" as any);
 
-    workflow.addConditionalEdges("sync_state", (state: InitialGraphState) => {
+    workflow.addConditionalEdges("sync_state" as any, (state: InitialGraphState) => {
       if (state.storyboardState && state.storyboardState.scenes.some(s => s.generatedVideo)) {
         console.log("   Resuming workflow from process_scene...");
         return "process_scene";
@@ -400,6 +416,7 @@ export class CinematicVideoWorkflow {
         timestamp: new Date().toISOString(),
       });
 
+      // Implicitly check for the best/latest video path
       const sceneVideoPath = await this.storageManager.getGcsObjectPath({ type: "scene_video", sceneId: scene.id });
       const shouldForceRegenerate = state.forceRegenerateSceneId === scene.id;
 
@@ -534,7 +551,7 @@ export class CinematicVideoWorkflow {
       const sceneMetric: SceneGenerationMetric = {
         sceneId: scene.id,
         attempts: result.attempts,
-        bestAttempt: result.attempts,
+        bestAttempt: result.usedAttempt, // Correctly track the used (best) attempt number
         finalScore: result.finalScore,
         duration: scene.duration,
         ruleAdded: !!result.evaluation?.ruleSuggestion
@@ -565,6 +582,16 @@ export class CinematicVideoWorkflow {
         newAttempts[ `scene_video_${scene.id}` ] = result.usedAttempt;
         newAttempts[ `scene_start_frame_${scene.id}` ] = result.usedAttempt;
         newAttempts[ `scene_end_frame_${scene.id}` ] = result.usedAttempt;
+
+        // Register best attempt with storage manager
+        this.storageManager.registerBestAttempt('scene_video', scene.id, result.usedAttempt);
+        this.storageManager.registerBestAttempt('scene_start_frame', scene.id, result.usedAttempt);
+        this.storageManager.registerBestAttempt('scene_end_frame', scene.id, result.usedAttempt);
+      }
+
+      // Ensure updated storyboard state carries the best attempt info
+      if (updatedStoryboardState.scenes[ state.currentSceneIndex ]) {
+        updatedStoryboardState.scenes[ state.currentSceneIndex ].bestAttempt = result.usedAttempt;
       }
 
       const newState = {
@@ -666,7 +693,7 @@ export class CinematicVideoWorkflow {
     console.log("=".repeat(60));
 
     // Initialize storage manager to sync state from GCS
-    await this.storageManager.initialize();
+    // await this.storageManager.initialize(); // Initialization moved to sync_state node
 
     let initialState: InitialGraphState;
     let audioGcsUri: string | undefined;

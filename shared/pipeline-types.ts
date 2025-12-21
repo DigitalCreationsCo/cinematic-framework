@@ -359,6 +359,7 @@ export const SceneGenerationOutputSchema = z.object({
   generatedVideo: ObjectDataSchema.optional().describe("GCS URL of generated video"),
   startFrame: ObjectDataSchema.optional().describe("GCS URL of start keyframe"),
   endFrame: ObjectDataSchema.optional().describe("GCS URL of end keyframe"),
+  bestAttempt: z.number().optional().describe("The attempt number that was selected as the best result"),
   evaluation: QualityEvaluationResultSchema.optional().describe("Quality evaluation result"),
   status: SceneStatusSchema,
 });
@@ -492,7 +493,7 @@ export const InitialGraphStateSchema = z.object({
   // Production metrics
   metrics: WorkflowMetricsSchema.optional(),
 
-  // Distributed state tracking
+  // generation attempt state tracking
   attempts: z.record(z.string(), z.number()).describe("Map of resource IDs to their latest attempt count").default({}),
 });
 export type InitialGraphState = z.infer<typeof InitialGraphStateSchema>;

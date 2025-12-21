@@ -55,8 +55,9 @@ export class AudioProcessingAgent {
         analysis.audioPublicUri = audioPublicUri;
 
         // Initialize startFrame and endFrame for each scene
-        analysis.segments = analysis.segments.map(segment => ({
+        analysis.segments = analysis.segments.map((segment, index) => ({
             ...segment,
+            id: index, // Ensure 0-based sequential IDs
             startFrame: undefined,
             endFrame: undefined,
         }));

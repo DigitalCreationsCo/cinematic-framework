@@ -166,7 +166,7 @@ export class FrameCompositionAgent {
                 if (numAttempts < this.qualityAgent.qualityConfig.maxRetries) {
                     console.log(`   Retrying frame generation...`);
 
-                    await new Promise(resolve => setTimeout(resolve, 3000));  
+                    await new Promise(resolve => setTimeout(resolve, 3000));
                 }
             }
         }
@@ -261,6 +261,12 @@ export class FrameCompositionAgent {
         }
 
         const imageBuffer = Buffer.from(generatedImageData, "base64");
+
+        // Update storage state with the current attempt if applicable
+        if ('sceneId' in pathParams && 'attempt' in pathParams && pathParams.attempt) {
+            this.storageManager.updateLatestAttempt(pathParams.type, pathParams.sceneId, pathParams.attempt);
+        }
+
         const outputPath = await this.storageManager.getGcsObjectPath(pathParams);
 
         console.log(`   ... Uploading frame to ${outputPath}`);
