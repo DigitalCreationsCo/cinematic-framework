@@ -89,8 +89,8 @@ This architecture replaces verbose, multi-purpose prompts with focused, composab
 - Physical state tracking (accumulated dirt, damage, exhaustion)
 - Location continuity (lighting direction, weather progression)
 - Carryforward notes for next scene
-
-**Key Improvement**: Replaced prose paragraphs with explicit checklists. Continuity state is now reliably managed via **persistent PostgreSQL checkpoints**, ensuring that temporal context is accurate even across interrupted workflow steps or when processing `RETRY_SCENE` commands.
+ 
+**Key Improvement**: Replaced prose paragraphs with explicit checklists. Continuity state is now reliably managed via **persistent PostgreSQL checkpoints** which now include **externalized asset attempt tracking**, ensuring temporal context is accurate even across interrupted workflow steps or when processing `REGENERATE_SCENE` or `REGENERATE_FRAME` commands.
 
 ---
 
@@ -383,9 +383,9 @@ Potential new roles to add:
 
 ## Version History
 
-- **v3.3.2** (Current): Added Scene Regeneration capability, allowing targeted rewinding of workflow state to specific scenes. Updated schema to support public audio URIs for improved client-side playback.
+- **v3.4.0** (Current): Implemented distributed architecture support: **PostgreSQL Distributed Locking** for project concurrency and **Externalized Asset Attempt Tracking** in `GraphState`. Added client commands for fine-grained control: `REGENERATE_FRAME` and `RESOLVE_INTERVENTION`.
+- **v3.3.2**: Added Scene Regeneration capability, allowing targeted rewinding of workflow state to specific scenes. Updated schema to support public audio URIs for improved client-side playback.
 - **v3.3.1**: Consolidated type imports to use shared types. Implemented comprehensive real-time logging via worker console interception and `LOG` Pub/Sub events. Frontend supports new Theatre Mode playback.
-- **v3.3.0**: Refined pipeline worker execution runtime (Node.js v20, using `import.meta.main` for graph execution entry point). Integration with command-driven orchestration and persistent state management. Temporal state tracking guaranteed by PostgreSQL checkpoints.
 - **v3.1.0**: Enhanced quality evaluation and retry mechanisms, including new logging, unified retry handler, and domain-specific generation rules.
 - **v3.0.0**: Role-based prompt architecture implemented
 - **v2.0.0**: Continuity-focused prompts with global rules

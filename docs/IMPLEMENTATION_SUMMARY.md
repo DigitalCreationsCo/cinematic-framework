@@ -30,14 +30,15 @@ This system integrates the role prompts and temporal state into the final action
 
 This phase introduced a distributed, fault-tolerant execution model:
 
-1.  **New Service: `pipeline-worker/`**: A dedicated worker service running on **Node.js v20+**. It subscribes to Pub/Sub commands (`START_PIPELINE`, `STOP_PIPELINE`, etc.) published by the API server and executes the workflow using `node pipeline-worker/index.ts` instead of `tsx`. Audio assets are now copied into this container.
+1.  **New Service: `pipeline-worker/`**: A dedicated, horizontally scalable worker service running on **Node.js v20+**. It now implements **Distributed Locking** via `project_locks` in PostgreSQL, ensuring only one worker processes a project at a time. It subscribes to Pub/Sub commands (`START_PIPELINE`, `STOP_PIPELINE`, `REGENERATE_SCENE`, `REGENERATE_FRAME`, `RESOLVE_INTERVENTION`) and executes the workflow.
 2.  **State Management Abstraction: `pipeline-worker/checkpointer-manager.ts`**: Implements persistent state saving and loading using LangChain's PostgreSQL integration:
     *   Uses **`@langchain/langgraph-postgres`** via the `PostgresCheckpointer`.
     *   Persists the state via `checkpointer.put` and loads it using `channel_values` directly, bypassing stringified JSON state handling.
-    *   Enables reliable resume, stop, and **scene retry capabilities**.
-3.  **Communication Layer**: The system now relies on **Pub/Sub topics** (`video-commands`, `video-events`) for all internal communication, replacing direct internal scripting calls.
-4.  **API Server (`server/routes.ts`)**: Refactored to be stateless, only responsible for publishing commands (POST endpoints) and relaying state events (SSE endpoint now uses a single, shared, persistent Pub/Sub subscription to minimize resource usage) with improved error handling.
-5.  **Real-time Logging**: The `pipeline-worker` now intercepts all console outputs (filtering out raw LLM JSON responses) and publishes them as structured `LOG` events via Pub/Sub, providing the client with granular, real-time feedback on execution steps, warnings, and errors.
+    *   The core state (`GraphState`) now tracks the latest attempt number for all generated assets (`attempts: Record<string, number>`), replacing the volatile in-memory cache in the `GCPStorageManager`.
+    *   Enables reliable resume, stop, and **scene/frame retry capabilities**.
+3.  **Communication Layer**: The system now relies on **Pub/Sub topics** (`video-commands`, `video-events`) for all internal communication.
+4.  **API Server (`server/routes.ts`)**: Refactored to be stateless, only responsible for publishing commands and relaying state events via a single, shared, persistent SSE subscription.
+5.  **Real-time Logging & Interrupts**: The worker intercepts console outputs and publishes them as `LOG` events. It also actively checks the LangGraph state for **LLM Interrupts** (e.g., retry limits exhausted) and publishes a `LLM_INTERVENTION_NEEDED` event to allow the client to resolve the issue via the new `RESOLVE_INTERVENTION` command.
 
 ---
 
@@ -47,9 +48,10 @@ This phase introduced a distributed, fault-tolerant execution model:
 The role-based architecture achieved **40-45% token reduction** across key generation steps by replacing abstract prose with concrete, role-specific checklists. This directly translates to lower operational costs and faster LLM interactions.
 
 ### 2. Fault Tolerance & Iteration
-The introduction of **PostgreSQL check-pointing** means that workflow execution is durable.
-- If the pipeline worker fails, it can resume from the last saved state.
-- The `REGENERATE_SCENE` command now utilizes the LangGraph `Command({ goto: "process_scene", update: currentState })` feature for robust state reset and immediate flow redirection, allowing targeted reprocessing of scenes that resulted in an `error` status by rewinding the graph state and preserving the regeneration attempt history.
+The introduction of **PostgreSQL check-pointing** and **Distributed Locking** means that workflow execution is robust and durable in a multi-worker environment.
+- **Distributed Locking** ensures that only one worker instance processes a given project at any time.
+- State is synced with GCS on startup via the new `sync_state` graph node, resolving consistency issues.
+- The system supports fine-grained control via new commands: `REGENERATE_SCENE`, `REGENERATE_FRAME`, and `RESOLVE_INTERVENTION` (for LLM failures).
 
 ### 3. State Tracking & Continuity
 A dedicated temporal state tracking system was implemented to track progressive changes in character appearance (injuries, dirt, costume condition) and environmental conditions (weather, debris) across scenes, enforced via prompt injection.
@@ -67,7 +69,7 @@ The responsibilities are cleanly separated:
 
 ## File Structure Updates
 
-The project now includes the following new/modified directories:
+The project now includes the following new/modified files/directories:
 
 ```
 /
@@ -78,8 +80,13 @@ The project now includes the following new/modified directories:
 ├── shared/                           # Cross-service shared types
 │   ├── pipeline-types.ts
 │   └── pubsub-types.ts               # Defines Commands and Events
-├── docs/TEMPORAL_TRACKING.md         # New detailed documentation on state tracking
-├── docs/TEMPORAL_TRACKING_IMPLEMENTATION.md # New implementation details on state tracking
+├── docs/DISTRIBUTED_ARCHITECTURE.md  # Detailed plan for distributed compatibility
+├── docs/DISTRIBUTED_COMPATIBILITY_REPORT.md # Analysis of local state issues
+├── pipeline/utils/lock-manager.ts    # Postgres implementation of DistributedLockManager
+├── shared/pipeline-types.ts          # Updated GraphState with 'attempts' tracking
+├── pipeline/storage-manager.ts       # Removed in-memory cache, now requires explicit attempt number
+├── docs/TEMPORAL_TRACKING.md         # Detailed documentation on state tracking
+├── docs/TEMPORAL_TRACKING_IMPLEMENTATION.md # Implementation details on state tracking
 ├── docker-compose.yml                # Orchestration including Postgres and Pub/Sub emulator
 └── server/routes.ts                  # Updated for Pub/Sub command dispatch/SSE streaming
 ```
@@ -88,6 +95,6 @@ The project now includes the following new/modified directories:
 
 ## Conclusion
 
-The shift to a command-driven, persistent state model integrates perfectly with the role-based prompting system. The architecture is now more robust, scalable, auditable, and features **perfect temporal synchronization across all playback elements** and **comprehensive real-time logging**.
+The shift to a command-driven, persistent state model is now fully distributed-compatible. The introduction of **PostgreSQL Distributed Locking** and **Externalized Asset Attempt Tracking** ensures reliability and scalability in a multi-worker environment, supporting new client control commands like `REGENERATE_FRAME` and `RESOLVE_INTERVENTION`.
 
 **Implementation Status:** **✅ Complete** (All core architecture, persistence, command handling, temporal state tracking, real-time logging, and new media synchronization logic are implemented and documented.)

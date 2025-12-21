@@ -8,7 +8,7 @@ Cinematic Framework leverages Google's Vertex AI (Gemini models) and LangGraph t
 
 - **Analyzes audio tracks** to extract musical structure, timing, and emotional beats
 - **Generates detailed storyboards** with scenes, characters, locations, and cinematography
-- **Maintains visual continuity** across scenes using reference images and persistent state checkpoints
+- **Maintains visual continuity** across scenes using reference images and persistent state checkpoints, with asset versioning now managed in persistent state (`GraphState.attempts`).
 - **Produces cinematic videos** with proper shot composition, lighting, and camera movements
 - **Stitches scenes** into a final rendered video synchronized with audio
 - **Self-improves** its generation process by learning from quality-check feedback, utilizing enhanced evaluation guidelines.
@@ -19,18 +19,18 @@ Cinematic Framework leverages Google's Vertex AI (Gemini models) and LangGraph t
 - **Audio-Driven and/or Prompt-Based**: Generate videos from audio files (with automatic scene timing) and/or from creative prompts
 - **Multi-Agent Architecture**: Specialized agents for audio analysis, storyboard composition, character/location management, scene generation, and quality control
 - **Role-Based Prompt Architecture**: Film production crew roles (Director, Cinematographer, Gaffer, Script Supervisor, etc.) compose prompts for specialized, high-quality output. See [PROMPTS_ARCHITECTURE.md](docs/PROMPTS_ARCHITECTURE.md) for architecture details and [WORKFLOW_INTEGRATION.md](docs/WORKFLOW_INTEGRATION.md) for integration status.
-- **Scene Regeneration**: Allows users to selectively regenerate specific scenes that don't meet quality standards without restarting the entire pipeline. The system rewinds the state for that specific scene while maintaining overall continuity. Regeneration now leverages the scene's generation history to resume the retry process from the next logical attempt number, ensuring continuity of the quality improvement loop.
+- **Scene Regeneration & Intervention**: Allows users to selectively regenerate specific scenes or **individual frames** (`REGENERATE_FRAME`) without restarting the entire pipeline. It also supports interactive correction of LLM failures via `RESOLVE_INTERVENTION`.
 - **Self-Improving Generation**: A `QualityCheckAgent` evaluates generated scenes and provides feedback. This feedback is used to refine a set of "Generation Rules" that guide subsequent scene generations, improving quality and consistency over time.
 - **Learning Metrics**: The framework tracks the number of attempts and quality scores for each scene, calculating trend lines to provide real-time feedback on whether the system is "learning" (i.e., requiring fewer attempts to generate high-quality scenes).
 - **Visual Continuity**: Maintains character appearance and location consistency using reference images and **pre-generated start/end frames** for each scene, with intelligent skipping of generation if frames already exist in storage, now governed by persistent checkpoints.
 - **Cinematic Quality**: Professional shot types, camera movements, lighting, and transitions
-- **Persistent State & Resume Capability**: Workflow state is persisted in PostgreSQL via LangGraph checkpointers, allowing for robust resumption and enabling command-driven operations like STOP/REGENERATE via Pub/Sub commands.
+- **Distributed Architecture & Resilience**: Supports safe horizontal scaling across multiple worker replicas using **PostgreSQL Distributed Locking** (`project_locks`) to prevent concurrency issues. Workflow state is persisted in PostgreSQL via LangGraph checkpointers, allowing for robust resumption and enabling command-driven operations like `START/STOP/REGENERATE` via Pub/Sub commands.
 - **Comprehensive Schemas**: Type-safe data structures using Zod for all workflow stages, defined in [shared/schema.ts](shared/schema.ts).
-- **Automatic Retry Logic**: Handles API failures and safety filter violations, centrally managed via command handlers in the pipeline worker service.
+- **Automatic Retry Logic**: Handles API failures, safety filter violations, and LLM retry exhaustion (`LLM_INTERVENTION_NEEDED` event), centrally managed via command handlers in the pipeline worker service.
 
 ## Architecture
 
-The framework uses a **LangGraph state machine** running in a dedicated `pipeline-worker` service (using Node 20+). Execution is controlled via commands published to a Pub/Sub topic (`video-commands`). State changes are broadcast via another Pub/Sub topic (`video-events`), which the API server relays to connected clients via SSE.
+The framework uses a **LangGraph state machine** running across one or more horizontally scalable `pipeline-worker` services (using Node 20+). Execution is controlled via commands published to a Pub/Sub topic (`video-commands`). Distributed locking ensures only one worker executes a project at a time. State changes are broadcast via another Pub/Sub topic (`video-events`), which the API server relays to connected clients via SSE.
 
 ```mermaid
 graph TD
@@ -57,7 +57,7 @@ graph TD
 5.  **QualityCheckAgent**: Evaluates generated scenes for quality and consistency, feeding back into the prompt/rule refinement loop.
 6.  **Prompt CorrectionInstruction**: Guides the process for refining prompts based on quality feedback.
 7.  **Generation Rules Presets**: Proactive domain-specific rules that can be automatically added to guide generation quality.
-8.  **Pipeline Worker (`pipeline-worker/`)**: A dedicated service running the LangGraph instance using Node.js v20+. It handles command execution (`START_PIPELINE`, `STOP_PIPELINE`, `REGENERATE_SCENE`) and uses the `PostgresCheckpointer` for reliable state management. **It now intercepts console logs, intelligently filters out LLM JSON responses, and publishes relevant info to the client as real-time `LOG` events via Pub/Sub.** It now uses `node` directly for execution, replacing `tsx`.
+8.  **Pipeline Worker (`pipeline-worker/`)**: A dedicated, horizontally scalable service running the LangGraph instance using Node.js v20+. It handles command execution (`START_PIPELINE`, `STOP_PIPELINE`, `REGENERATE_SCENE`, `REGENERATE_FRAME`, `RESOLVE_INTERVENTION`), uses **PostgreSQL Distributed Locking** for concurrency control, and uses the `PostgresCheckpointer` for reliable state management. It intercepts console logs, intelligently filters out LLM JSON responses, and publishes relevant info to the client as real-time `LOG` events via Pub/Sub.
 9.  **API Server (`server/`)**: Now stateless, it acts as a proxy, publishing client requests as Pub/Sub commands and streaming Pub/Sub events back to connected clients via a single, shared, persistent SSE subscription to reduce Pub/Sub resource usage. It features improved error handling and explicit acknowledgement for Pub/Sub messages to ensure reliable event delivery.
 
 ## Prerequisites
