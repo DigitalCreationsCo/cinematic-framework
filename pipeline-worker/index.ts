@@ -37,11 +37,9 @@ const pubsub = new PubSub({
 const checkpointerManager = new CheckpointerManager(postgresUrl);
 await checkpointerManager.init();
 
-const lockManager = new DistributedLockManager(postgresUrl);
-await lockManager.init();
+// const lockManager = new DistributedLockManager(postgresUrl);
+// await lockManager.init();
 const workerId = crypto.randomUUID();
-
-const storage = new Storage({ projectId: gcpProjectId });
 
 const VIDEO_COMMANDS_TOPIC_NAME = "video-commands";
 const VIDEO_EVENTS_TOPIC_NAME = "video-events";
@@ -253,7 +251,7 @@ async function handleStartPipelineCommand(command: Extract<PipelineCommand, { ty
     } else {
         console.log(`No checkpoint found for projectId: ${projectId}`);
         console.log("[handleStartPipelineCommand] Starting new pipeline for projectId:", projectId);
-        console.log("Initial state for new pipeline:", JSON.stringify(payload, null, 2));
+        console.log("parameters for new pipeline:", JSON.stringify(payload, null, 2));
 
         const workflow = new CinematicVideoWorkflow(process.env.GCP_PROJECT_ID!, projectId, bucketName);
         
@@ -264,29 +262,45 @@ async function handleStartPipelineCommand(command: Extract<PipelineCommand, { ty
             audioPublicUri = sm.getPublicUrl(payload.audioGcsUri);
         }
 
-        const storyboardPath = `${projectId}/scenes/storyboard.json`;
-        const [ contents ] = await storage.bucket(bucketName).file(storyboardPath).download();
-        
-        let storyboard;
-        if (contents.length) {
-            storyboard = JSON.parse(contents.toString()) as Storyboard;
+        try {
+            console.log("   Checking for existing storyboard...");
+            const storyboardPath = `${projectId}/scenes/storyboard.json`;
+            const storyboard = await sm.downloadJSON<Storyboard>(storyboardPath);
+
             console.log("   Found existing storyboard.");
+
+            initialState = {
+                localAudioPath: payload.audioGcsUri || "",
+                creativePrompt: payload.creativePrompt,
+                audioGcsUri: payload.audioGcsUri,
+                audioPublicUri: audioPublicUri,
+                hasAudio: !!payload.audioGcsUri,
+                storyboard: storyboard,
+                storyboardState: storyboard,
+                currentSceneIndex: 0,
+                errors: [],
+                generationRules: [],
+                refinedRules: [],
+                attempts: {},
+            };
+        } catch (error) {
+            console.error("Error loading from GCS: ", error);
+            console.log("   No existing storyboard found or error loading it. Starting fresh workflow.");
+
+            initialState = {
+                localAudioPath: payload.audioGcsUri || "",
+                creativePrompt: payload.creativePrompt,
+                audioGcsUri: payload.audioGcsUri,
+                audioPublicUri: audioPublicUri,
+                hasAudio: !!payload.audioGcsUri,
+                currentSceneIndex: 0,
+                errors: [],
+                generationRules: [],
+                refinedRules: [],
+                attempts: await sm.scanCurrentAttempts(),
+            };
         }
 
-        initialState = {
-            localAudioPath: payload.audioGcsUri || "",
-            creativePrompt: payload.creativePrompt,
-            audioGcsUri: payload.audioGcsUri,
-            audioPublicUri: audioPublicUri,
-            hasAudio: !!payload.audioGcsUri,
-            storyboard: storyboard,
-            storyboardState: storyboard,
-            currentSceneIndex: 0,
-            errors: [],
-            generationRules: [],
-            refinedRules: [],
-            attempts: {},
-        };
         workflow.publishEvent = publishPipelineEvent;
         const compiledGraph = workflow.graph.compile({ checkpointer });
         console.log(`Compiled graph for new pipeline for projectId: ${projectId}. Starting stream.`);
@@ -345,14 +359,18 @@ async function handleRequestFullStateCommand(command: Extract<PipelineCommand, {
                 throw new Error("GCP_BUCKET_NAME environment variable not set.");
             }
 
-            const storyboardPath = `${projectId}/scenes/storyboard.json`;
-            const [ contents ] = await storage.bucket(bucketName).file(storyboardPath).download();
-            if (contents.length) {
-                const storyboard = JSON.parse(contents.toString()) as Storyboard;
+            const storage = new GCPStorageManager(process.env.GCP_PROJECT_ID!, projectId, bucketName);
+
+            let state: GraphState;
+            try {
+                console.log("   Checking for existing storyboard...");
+                
+                const storyboardPath = `${projectId}/scenes/storyboard.json`;
+                const storyboard = await storage.downloadJSON<Storyboard>(storyboardPath);
 
                 console.log("   Found existing storyboard. Resuming workflow.");
 
-                const state: GraphState = {
+                state = {
                     localAudioPath: "",
                     creativePrompt: storyboard.metadata.creativePrompt || "",
                     hasAudio: false,
@@ -373,7 +391,7 @@ async function handleRequestFullStateCommand(command: Extract<PipelineCommand, {
                     timestamp: new Date().toISOString(),
                 });
 
-            } else {
+            } catch (error) {
                 console.warn(`No state found in storage. ProjectId: ${projectId}`);
             }
         }
@@ -445,7 +463,6 @@ async function handleResumePipelineCommand(command: Extract<PipelineCommand, { t
             });
 
             await checkAndPublishInterruptFromStream(projectId, state as GraphState, publishPipelineEvent);
-
         }
     } catch (err) {
         console.error('[handleResumePipelineCommand] Error during stream execution:', err);
@@ -716,7 +733,7 @@ async function handleResolveInterventionCommand(
     // Verify there's an interrupt to resolve 
     if (!currentState.__interrupt__?.[0].value) {
         console.warn(`[Worker] No interrupt found in state to resolve for projectId: ${projectId}. Checking if we can resume anyway.`);
-        throw Error('No interrupt found in state');
+        return;
     }
 
     const interruptData = currentState.__interrupt__?.[0].value;
@@ -766,19 +783,17 @@ async function handleResolveInterventionCommand(
                 type: "WORKFLOW_FAILED",
                 projectId,
                 payload: {
-                    error: `Workflow aborted by user after interrupt at ${nodeName}`,
+                    error: `Workflow canceled during ${nodeName}`,
                     nodeName: interruptData.nodeName
                 },
                 timestamp: new Date().toISOString()
             });
 
-            // Clear interrupt and don't resume
             updatedState = {
                 __interrupt__: undefined,
                 __interrupt_resolved__: true
             };
 
-            // Save state and exit
             await checkpointer.put(runnableConfig, {
                 ...existingCheckpoint,
                 channel_values: { ...currentState, ...updatedState }
@@ -855,7 +870,12 @@ async function handleResolveInterventionCommand(
             });
         }
 
-        // Publish resolution success
+        console.log(`[Worker] Resolving interrupt for projectId: ${projectId}`, {
+            action: payload.action,
+            nodeName: interruptData.nodeName,
+            hasRevisedParams: !!payload.revisedParams
+        });
+
         await publishPipelineEvent({
             type: "INTERVENTION_RESOLVED",
             projectId,
@@ -867,6 +887,12 @@ async function handleResolveInterventionCommand(
         });
 
         await checkAndPublishInterruptFromSnapshot(projectId, compiledGraph, runnableConfig, publishPipelineEvent);
+
+        console.log(`[Worker] Workflow resumed after interrupt:`, {
+            projectId: projectId,
+            nodeName: interruptData.nodeName,
+            action: payload.action
+        });
 
     } catch (error) {
         console.error("[Worker] Error resuming graph:", error);
@@ -934,17 +960,16 @@ async function main() {
         console.log(`[Worker] Received command: ${command.type} for projectId: ${command.projectId} (Msg ID: ${message.id}, Attempt: ${message.deliveryAttempt})`);
 
         // Acquire lock
-        const acquired = await lockManager.tryAcquire(command.projectId, workerId);
-        if (!acquired) {
-            console.warn(`[Worker] Could not acquire lock for project ${command.projectId}. It may be processing on another worker.`);
-            message.ack(); // Ack to remove from queue (or nack to retry later if you prefer)
-            return;
-        }
+        // const acquired = await lockManager.tryAcquire(command.projectId, workerId);
+        // if (!acquired) {
+        //     console.warn(`[Worker] Could not acquire lock for project ${command.projectId}. It may be processing on another worker.`);
+        //     message.ack(); // Ack to remove from queue (or nack to retry later if you prefer)
+        //     return;
+        // }
 
-        // Heartbeat loop
-        const heartbeat = setInterval(() => {
-            lockManager.refresh(command!.projectId, workerId).catch(err => console.error(`[Worker] Heartbeat failed for ${command!.projectId}:`, err));
-        }, 30000);
+        // const heartbeat = setInterval(() => {
+        //     lockManager.refresh(command!.projectId, workerId).catch(err => console.error(`[Worker] Heartbeat failed for ${command!.projectId}:`, err));
+        // }, 30000);
 
         // Acknowledge immediately to prevent Pub/Sub redelivery during long-running tasks
         // Note: In distributed setup, if we crash, the lock expires and pubsub (if nacked or not acked) would redeliver.
@@ -986,8 +1011,8 @@ async function main() {
                 process.exit(1);
             }
         } finally {
-            clearInterval(heartbeat);
-            await lockManager.release(command.projectId, workerId);
+            // clearInterval(heartbeat);
+            // await lockManager.release(command.projectId, workerId);
         }
     });
 

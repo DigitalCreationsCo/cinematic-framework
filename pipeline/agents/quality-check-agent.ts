@@ -167,7 +167,9 @@ export class QualityCheckAgent {
     location: Location,
     attempt: number,
     previousScene?: Scene,
+    onProgress?: (sceneId: number, message: string) => void
   ): Promise<QualityEvaluationResult> {
+    if (onProgress) onProgress(scene.id, "Evaluating scene quality...");
     const evaluationPrompt = buildSceneVideoEvaluationPrompt(
       scene,
       generatedVideo.publicUri,
@@ -230,7 +232,8 @@ export class QualityCheckAgent {
     evaluation: QualityEvaluationResult,
     scene: Scene,
     characters: Character[],
-    attempt: number
+    attempt: number,
+    onProgress?: (sceneId: number, message: string) => void
   ): Promise<string> {
 
     if (!evaluation.promptCorrections || evaluation.promptCorrections.length === 0) {
@@ -239,6 +242,7 @@ export class QualityCheckAgent {
     }
 
     console.log(`   🔧 Attempt ${attempt + 1}: Applying ${evaluation.promptCorrections.length} corrections`);
+    if (onProgress) onProgress(scene.id, `Applying ${evaluation.promptCorrections.length} prompt corrections...`);
 
     const correctionPrompt = buildCorrectionPrompt(originalPrompt, scene, evaluation.promptCorrections);
 

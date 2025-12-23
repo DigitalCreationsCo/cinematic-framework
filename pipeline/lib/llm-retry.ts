@@ -40,25 +40,21 @@ export async function retryLlmCall<T, U>(
             console.log(`Calling LLM (Attempt ${retries + 1})...`);
             return await llmCall(params);
         } catch (error) {
-            console.error('LLM call failed. Triggering graph interrupt for human intervention.');
+            console.error('LLM call failed. Triggering graph interrupt for human intervention.Error: ', error);
 
             const interruptValue: LlmRetryInterruptValue = {
                 nodeName: "",
                 type: "llm_intervention",
                 error: error instanceof Error ? error.message : String(error),
                 params: params as any,
-                retries: retries,
+                attemptCount: retries,
                 functionName: llmCall.name || "Unknown Function"
             };
 
-            // Trigger Graph Interrupt
-            // The graph execution will pause here.
             // When resumed with Command({ resume: { action: 'retry', revisedParams: ... } }), this value will be returned.
             const resolution = interrupt(interruptValue);
 
-            // If we are here, it means the graph was resumed!
             if (resolution) {
-                // User provided new params or action
                 if (resolution.action === 'cancel') {
                     throw new Error('User cancelled operation.');
                 }
@@ -75,7 +71,7 @@ export async function retryLlmCall<T, U>(
                 }
             }
 
-            throw new Error('LLM call failed and resolution was not provided.');
+            throw new Error('LLM call failed and resolution was not provided.');    
         }
     }
 }

@@ -17,7 +17,7 @@ import { buildCharacterImagePrompt } from "../prompts/character-image-instructio
 import { buildLocationImagePrompt } from "../prompts/location-image-instruction";
 import { composeEnhancedSceneGenerationPrompt } from "../prompts/prompt-composer";
 import { buildFrameGenerationPrompt } from "../prompts/frame-generation-instruction";
-import { LlmController } from "../llm/controller";
+import { LlmController, LlmProvider } from "../llm/controller";
 import { imageModelName } from "../llm/google/models";
 import { QualityCheckAgent } from "./quality-check-agent";
 import { evolveCharacterState, evolveLocationState } from "./state-evolution";
@@ -275,7 +275,7 @@ export class ContinuityManagerAgent {
                     ]
                 );
             } else {
-                console.log(`  → Found existing START frame for Scene ${scene.id}: ${currentScene.startFrame}`);
+                console.log(`  → Found existing START frame for Scene ${scene.id}: ${currentScene.startFrame.publicUri}`);
             }
 
             // --- Generate End Frame ---
@@ -303,7 +303,7 @@ export class ContinuityManagerAgent {
                     ]
                 );
             } else {
-                console.log(`  → Found existing END frame for Scene ${scene.id}: ${currentScene.endFrame}`);
+                console.log(`  → Found existing END frame for Scene ${scene.id}: ${currentScene.endFrame.publicUri}`);
             }
 
             updatedScenes.push(currentScene);
@@ -350,11 +350,10 @@ export class ContinuityManagerAgent {
                 try {
                     const outputMimeType = "image/png";
 
-                    const result = await retryLlmCall(
-                        this.imageModel.generateContent.bind(this.imageModel),
-                        {
+                    const generateLocationImage = (params: any) => {
+                        return this.imageModel.generateContent({
                             model: imageModelName,
-                            contents: [ imagePrompt ],
+                            contents: [ params.prompt ],
                             config: {
                                 candidateCount: 1,
                                 responseModalities: [ Modality.IMAGE ],
@@ -363,19 +362,15 @@ export class ContinuityManagerAgent {
                                     outputMimeType: outputMimeType
                                 }
                             }
-                        },
+                        });
+                    };
+
+                    const result = await retryLlmCall(
+                        generateLocationImage,
+                        { prompt: imagePrompt },
                         {
                             initialDelay: this.ASSET_GEN_COOLDOWN_MS,
                         },
-                        async (error: any, attempt: number, currentParams) => {
-                            if (error instanceof ApiError) {
-                                if (error.message.includes("Resource exhausted") && attempt > 1) {
-                                    currentParams.model = "imagen-4.0-generate-001";
-                                    console.log("image model now using imagen-4.0-generate-001");
-                                }
-                            }
-                            return currentParams;
-                        }
                     );
 
                     if (!result.candidates || result.candidates?.[ 0 ]?.content?.parts?.length === 0) {

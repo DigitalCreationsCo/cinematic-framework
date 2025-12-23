@@ -21,7 +21,7 @@ export type PipelineCommand =
 export type StartPipelineCommand = PubSubMessage<
     "START_PIPELINE",
     {
-        audioGcsUri?: string; 
+        audioGcsUri?: string;
         creativePrompt: string;
     }
 >;
@@ -76,6 +76,7 @@ export type PipelineEvent =
     | WorkflowStartedEvent
     | FullStateEvent
     | SceneStartedEvent
+    | SceneProgressEvent
     | SceneCompletedEvent
     | SceneSkippedEvent
     | WorkflowCompletedEvent
@@ -84,6 +85,17 @@ export type PipelineEvent =
     | InterventionResolvedEvent
     | LogEvent;
 
+
+export type SceneProgressEvent = PubSubMessage<
+    "SCENE_PROGRESS",
+    {
+        sceneId: number;
+        progressMessage: string;
+        progress?: number; // 0-100
+        startFrame?: any; // ObjectData
+        endFrame?: any; // ObjectData
+    }
+>;
 
 export type LogEvent = PubSubMessage<
     "LOG",

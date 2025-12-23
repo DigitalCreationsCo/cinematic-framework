@@ -85,14 +85,9 @@ const Timeline = memo(function Timeline({ scenes, sceneStatuses, selectedSceneId
 
   return (
     <div className="space-y-2" data-testid="timeline">
-      <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-        <span>0:00</span>
-        <span className="font-mono">{ Math.floor(totalDuration / 60) }:{ String(Math.floor(totalDuration % 60)).padStart(2, '0') }</span>
-      </div>
-
       <ScrollArea className="w-full">
         <div
-          className="relative h-20 bg-muted rounded-md"
+          className="relative h-20 bg-muted rounded-md overflow-y-clip"
           style={ { width: `${Math.max(timelineWidth, 100)}px`, minWidth: '100%' } }
         >
           { scenes.map((scene, index) => {
@@ -152,13 +147,17 @@ const Timeline = memo(function Timeline({ scenes, sceneStatuses, selectedSceneId
         <ScrollBar orientation="horizontal" />
       </ScrollArea>
 
-      <div className="flex flex-wrap gap-2 text-xs">
-        { Object.entries(typeColors).map(([ type, color ]) => (
-          <div key={ type } className="flex items-center gap-1">
-            <div className={ cn("w-3 h-3 rounded-sm", color) } />
-            <span className="text-muted-foreground capitalize">{ type }</span>
-          </div>
-        )) }
+      <div className="flex flex-wrap gap-2 text-xs items-center justify-between text-muted-foreground px-1">
+        <div className='flex flex-wrap gap-2'>
+          { Object.entries(typeColors).map(([ type, color ]) => (
+            <div key={ type } className="flex items-center gap-1">
+              <div className={ cn("w-3 h-3 rounded-sm", color) } />
+              <span className="capitalize">{ type }</span>
+            </div>
+          )) }
+        </div>
+
+        <span className="font-mono">{ Math.floor(totalDuration / 60) }:{ String(Math.floor(totalDuration % 60)).padStart(2, '0') }</span>
       </div>
     </div>
   );

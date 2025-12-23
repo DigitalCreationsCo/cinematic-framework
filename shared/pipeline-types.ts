@@ -362,6 +362,7 @@ export const SceneGenerationOutputSchema = z.object({
   bestAttempt: z.number().optional().describe("The attempt number that was selected as the best result"),
   evaluation: QualityEvaluationResultSchema.optional().describe("Quality evaluation result"),
   status: SceneStatusSchema,
+  progressMessage: z.string().optional().describe("Real-time progress message during generation"),
 });
 export type SceneGenerationOutput = z.infer<typeof SceneGenerationOutputSchema>;
 

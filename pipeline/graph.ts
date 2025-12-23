@@ -258,7 +258,7 @@ export class CinematicVideoWorkflow {
         const interruptValue: LlmRetryInterruptValue = {
           type: currentAttempt >= maxRetries ? 'llm_retry_exhausted' : 'llm_intervention',
           error: errorMessage,
-          errorDetails: errorDetails, 
+          errorDetails: errorDetails,
           functionName: 'expandCreativePrompt',
           nodeName: nodeName,
           params: {
@@ -268,7 +268,7 @@ export class CinematicVideoWorkflow {
           lastAttemptTimestamp: new Date().toISOString(),
           stackTrace: error instanceof Error ? error.stack : undefined
         };
-        
+
         throw new NodeInterrupt(interruptValue);
       }
     });
@@ -515,7 +515,7 @@ export class CinematicVideoWorkflow {
           params: {
             characters: state.storyboardState.characters,
             sceneDescriptions: state.storyboardState.scenes.map(s => s.description),
-          }, 
+          },
           attemptCount: currentAttempt,
           lastAttemptTimestamp: new Date().toISOString(),
           stackTrace: error instanceof Error ? error.stack : undefined
@@ -589,10 +589,20 @@ export class CinematicVideoWorkflow {
 
         console.log("\n🖼️ PHASE 2c: Generating Scene Start/End Frames...");
 
+        const onProgress = async (sceneId: number, msg: string, artifacts?: any) => {
+          await this.publishEvent({
+            type: "SCENE_PROGRESS",
+            projectId: this.videoId,
+            payload: { sceneId, progressMessage: msg, ...artifacts },
+            timestamp: new Date().toISOString(),
+          });
+        };
+
         const updatedScenes = await this.continuityAgent.generateSceneFramesBatch(
           state.storyboardState.scenes,
           state.storyboardState,
           state.generationRules,
+          onProgress
         );
 
         const newState = {
@@ -760,6 +770,15 @@ export class CinematicVideoWorkflow {
           }
         };
 
+        const onProgress = async (sceneId: number, msg: string, artifacts?: any) => {
+          await this.publishEvent({
+            type: "SCENE_PROGRESS",
+            projectId: this.videoId,
+            payload: { sceneId, progressMessage: msg, ...artifacts },
+            timestamp: new Date().toISOString(),
+          });
+        };
+
         // Use scene.startFrame directly for previousFrameUrl and scene.endFrame for config.lastFrame
         const result = await this.sceneAgent.generateSceneWithQualityCheck(
           scene,
@@ -773,7 +792,8 @@ export class CinematicVideoWorkflow {
           characterReferenceImages,
           locationReferenceImages,
           !state.hasAudio,
-          onAttemptComplete
+          onAttemptComplete,
+          onProgress
         );
 
         if (result.evaluation) {
@@ -923,7 +943,7 @@ export class CinematicVideoWorkflow {
 
         const newState = {
           ...state,
-          errors: [ ...state.errors, { 
+          errors: [ ...state.errors, {
             node: 'render_video',
             error: `Video rendering failed: ${error}`,
             skipped: true,

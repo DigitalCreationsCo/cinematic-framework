@@ -265,10 +265,10 @@ export class CompositionalAgent {
     };
 
     const storyboard = await retryLlmCall(llmCall, undefined, { maxRetries: 3, initialDelay: 1000, ...retryConfig });
-    (storyboard.metadata as any).creativePrompt = creativePrompt;
-    (storyboard.metadata as any).videoModel = videoModelName;
-    (storyboard.metadata as any).imageModel = imageModelName;
-    (storyboard.metadata as any).textModel = textModelName;
+    storyboard.metadata.creativePrompt = creativePrompt;
+    storyboard.metadata.videoModel = videoModelName;
+    storyboard.metadata.imageModel = imageModelName;
+    storyboard.metadata.textModel = textModelName;
 
     // Save storyboard
     const storyboardPath = this.storageManager.getGcsObjectPath({ type: "storyboard" });

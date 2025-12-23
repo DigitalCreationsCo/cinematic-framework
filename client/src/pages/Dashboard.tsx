@@ -72,7 +72,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (pipelineState) {
-      setPipelineStatus(pipelineState.currentSceneIndex < (pipelineState.storyboardState?.scenes.length || 0) ? "ready" : "complete");
+      setPipelineStatus(pipelineState.currentSceneIndex < (pipelineState.storyboardState?.scenes.length || 0) ? pipelineStatus : "complete");
     }
   }, [ pipelineState, setPipelineStatus ]);
 
@@ -107,7 +107,7 @@ export default function Dashboard() {
 
   const completedScenes = useMemo(() => Object.values(currentSceneStatuses).filter(s => s === "complete").length, [ currentSceneStatuses ]);
 
-  const clientIsLoading = isLoading;
+  const clientIsLoading = isLoading && !pipelineState;
 
   const activeScene = useMemo(() => {
     return currentScenes.find(s =>
@@ -258,7 +258,7 @@ export default function Dashboard() {
       <ScrollArea className="h-full">
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 p-1 pb-4">
           { clientIsLoading && sceneSkeletons }
-          { !clientIsLoading && currentScenes.map((scene) => (
+          { !clientIsLoading && (currentScenes.length ? (currentScenes.map((scene) => (
             <SceneCard
               key={ scene.id }
               scene={ scene }
@@ -268,7 +268,11 @@ export default function Dashboard() {
               onPlay={ handlePlayScene }
               isLoading={ clientIsLoading }
             />
-          )) }
+          ))) :
+            <div className="text-xs text-muted-foreground px-4">
+              No scenes have been created yet
+            </div>
+          ) }
         </div>
       </ScrollArea>
     </TabsContent>
@@ -277,16 +281,20 @@ export default function Dashboard() {
   const characterTabContent = useMemo(() => (
     <TabsContent value="characters" className="flex-1 overflow-hidden mt-0 p-4">
       <ScrollArea className="h-full">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-4">
           { clientIsLoading && characterSkeletons }
-          { !clientIsLoading && currentCharacters.map((char) => (
+          { !clientIsLoading && (currentCharacters.length ? currentCharacters.map((char) => (
             <CharacterCard
               key={ char.id }
               character={ char }
               onSelect={ handleCharacterSelect }
               isLoading={ clientIsLoading }
             />
-          )) }
+          )) :
+            <div className="text-xs text-muted-foreground px-4">
+              No characters have been created yet
+            </div>
+          ) }
         </div>
       </ScrollArea>
     </TabsContent>
@@ -297,13 +305,17 @@ export default function Dashboard() {
       <ScrollArea className="h-full">
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 pb-4">
           { clientIsLoading && locationSkeletons }
-          { !clientIsLoading && currentLocations.map((loc) => (
+          { !clientIsLoading && (currentLocations.length ? currentLocations.map((loc) => (
             <LocationCard
               key={ loc.id }
               location={ loc }
               onSelect={ handleLocationSelect }
               isLoading={ clientIsLoading }
             />
+          )) : (
+            <div className="text-xs text-muted-foreground px-4">
+              No locations have been created yet
+            </div>
           )) }
         </div>
       </ScrollArea>
@@ -422,7 +434,7 @@ export default function Dashboard() {
   return (
     <div className="h-screen flex flex-col bg-background">
       <PipelineHeader
-        title={ currentMetadata?.title || "Loading..." }
+        title={ clientIsLoading ? "Loading..." : (currentMetadata?.title || "") }
         handleStart={ handleStartPipeline }
         handleStop={ handleStopPipeline }
         handleResume={ handleResume }

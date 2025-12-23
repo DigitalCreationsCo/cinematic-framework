@@ -54,7 +54,7 @@ export class SceneGeneratorAgent {
         const prevAttempt = currentAttempt;
 
         if (!this.qualityAgent.qualityConfig.enabled || !this.qualityAgent) {
-            const generated = await this.generateScene(
+            const generated = await this.generateSceneWithSafetyRetry(
                 scene,
                 enhancedPrompt,
                 prevAttempt + 1,
@@ -253,14 +253,17 @@ export class SceneGeneratorAgent {
         locationReferenceImages?: ObjectData[],
         previousScene?: Scene,
         generateAudio = false,
-    ) {
+    ): Promise<GeneratedScene> {
+        console.log(`\n🎬 Generating Scene ${scene.id}: ${formatTime(scene.duration)}`);
+        console.log(`   Duration: ${scene.duration}s | Shot: ${scene.shotType}`);
 
         const attemptLabel = attempt ? ` (Quality Attempt ${attempt})` : "";
 
-        return await retryLlmCall(
-            (prompt: string) => this.generateScene(
-                scene,
-                prompt,
+        const generatedVideo = await retryLlmCall(
+            (params: { prompt: string; }) => this.executeVideoGeneration(
+                params.prompt,
+                scene.duration,
+                scene.id,
                 attempt,
                 startFrame,
                 endFrame,
@@ -269,62 +272,32 @@ export class SceneGeneratorAgent {
                 previousScene,
                 generateAudio,
             ),
-            enhancedPrompt,
+            {
+                prompt: enhancedPrompt,
+            },
             {
                 maxRetries: this.qualityAgent.qualityConfig.safetyRetries,
                 initialDelay: 1000,
                 backoffFactor: 2
             },
-            async (error: any, attempt: number, currentPrompt: string) => {
+            async (error: any, attempt: number, params: any) => {
                 if (error instanceof RAIError) {
                     console.warn(`   ⚠️ Safety error ${attemptLabel}. Sanitizing...`);
-                    return await this.qualityAgent.sanitizePrompt(currentPrompt, error.message);
+                    const sanitizedPrompt = await this.qualityAgent.sanitizePrompt(params.prompt, error.message);
+                    return {
+                        ...params,
+                        prompt: sanitizedPrompt
+                    }
                 }
             }
         );
-    }
 
-    private async generateScene(
-        scene: Scene,
-        enhancedPrompt: string,
-        attempt: number,
-        startFrame?: ObjectData,
-        endFrame?: ObjectData,
-        characerterReferenceUrls?: ObjectData[],
-        locationReferenceUrls?: ObjectData[],
-        previousScene?: Scene,
-        generateAudio = false,
-    ): Promise<GeneratedScene> {
-        try {
-            console.log(`\n🎬 Generating Scene ${scene.id}: ${formatTime(scene.duration)}`);
-            console.log(`   Duration: ${scene.duration}s | Shot: ${scene.shotType}`);
-
-            const videoUrl = await this.executeVideoGeneration(
-                enhancedPrompt,
-                scene.duration,
-                scene.id,
-                attempt,
-                startFrame,
-                endFrame,
-                characerterReferenceUrls,
-                locationReferenceUrls,
-                previousScene,
-                generateAudio,
-            );
-
-            return {
-                ...scene,
-                enhancedPrompt,
-                generatedVideo: videoUrl,
-                endFrame,
-            };
-        } catch (error) {
-            if (error instanceof RAIError) {
-                throw error;
-            }
-            console.error(`   ✗ Failed to generate scene ${scene.id}:`, error);
-            throw error;
-        }
+        return {
+            ...scene,
+            enhancedPrompt,
+            generatedVideo: generatedVideo,
+            endFrame,
+        };
     }
 
     private async executeVideoGeneration(

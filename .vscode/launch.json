@@ -37,14 +37,13 @@
             "remoteRoot": "/usr/src/app",
             "restart": true,
         },
-        
-
         {
             "name": "Launch Worker",
             "type": "node",
             "request": "launch",
             "program": "${workspaceFolder}/node_modules/.bin/tsx",
             "args": "pipeline-worker/index.ts",
+            "envFile": "${workspaceFolder}/.env",
             "skipFiles": [
                 "<node_internals>/**"
             ],
@@ -68,9 +67,44 @@
             "request": "launch",
             "program": "${workspaceFolder}/node_modules/.bin/tsx",
             "args": "server/index.ts",
+            "envFile": "${workspaceFolder}/.env",
             "skipFiles": [
                 "<node_internals>/**"
             ],
+        },
+        {
+            "name": "Debug Server (Hot Reload)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/node_modules/.bin/tsx",
+            "args": [
+                "watch",
+                "--inspect",
+                "server/index.ts"
+            ],
+            "envFile": "${workspaceFolder}/.env",
+            "console": "integratedTerminal",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "restart": true
+        },
+        {
+            "name": "Debug Worker (Hot Reload)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/node_modules/.bin/tsx",
+            "args": [
+                "watch",
+                "--inspect",
+                "pipeline-worker/index.ts"
+            ],
+            "envFile": "${workspaceFolder}/.env",
+            "console": "integratedTerminal",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "restart": true
         },
         {
             "name": "Debug Client",
@@ -82,7 +116,6 @@
                 "/*": "${webRoot}/*"
             }
         },
-
         {
             "name": "Docker: Launch Server",
             "type": "docker",
@@ -90,7 +123,6 @@
             "preLaunchTask": "docker-run: debug",
             "platform": "node"
         },
-
         {
             "name": "Launch Pipeline",
             "type": "node",
@@ -143,6 +175,14 @@
                 "Launch Worker",
                 "Launch Server",
                 "Debug Client",
+            ]
+        },
+        {
+            "name": "Debug Full-Stack (Hot Reload)",
+            "configurations": [
+                "Debug Worker (Hot Reload)",
+                "Debug Server (Hot Reload)",
+                "Debug Client"
             ]
         }
     ]

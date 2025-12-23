@@ -26,15 +26,16 @@ export class FrameCompositionAgent {
         this.storageManager = storageManager;
     }
 
-    async prepareImageInputs(url: string[]): Promise<Part[]> {
+    async prepareImageInputs(urls: string[]): Promise<Part[]> {
+
         return Promise.all(
-            url.map(async (url) => {
-                const filePathParts = url.split('/');
-                const mimeType = await this.storageManager.getObjectMimeType(url);
+            urls.map(async (u) => {
+                const filePathParts = u.split('/');
+                const mimeType = await this.storageManager.getObjectMimeType(u);
                 if (!mimeType) {
-                    throw new Error(`Could not determine mime type for ${url}`);
+                    throw new Error(`Could not determine mime type for ${u}`);
                 }
-                return { fileData: { mimeType, fileUri: url, displayName: filePathParts[ filePathParts.length - 1 ] } };
+                return { fileData: { mimeType, fileUri: u, displayName: filePathParts[ filePathParts.length - 1 ] } };
             })
         );
     }
@@ -47,6 +48,7 @@ export class FrameCompositionAgent {
         sceneLocations: Location[],
         previousFrame: ObjectData | undefined,
         referenceImages: (ObjectData | undefined)[],
+        onProgress?: (sceneId: number, message: string) => void
     ): Promise<ObjectData> {
         if (!this.qualityAgent.qualityConfig.enabled && !!this.qualityAgent.evaluateFrameQuality) {
             const prevAttempt = this.storageManager.getLatestAttempt(framePosition === "start" ? "scene_start_frame" : "scene_end_frame", scene.id);
@@ -54,10 +56,10 @@ export class FrameCompositionAgent {
             return await this.executeGenerateImage(
                 prompt,
                 { type: framePosition === "start" ? "scene_start_frame" : "scene_end_frame", sceneId: scene.id, attempt: prevAttempt + 1 },
-                previousFrame, referenceImages);
+                previousFrame, referenceImages, onProgress);
         }
 
-        const result = await this.generateImageWithQualityRetry(scene, prompt, framePosition, sceneCharacters, sceneLocations, previousFrame, referenceImages);
+        const result = await this.generateImageWithQualityRetry(scene, prompt, framePosition, sceneCharacters, sceneLocations, previousFrame, referenceImages, onProgress);
 
         if (result.evaluation) {
             console.log(`   📊 Final: ${(result.finalScore * 100).toFixed(1)}% after ${result.attempts} attempt(s)`);
@@ -79,6 +81,7 @@ export class FrameCompositionAgent {
         locations: Location[],
         previousFrame: ObjectData | undefined,
         referenceImages: (ObjectData | undefined)[] = [],
+        onProgress?: (sceneId: number, message: string) => void
     ): Promise<FrameGenerationResult> {
 
         const acceptanceThreshold = this.qualityAgent.qualityConfig.minorIssueThreshold;
@@ -108,10 +111,13 @@ export class FrameCompositionAgent {
                     latestAttempt,
                     objectParams,
                     previousFrame,
-                    referenceImages
+                    referenceImages,
+                    onProgress
                 );
 
                 console.log(`  🔍 Quality checking ${framePosition} frame for Scene ${scene.id}...`);
+                if (onProgress) onProgress(scene.id, `Quality checking ${framePosition} frame...`);
+
                 evaluation = await this.qualityAgent.evaluateFrameQuality(
                     frame,
                     scene,
@@ -155,7 +161,7 @@ export class FrameCompositionAgent {
                 await new Promise(resolve => setTimeout(resolve, 3000));
             } catch (error) {
                 if (error instanceof GraphInterrupt) throw Error;
-                
+
                 console.warn(`   ⚠️ Frame quality issues for ${this.storageManager.getGcsObjectPath(objectParams)}`);
 
                 if (evaluation && frame) {
@@ -200,6 +206,7 @@ export class FrameCompositionAgent {
         objectParams: FrameImageObjectParams,
         previousFrame: ObjectData | undefined,
         referenceImages: (ObjectData | undefined)[] = [],
+        onProgress?: (sceneId: number, message: string) => void
     ) {
 
         const attemptLabel = attempt ? ` (Quality Attempt ${attempt})` : "";
@@ -210,6 +217,7 @@ export class FrameCompositionAgent {
                 objectParams,
                 previousFrame,
                 referenceImages,
+                onProgress
             ),
             prompt,
             {
@@ -231,11 +239,13 @@ export class FrameCompositionAgent {
         pathParams: FrameImageObjectParams,
         previousFrame: ObjectData | undefined,
         referenceImages: (ObjectData | undefined)[],
+        onProgress?: (sceneId: number, message: string) => void
     ) {
         console.log(`   [FrameCompositionAgent] Generating frame for scene ${pathParams.sceneId} (${pathParams.type})...`);
+        if (onProgress) onProgress(pathParams.sceneId, `Generating ${pathParams.type.includes('start') ? 'start' : 'end'} frame image...`);
 
         const contents: Part[] = [ { text: prompt } ];
-        const validReferenceImageUrls = [ previousFrame, ...referenceImages ].map(obj => obj?.storageUri).filter(url => typeof url !== 'undefined');
+        const validReferenceImageUrls = [ previousFrame, ...referenceImages ].map(obj => obj?.storageUri).filter((url): url is string => typeof url === 'string' && url.length > 0);
 
         if (referenceImages.length) {
             const referenceInput = await this.prepareImageInputs(validReferenceImageUrls);

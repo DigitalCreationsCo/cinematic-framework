@@ -184,7 +184,7 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
                     <div className="absolute inset-3 flex items-center justify-center bg-background/80 backdrop-blur-sm z-10 rounded-md">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Generating scene...</span>
+                        <span>{scene.progressMessage || "Generating scene..."}</span>
                       </div>
                     </div>
                   ) }

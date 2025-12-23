@@ -17,7 +17,7 @@ export function InterventionModal() {
         }
     }, [ interruptionState ]);
 
-    const handleResolve = async (action: 'retry' | 'cancel', revisedParams?: any) => {
+    const handleResolve = async (action: 'retry' | 'skip' | 'abort', revisedParams?: any) => {
         if (!selectedProject) return;
 
         try {
@@ -51,7 +51,7 @@ export function InterventionModal() {
     if (!interruptionState) return null;
 
     return (
-        <Dialog open={ !!interruptionState } onOpenChange={ (open) => !open && handleResolve('cancel') }>
+        <Dialog open={ !!interruptionState } onOpenChange={ (open) => !open && handleResolve('abort') }>
             <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Human Intervention Required</DialogTitle>
@@ -87,7 +87,7 @@ export function InterventionModal() {
                 </div>
 
                 <DialogFooter className="gap-2 sm:gap-0">
-                    <Button variant="outline" onClick={ () => handleResolve('cancel') }>
+                    <Button variant="outline" onClick={ () => handleResolve('abort') }>
                         Cancel Operation
                     </Button>
                     <div className="flex gap-2">
