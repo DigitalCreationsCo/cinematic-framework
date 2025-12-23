@@ -74,12 +74,14 @@ const systemPrompt = composeStoryboardEnrichmentPrompt(
 
 #### Character Reference Images
 - **Function:** `generateCharacterAssets()`
+- **New Feature:** Now accepts an optional `onProgress` callback to provide real-time status updates (via `SCENE_PROGRESS` events) for scenes related to the character being generated.
 - **Role Prompt Used:** `buildCostumeAndMakeupPrompt()` via wrapper [pipeline/prompts/character-image-instruction.ts](pipeline/prompts/character-image-instruction.ts)
 - **Department:** Costume & Makeup
 - **Output:** Reference images for each character
 
 #### Location Reference Images
 - **Function:** `generateLocationAssets()`
+- **New Feature:** Now accepts an optional `onProgress` callback to provide real-time status updates (via `SCENE_PROGRESS` events) for scenes related to the location being generated.
 - **Role Prompt Used:** `buildProductionDesignerPrompt()` via wrapper [pipeline/prompts/location-image-instruction.ts](pipeline/prompts/location-image-instruction.ts)
 - **Department:** Production Design
 - **Output:** Reference images for each location

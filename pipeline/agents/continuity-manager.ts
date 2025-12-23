@@ -102,6 +102,7 @@ export class ContinuityManagerAgent {
 
     async generateCharacterAssets(
         characters: Character[],
+        onProgress?: (id: string, msg: string) => Promise<void>
     ): Promise<Character[]> {
         console.log(`\n🎨 Checking for existing reference images for ${characters.length} characters...`);
 
@@ -133,6 +134,10 @@ export class ContinuityManagerAgent {
 
             for (const character of charactersToGenerate) {
                 console.log(`  → Generating: ${character.name}`);
+
+                if (onProgress) {
+                    await onProgress(character.id, `Generating initial reference image...`);
+                }
 
                 const imagePrompt = buildCharacterImagePrompt(character);
 
@@ -191,10 +196,17 @@ export class ContinuityManagerAgent {
                     }
                     console.log(`    ✓ Saved: ${this.storageManager.getPublicUrl(imageUrl)}`);
 
+                    if (onProgress) {
+                        await onProgress(character.id, `Reference image generation complete.`);
+                    }
+
                 } catch (error) {
                     if (error instanceof GraphInterrupt) throw Error;
                     
                     console.error(`    ✗ Failed to generate image for ${character.name}:`, error);
+                    if (onProgress) {
+                        await onProgress(character.id, `Reference image generation failed: ${error.message}`);
+                    }
                     const characterIndex = updatedCharacters.findIndex(c => c.id === character.id);
                     if (characterIndex > -1) {
                         updatedCharacters[ characterIndex ].referenceImages = [];
@@ -313,6 +325,7 @@ export class ContinuityManagerAgent {
 
     async generateLocationAssets(
         locations: Location[],
+        onProgress?: (id: string, msg: string) => Promise<void>
     ): Promise<Location[]> {
         console.log(`\n🎨 Checking for existing reference images for ${locations.length} locations...`);
 
@@ -344,6 +357,10 @@ export class ContinuityManagerAgent {
 
             for (const location of locationsToGenerate) {
                 console.log(`  → Generating: ${location.name}`);
+
+                if (onProgress) {
+                    await onProgress(location.id, `Generating initial image for ${location.name}...`);
+                }
 
                 const imagePrompt = buildLocationImagePrompt(location);
 
@@ -397,10 +414,17 @@ export class ContinuityManagerAgent {
                     }
                     console.log(`    ✓ Saved: ${this.storageManager.getPublicUrl(imageUrl)}`);
 
+                    if (onProgress) {
+                        await onProgress(location.id, `Reference image generation complete.`);
+                    }
+
                 } catch (error) {
                     if (error instanceof GraphInterrupt) throw Error;
 
                     console.error(`    ✗ Failed to generate image for ${location.name}:`, error);
+                    if (onProgress) {
+                        await onProgress(location.id, `Reference image generation failed: ${error.message}`);
+                    }
                     const locationIndex = updatedLocations.findIndex(l => l.id === location.id);
                     if (locationIndex > -1) {
                         updatedLocations[ locationIndex ].referenceImages = [];
