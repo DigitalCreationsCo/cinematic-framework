@@ -33,6 +33,15 @@ export type GcsObjectPathParams =
 // GCP STORAGE MANAGER
 // ============================================================================
 
+/**
+ * Manages all Google Cloud Storage interactions for the pipeline.
+ *
+ * Responsibilities:
+ * - Path Standardization: Generates consistent, versioned paths for all assets.
+ * - Attempt Tracking: Manages version numbering (1, 2, 3...) for iterative assets.
+ * - State Synchronization: Syncs local attempt state with GCS via `scanCurrentAttempts`.
+ * - I/O Operations: Handles uploading and downloading of files, buffers, and JSON.
+ */
 export class GCPStorageManager {
   private storage: Storage;
   private bucketName: string;
@@ -40,6 +49,12 @@ export class GCPStorageManager {
   private latestAttempts: Record<string, number> = {};
   private bestAttempts: Record<string, number> = {};
 
+  /**
+   * Creates an instance of GCPStorageManager.
+   * @param projectId - Google Cloud Project ID.
+   * @param videoId - Unique identifier for the current video project (used as root folder).
+   * @param bucketName - Name of the GCS bucket to use.
+   */
   constructor(projectId: string, videoId: string, bucketName: string) {
     this.storage = new Storage({ projectId });
     if (!this.storage.bucket(bucketName).exists()) {
@@ -51,7 +66,9 @@ export class GCPStorageManager {
   }
 
   /**
-   * Initialize internal state from GraphState
+   * Initializes the internal attempt trackers from a provided state (e.g., loaded from GraphState).
+   * @param latest - Map of asset keys to their highest known attempt number.
+   * @param best - Map of asset keys to their "best" or chosen attempt number.
    */
   initializeAttempts(latest: Record<string, number>, best: Record<string, number> = {}) {
     this.latestAttempts = { ...latest };
@@ -59,11 +76,19 @@ export class GCPStorageManager {
     console.log(`   ... StorageManager initialized with ${Object.keys(latest).length} latest attempts and ${Object.keys(best).length} best attempts.`);
   }
 
+  /**
+   * Registers a specific attempt as the "best" version for an asset.
+   * Useful when picking a specific generation to use in the final video.
+   */
   registerBestAttempt(type: GcsObjectType, id: number | string, attempt: number) {
     const key = `${type}_${id}`;
     this.bestAttempts[ key ] = attempt;
   }
 
+  /**
+   * Updates the latest known attempt for an asset if the provided attempt is higher.
+   * Keeps track of the tip of the generation history.
+   */
   updateLatestAttempt(type: GcsObjectType, id: number | string, attempt: number) {
     const key = `${type}_${id}`;
     if (!this.latestAttempts[ key ] || attempt > this.latestAttempts[ key ]) {
@@ -71,6 +96,10 @@ export class GCPStorageManager {
     }
   }
 
+  /**
+   * Retrieves the highest known attempt number for a given asset.
+   * Returns 0 if no attempts are tracked.
+   */
   getLatestAttempt(type: GcsObjectType, id: number | string): number {
     const key = `${type}_${id}`;
     return this.latestAttempts[ key ] || 0;
@@ -78,7 +107,9 @@ export class GCPStorageManager {
 
   /**
    * Scans GCS for existing files and returns a map of the latest attempts.
-   * This is used to initialize or validate the GraphState attempts map.
+   * This is used to initialize or validate the GraphState attempts map on startup.
+   *
+   * @returns A map of asset keys (e.g., 'scene_video_1') to their latest attempt numbers.
    */
   async scanCurrentAttempts(): Promise<Record<string, number>> {
     console.log("   ... Scanning GCS for existing assets to validate state...");
@@ -134,8 +165,11 @@ export class GCPStorageManager {
   }
 
   /**
-   * Returns a path for the NEXT attempt (incrementing the counter).
-   * Used when generating new files.
+   * Generates a path for the NEXT attempt of a versioned asset.
+   * Automatically increments the internal attempt counter and returns the new path.
+   *
+   * @param params - Path parameters (must include versioned type info).
+   * @returns The relative GCS path for the new file (e.g., 'scenes/scene_001_02.mp4').
    */
   getNextAttemptPath(params: GcsObjectPathParams): string {
     if (!('sceneId' in params) || !('attempt' in params)) {
@@ -157,6 +191,13 @@ export class GCPStorageManager {
     return this.getGcsObjectPath({ ...params, attempt: nextAttempt });
   }
 
+  /**
+   * Resolves the actual attempt number to use based on the input strategy.
+   * - If explicit number: returns it directly.
+   * - If 'latest': returns best > latest > 1.
+   *
+   * Defaults to 1 to ensure '00' files are never targeted implicitly.
+   */
   private resolveAttempt(type: GcsObjectType, id: number, explicitAttempt: number | 'latest'): number {
     if (typeof explicitAttempt === 'number') return explicitAttempt;
 
@@ -177,6 +218,9 @@ export class GCPStorageManager {
   /**
    * Generates a standardized relative GCS object path.
    * Structure: [videoId]/[category]/[filename]
+   *
+   * @param params - Object describing the asset type and IDs.
+   * @returns The relative path string (e.g., 'video_123/scenes/storyboard.json').
    */
   getGcsObjectPath(params: GcsObjectPathParams): string {
     const basePath = this.videoId;
@@ -232,6 +276,12 @@ export class GCPStorageManager {
     }
   }
 
+  /**
+   * Uploads a local file to GCS.
+   * @param localPath - Path to the file on the local filesystem.
+   * @param destination - Relative destination path in GCS.
+   * @returns The gs:// URI of the uploaded file.
+   */
   async uploadFile(
     localPath: string,
     destination: string
@@ -248,6 +298,13 @@ export class GCPStorageManager {
     return this.getGcsUrl(normalizedDest);
   }
 
+  /**
+   * Uploads an in-memory buffer to GCS.
+   * @param buffer - Data buffer to upload.
+   * @param destination - Relative destination path in GCS.
+   * @param contentType - MIME type of the content.
+   * @returns The gs:// URI of the uploaded file.
+   */
   async uploadBuffer(
     buffer: Buffer,
     destination: string,
@@ -266,11 +323,23 @@ export class GCPStorageManager {
     return this.getGcsUrl(normalizedDest);
   }
 
+  /**
+   * Uploads a JSON object to GCS.
+   * @param data - The JSON object to serialize and upload.
+   * @param destination - Relative destination path in GCS.
+   * @returns The gs:// URI of the uploaded file.
+   */
   async uploadJSON(data: any, destination: string): Promise<string> {
     const buffer = Buffer.from(JSON.stringify(data, null, 2));
     return this.uploadBuffer(buffer, destination, "application/json");
   }
 
+  /**
+   * Helper to upload a local audio file to the 'audio/' subdirectory.
+   * Skips upload if the file already exists.
+   * @param localPath - Path to the local audio file.
+   * @returns The gs:// URI of the audio file.
+   */
   async uploadAudioFile(localPath: string): Promise<string> {
     const fileName = path.basename(localPath);
     const destination = `audio/${fileName}`;
@@ -286,6 +355,11 @@ export class GCPStorageManager {
     return this.uploadFile(localPath, destination);
   }
 
+  /**
+   * Downloads and parses a JSON file from GCS.
+   * @param source - The GCS path or URI (gs://...) to download.
+   * @returns The parsed JSON object of type T.
+   */
   async downloadJSON<T>(source: string): Promise<T> {
     const bucket = this.storage.bucket(this.bucketName);
     const path = this.parsePathFromUri(source);
@@ -307,6 +381,9 @@ export class GCPStorageManager {
     return this.normalizePath(uriOrPath);
   }
 
+  /**
+   * Downloads a file from GCS to a local destination path.
+   */
   async downloadFile(gcsPath: string, localDestination: string): Promise<void> {
     const path = this.parsePathFromUri(gcsPath);
     const bucket = this.storage.bucket(this.bucketName);
@@ -314,6 +391,10 @@ export class GCPStorageManager {
     await file.download({ destination: localDestination });
   }
 
+  /**
+   * Downloads a file from GCS into memory.
+   * @returns The file contents as a Buffer.
+   */
   async downloadToBuffer(gcsPath: string): Promise<Buffer> {
     const path = this.parsePathFromUri(gcsPath);
     const bucket = this.storage.bucket(this.bucketName);
@@ -322,6 +403,10 @@ export class GCPStorageManager {
     return contents;
   }
 
+  /**
+   * Checks if a file exists in GCS.
+   * @param gcsPath - Relative path or gs:// URI.
+   */
   async fileExists(gcsPath: string): Promise<boolean> {
     const path = this.parsePathFromUri(gcsPath);
     const bucket = this.storage.bucket(this.bucketName);
@@ -330,22 +415,37 @@ export class GCPStorageManager {
     return exists;
   }
 
+  /**
+   * Returns the HTTPS public URL for a GCS object.
+   * Useful for frontend display.
+   */
   getPublicUrl(gcsPath: string): string {
     const normalizedPath = this.normalizePath(gcsPath);
     return `https://storage.googleapis.com/${this.bucketName}/${normalizedPath}`;
   }
 
+  /**
+   * Returns the gs:// URI for a GCS object.
+   * Useful for backend/API operations.
+   */
   getGcsUrl(gcsPath: string): string {
     const normalizedPath = this.normalizePath(gcsPath);
     return `gs://${this.bucketName}/${normalizedPath}`;
   }
 
+  /**
+   * Constructs a standard ObjectData structure containing both public and storage URIs.
+   */
   buildObjectData(uri: string): ObjectData {
     return {
       storageUri: this.getGcsUrl(uri),
       publicUri: this.getPublicUrl(uri)
     };
   }
+
+  /**
+   * Retrieves the MIME type of a GCS object (e.g., 'video/mp4', 'image/png').
+   */
   async getObjectMimeType(gcsPath: string): Promise<string | undefined> {
     const path = this.parsePathFromUri(gcsPath);
     const bucket = this.storage.bucket(this.bucketName);
