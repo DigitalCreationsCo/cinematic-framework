@@ -22,7 +22,7 @@ Cinematic Framework leverages Google's Vertex AI (Gemini models) and LangGraph t
 - **Scene Regeneration & Intervention**: Allows users to selectively regenerate specific scenes or **individual frames** (`REGENERATE_FRAME`) without restarting the entire pipeline. It also supports interactive correction of LLM failures via `RESOLVE_INTERVENTION`.
 - **Self-Improving Generation**: A `QualityCheckAgent` evaluates generated scenes and provides feedback. This feedback is used to refine a set of "Generation Rules" that guide subsequent scene generations, improving quality and consistency over time.
 - **Learning Metrics**: The framework tracks the number of attempts and quality scores for each scene, calculating trend lines to provide real-time feedback on whether the system is "learning" (i.e., requiring fewer attempts to generate high-quality scenes).
-- **Visual Continuity**: Maintains character appearance and location consistency using reference images and **pre-generated start/end frames** for each scene, with intelligent skipping of generation if frames already exist in storage, now governed by persistent checkpoints.
+- **Visual Continuity**: Maintains character appearance and location consistency using reference images and **pre-generated start/end frames** for each scene. The system now checks Google Cloud Storage (GCS) for existing start/end frames before generation, ensuring idempotency and supporting pipeline resumption at the frame level.
 - **Cinematic Quality**: Professional shot types, camera movements, lighting, and transitions
 - **Distributed Architecture & Resilience**: Supports safe horizontal scaling across multiple worker replicas. Workflow state is persisted in PostgreSQL via LangGraph checkpointers, allowing for robust resumption and enabling command-driven operations like `START/STOP/REGENERATE` via Pub/Sub commands. Distributed Locking mechanism has been temporarily removed.
 - **Comprehensive Schemas**: Type-safe data structures using Zod for all workflow stages, defined in [shared/schema.ts](shared/schema.ts).
@@ -52,7 +52,7 @@ graph TD
 
 1.  **AudioProcessingAgent**: Analyzes audio files to extract musical structure, timing, and mood, setting initial scene parameters.
 2.  **CompositionalAgent**: Expands creative prompts and generates comprehensive storyboards.
-3.  **ContinuityManagerAgent**: Manages character and location reference images, ensuring visual coherence by checking and generating start/end frames for scenes based on persistent state context.
+3.  **ContinuityManagerAgent**: Manages character and location reference images. It ensures visual coherence and supports idempotent workflow by explicitly checking Google Cloud Storage for pre-generated scene start/end frames before attempting generation.
 4.  **SceneGeneratorAgent**: Generates individual video clips, now relying on pre-generated start/end frames from the persistent state for continuity.
 5.  **QualityCheckAgent**: Evaluates generated scenes for quality and consistency, feeding back into the prompt/rule refinement loop.
 6.  **Prompt CorrectionInstruction**: Guides the process for refining prompts based on quality feedback.

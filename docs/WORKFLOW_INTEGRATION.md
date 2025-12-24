@@ -88,9 +88,12 @@ const systemPrompt = composeStoryboardEnrichmentPrompt(
 
 ---
 
-### 3. **Scene Video Generation** (Generation Point 3.3)
+### 3. **Scene Keyframe & Video Generation** (Generation Points 3.1, 3.2, 3.3)
 **Agent:** `ContinuityManagerAgent`
 **File:** [pipeline/agents/continuity-manager.ts](pipeline/agents/continuity-manager.ts)
+
+#### Frame Generation Checkpointing (New)
+The `ContinuityManagerAgent` now checks Google Cloud Storage for existing `scene_start_frame` and `scene_end_frame` objects (using `storageManager.fileExists`) before initiating image generation. This ensures that if the pipeline is resumed, or if a frame was previously generated but the state save failed, the existing frame is loaded, maintaining idempotency and accelerating recovery.
 
 #### Scene Enhancement & Refinement
 - **Function:** `prepareAndRefineSceneInputs()`
@@ -101,14 +104,14 @@ const systemPrompt = composeStoryboardEnrichmentPrompt(
 ---
 
 ### 4. **Keyframe Generation** (Generation Points 3.1 & 3.2)
-**Agent:** `FrameCompositionAgent`
+**Agent:** `FrameCompositionAgent` (Invoked by ContinuityManagerAgent)
 **File:** [pipeline/agents/frame-composition-agent.ts](pipeline/agents/frame-composition-agent.ts)
 
 #### Start & End Frame Generation
 - **Function:** `generateImage()`
 - **Composition Used:** `composeFrameGenerationPrompt()` via wrapper [pipeline/prompts/frame-generation-instruction.ts](pipeline/prompts/frame-generation-instruction.ts)
 - **Roles Combined:** Cinematographer, Gaffer, Script Supervisor, Costume & Makeup, Production Designer.
-- **Output:** Start and end keyframes for each scene. These are persisted as part of the scene state in the checkpoint.
+- **Output:** Start and end keyframes for each scene. **Crucially, the `ContinuityManagerAgent` now ensures these frames are persistent in GCS before the graph proceeds, allowing for robust pipeline resumption.**
 
 ---
 
