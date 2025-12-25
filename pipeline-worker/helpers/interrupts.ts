@@ -28,22 +28,22 @@ export async function checkAndPublishInterruptFromSnapshot(
             });
 
             // Only publish if not already resolved
-            if (!stateSnapshot.values.__interrupt_resolved__) {
-                await publishEvent({
-                    type: "LLM_INTERVENTION_NEEDED",
-                    projectId,
-                    payload: {
-                        error: interruptValue.error,
-                        params: interruptValue.params,
-                        functionName: interruptValue.functionName,
-                        nodeName: interruptValue.nodeName,
-                        attemptCount: interruptValue.attemptCount
-                    },
-                    timestamp: new Date().toISOString()
-                });
+            // if (!stateSnapshot.values.__interrupt_resolved__) {
+            //     await publishEvent({
+            //         type: "LLM_INTERVENTION_NEEDED",
+            //         projectId,
+            //         payload: {
+            //             error: interruptValue.error,
+            //             params: interruptValue.params,
+            //             functionName: interruptValue.functionName,
+            //             nodeName: interruptValue.nodeName,
+            //             attemptCount: interruptValue.attemptCount
+            //         },
+            //         timestamp: new Date().toISOString()
+            //     });
 
-                return true;
-            }
+            //     return true;
+            // }
         }
 
         // Method 2: Check if graph is paused (state.next is populated)
@@ -69,18 +69,18 @@ export async function checkAndPublishInterruptFromSnapshot(
 
                         console.log(`[Worker] Interrupt found in task:`, task.name);
 
-                        await publishEvent({
-                            type: "LLM_INTERVENTION_NEEDED",
-                            projectId,
-                            payload: {
-                                error: interruptValue.error,
-                                params: interruptValue.params,
-                                functionName: interruptValue.functionName,
-                                nodeName: interruptValue.nodeName || task.name,
-                                attemptCount: interruptValue.attemptCount
-                            },
-                            timestamp: new Date().toISOString()
-                        });
+                        // await publishEvent({
+                        //     type: "LLM_INTERVENTION_NEEDED",
+                        //     projectId,
+                        //     payload: {
+                        //         error: interruptValue.error,
+                        //         params: interruptValue.params,
+                        //         functionName: interruptValue.functionName,
+                        //         nodeName: interruptValue.nodeName || task.name,
+                        //         attemptCount: interruptValue.attemptCount
+                        //     },
+                        //     timestamp: new Date().toISOString()
+                        // });
 
                         return true;
                     }

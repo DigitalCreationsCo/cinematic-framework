@@ -10,7 +10,9 @@ import {
   VolumeX,
   Repeat,
   Maximize,
-  X
+  X,
+  Volume,
+  Volume1,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Scene } from "@shared/pipeline-types";
@@ -333,11 +335,10 @@ const PlaybackControls = memo(function PlaybackControls({
             onClick={ toggleMute }
             data-testid="button-mute"
           >
-            { isMuted || volume === 0 ? (
-              <VolumeX className="w-4 h-4" />
-            ) : (
-              <Volume2 className="w-4 h-4" />
-            ) }
+            { (isMuted || volume === 0 && <Volume className="w-4 h-4" />) ||
+              (volume < 0.44 && <Volume1 className="w-4 h-4" />) ||
+              (<Volume2 className="w-4 h-4" />)
+            }
           </Button>
 
           <Slider
@@ -346,7 +347,7 @@ const PlaybackControls = memo(function PlaybackControls({
             max={ 1 }
             step={ 0.01 }
             onValueChange={ handleVolumeChange }
-            className="w-20"
+            className="w-20 cursor-pointer"
             data-testid="volume-slider"
           />
         </div>

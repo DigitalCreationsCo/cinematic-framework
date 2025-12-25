@@ -1,3 +1,5 @@
+import { ApiError as GenAIApiError } from "@google/genai";
+
 export class RAIError extends Error {
     constructor(message: string) {
         super(message);
@@ -23,6 +25,11 @@ export function extractErrorMessage(error: unknown): string {
             const details = (error as any).details;
             const message = (error as any).message || '';
             return `API Error (Code ${code}): ${message}${details ? ` - ${details}` : ''}`;
+        }
+
+        // Handle Error instances
+        if (error instanceof GenAIApiError) {
+            return `API Error (Code ${error.status}): ${error.message} - ${error.cause}`;
         }
 
         // Try to stringify the object

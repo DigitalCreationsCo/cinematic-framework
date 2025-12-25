@@ -73,7 +73,7 @@ const SceneCard = memo(function SceneCard({ scene, isSelected, isLoading, status
               <Play className="w-5 h-5" />
             </Button>
           ) }
-          { scene.progressMessage && (
+          { status === 'generating' && scene.progressMessage && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-10 p-4 text-center">
               <span className="text-xs font-medium text-muted-foreground animate-pulse leading-tight">
                 {scene.progressMessage}

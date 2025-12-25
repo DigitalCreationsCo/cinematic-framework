@@ -1,4 +1,4 @@
-import { GraphState, ObjectData } from "./pipeline-types";
+import { GraphState, ObjectData, SceneStatus } from "./pipeline-types";
 
 export interface PubSubMessage<T extends string, P> {
     type: T;
@@ -91,6 +91,7 @@ export type SceneProgressEvent = PubSubMessage<
     {
         sceneId: number;
         progressMessage: string;
+        status?: SceneStatus;
         progress?: number; 
         startFrame?: ObjectData; 
         endFrame?: ObjectData; 

@@ -46,7 +46,6 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
 
     eventSource.onmessage = (event) => {
       try {
-        
         setIsLoading(true);
         const parsedEvent = JSON.parse(event.data) as PipelineEvent;
 
@@ -86,8 +85,8 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
           
           case "SCENE_PROGRESS":
             updateScene(parsedEvent.payload.sceneId, (scene) => ({
-              status: "generating",
-              progressMessage: `${parsedEvent.payload.progressMessage} ${parsedEvent.payload.progress}`,
+              status: parsedEvent.payload.status || "generating",
+              progressMessage: parsedEvent.payload.progressMessage,
               startFrame: parsedEvent.payload.startFrame || scene.startFrame,
               endFrame: parsedEvent.payload.endFrame || scene.endFrame,
               generatedVideo: parsedEvent.payload.generatedVideo || scene.generatedVideo,
@@ -100,7 +99,8 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
             // Wait for next FULL_STATE to get complete scene data
             // Just update status for immediate UI feedback
             updateScene(parsedEvent.payload.sceneId, {
-              status: "complete"
+              status: "complete",
+              progressMessage: ""
             });
             break;
 
@@ -152,7 +152,7 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
             addMessage({
               id: crypto.randomUUID(),
               type: "warning",
-              message: `Pipeline paused. Intervention required: ${parsedEvent.payload.error}`,
+              message: `Paused. Intervention required: ${parsedEvent.payload.error}`,
               timestamp: new Date(parsedEvent.timestamp)
             });
             break;

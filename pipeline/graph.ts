@@ -24,6 +24,7 @@ import {
   WorkflowMetrics,
   AttemptMetric,
   ObjectData,
+  SceneStatus,
 } from "../shared/pipeline-types";
 import { PipelineEvent } from "../shared/pubsub-types";
 import { SceneGeneratorAgent } from "./agents/scene-generator";
@@ -210,7 +211,7 @@ export class CinematicVideoWorkflow {
     workflow.addEdge(START, "sync_state" as any);
 
     workflow.addConditionalEdges("sync_state" as any, (state: InitialGraphState) => {
-      if (state.storyboardState && state.storyboardState.scenes.some(s => s.generatedVideo)) {
+      if (state.storyboardState && state.storyboardState.scenes.some(s => s.generatedVideo.storageUri)) {
         console.log("   Resuming workflow from process_scene...");
         return "process_scene";
       }
@@ -590,11 +591,11 @@ export class CinematicVideoWorkflow {
 
         console.log("\n🖼️ PHASE 2c: Generating Scene Start/End Frames...");
 
-        const onProgress = async (sceneId: number, msg: string, artifacts?: { startFrame?: ObjectData, endFrame?: ObjectData }) => {
+        const onProgress = async (sceneId: number, msg: string, status?: SceneStatus, artifacts?: { startFrame?: ObjectData, endFrame?: ObjectData; }) => {
           await this.publishEvent({
             type: "SCENE_PROGRESS",
             projectId: this.videoId,
-            payload: { sceneId, progressMessage: msg, ...artifacts },
+            payload: { sceneId, status, progressMessage: msg, ...artifacts },
             timestamp: new Date().toISOString(),
           });
         };

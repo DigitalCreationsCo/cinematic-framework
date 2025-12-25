@@ -91,7 +91,7 @@ export default function Dashboard() {
   const currentMetrics = useMemo(() => pipelineState?.metrics, [ pipelineState ]);
 
   const currentSceneStatuses = useMemo(() => pipelineState?.storyboardState?.scenes.reduce<Record<number, SceneStatus>>((acc, scene) => {
-    acc[ scene.id ] = scene.generatedVideo ? "complete" : "pending";
+    acc[ scene.id ] = scene.generatedVideo.storageUri ? "complete" : scene.status || "pending";
     return acc;
   }, {}) || {}, [ pipelineState ]);
 

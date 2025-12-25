@@ -90,7 +90,9 @@ export const useStore = create<AppState>()(immer((set) => ({
     if (state.pipelineState?.storyboardState?.scenes) {
       const sceneIndex = state.pipelineState.storyboardState.scenes.findIndex((s: Scene) => s.id === sceneId);
       if (sceneIndex !== -1) {
-        Object.assign(state.pipelineState.storyboardState.scenes[ sceneIndex ], updates);
+        const scene = state.pipelineState.storyboardState.scenes[ sceneIndex ];
+        const newValues = typeof updates === 'function' ? updates(scene) : updates;
+        Object.assign(scene, newValues);
       }
     }
   }),

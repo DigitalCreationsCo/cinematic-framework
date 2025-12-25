@@ -1,14 +1,15 @@
 import { GraphState } from "../../shared/pipeline-types";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { checkAndPublishInterruptFromSnapshot, checkAndPublishInterruptFromStream } from "./interrupts";
-import { publishPipelineEvent } from "..";
+import { PipelineEvent } from "../../shared/pubsub-types";
 
 export async function streamWithInterruptHandling(
     projectId: string,
     compiledGraph: any,
     initialState: any,
     runnableConfig: RunnableConfig,
-    commandName: string
+    commandName: string,
+    publishEvent: (event: PipelineEvent) => Promise<void>
 ): Promise<void> {
     console.log(`[${commandName}] Starting stream for projectId: ${projectId}`);
 
@@ -28,14 +29,14 @@ export async function streamWithInterruptHandling(
                 const [ _, state ] = Object.entries(step)[ 0 ];
 
                 // Publish state update
-                await publishPipelineEvent({
+                await publishEvent({
                     type: "FULL_STATE",
                     projectId,
                     payload: { state: state as GraphState },
                     timestamp: new Date().toISOString()
                 });
 
-                await checkAndPublishInterruptFromStream(projectId, compiledGraph, publishPipelineEvent);
+                await checkAndPublishInterruptFromStream(projectId, state as GraphState, publishEvent);
 
             } catch (error) {
                 console.error(`[${commandName}] Error publishing state:`, error);
@@ -49,11 +50,11 @@ export async function streamWithInterruptHandling(
         console.error(`[${commandName}] Error during stream execution:`, error);
 
         // Check if this is an interrupt (not a real error)
-        const isInterrupt = await checkAndPublishInterruptFromSnapshot(projectId, compiledGraph, runnableConfig, publishPipelineEvent);
+        const isInterrupt = await checkAndPublishInterruptFromSnapshot(projectId, compiledGraph, runnableConfig, publishEvent);
 
         if (!isInterrupt) {
             // Real error - publish failure
-            await publishPipelineEvent({
+            await publishEvent({
                 type: "WORKFLOW_FAILED",
                 projectId,
                 payload: {
@@ -64,6 +65,6 @@ export async function streamWithInterruptHandling(
             throw error;
         }
     } finally {
-        await checkAndPublishInterruptFromSnapshot(projectId, compiledGraph, runnableConfig, publishPipelineEvent);
+        await checkAndPublishInterruptFromSnapshot(projectId, compiledGraph, runnableConfig, publishEvent);
     }
 }

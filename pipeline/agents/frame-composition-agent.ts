@@ -4,7 +4,7 @@ import { LlmController } from "../llm/controller";
 import { buildllmParams } from "../llm/google/llm-params";
 import { imageModelName } from "../llm/google/models";
 import { QualityCheckAgent } from "./quality-check-agent";
-import { Character, FrameGenerationResult, Location, ObjectData, QualityEvaluationResult, Scene } from "../../shared/pipeline-types";
+import { Character, FrameGenerationResult, Location, ObjectData, QualityEvaluationResult, Scene, SceneStatus } from "../../shared/pipeline-types";
 import { retryLlmCall } from "../lib/llm-retry";
 import { RAIError } from "../lib/errors";
 import { GraphInterrupt } from "@langchain/langgraph";
@@ -48,7 +48,7 @@ export class FrameCompositionAgent {
         sceneLocations: Location[],
         previousFrame: ObjectData | undefined,
         referenceImages: (ObjectData | undefined)[],
-        onProgress?: (sceneId: number, message: string) => void
+        onProgress?: (sceneId: number, msg: string, status?: SceneStatus, artifacts?: { startFrame?: ObjectData, endFrame?: ObjectData; }) => void
     ): Promise<ObjectData> {
         if (!this.qualityAgent.qualityConfig.enabled && !!this.qualityAgent.evaluateFrameQuality) {
             const prevAttempt = this.storageManager.getLatestAttempt(framePosition === "start" ? "scene_start_frame" : "scene_end_frame", scene.id);
@@ -85,7 +85,7 @@ export class FrameCompositionAgent {
         locations: Location[],
         previousFrame: ObjectData | undefined,
         referenceImages: (ObjectData | undefined)[] = [],
-        onProgress?: (sceneId: number, message: string) => void
+        onProgress?: (sceneId: number, msg: string, status?: SceneStatus, artifacts?: { startFrame?: ObjectData, endFrame?: ObjectData; }) => void
     ): Promise<FrameGenerationResult> {
 
         const acceptanceThreshold = this.qualityAgent.qualityConfig.minorIssueThreshold;
@@ -121,7 +121,7 @@ export class FrameCompositionAgent {
                 );
 
                 console.log(`  🔍 Quality checking ${framePosition} frame for Scene ${scene.id}...`);
-                if (onProgress) onProgress(scene.id, `Quality checking ${framePosition} frame...`);
+                if (onProgress) onProgress(scene.id, `Quality checking ${framePosition} frame...`, "evaluating");
 
                 evaluation = await this.qualityAgent.evaluateFrameQuality(
                     frame,
@@ -180,7 +180,9 @@ export class FrameCompositionAgent {
                 if (numAttempts < this.qualityAgent.qualityConfig.maxRetries) {
                     console.log(`   Retrying frame generation...`);
 
-                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    const GENERATE_IMAGE_SUCCESS_COOLDOWN = 6000;
+                    console.log(`Waiting ${GENERATE_IMAGE_SUCCESS_COOLDOWN / 1000}s to avoid rate limit`);
+                    await new Promise(resolve => setTimeout(resolve, GENERATE_IMAGE_SUCCESS_COOLDOWN));
                 }
             }
         }
@@ -212,7 +214,7 @@ export class FrameCompositionAgent {
         attempt: number,
         previousFrame: ObjectData | undefined,
         referenceImages: (ObjectData | undefined)[] = [],
-        onProgress?: (sceneId: number, message: string) => void
+        onProgress?: (sceneId: number, msg: string, status?: SceneStatus, artifacts?: { startFrame?: ObjectData, endFrame?: ObjectData; }) => void
     ) {
 
         const attemptLabel = attempt ? ` (Quality Attempt ${attempt})` : "";
@@ -229,7 +231,7 @@ export class FrameCompositionAgent {
             prompt,
             {
                 maxRetries: this.qualityAgent.qualityConfig.safetyRetries,
-                initialDelay: 1000,
+                initialDelay: 3000,
                 backoffFactor: 2
             },
             async (error: any, attempt: number, currentPrompt: string) => {
@@ -247,10 +249,10 @@ export class FrameCompositionAgent {
         pathParams: FrameImageObjectParams,
         previousFrame: ObjectData | undefined,
         referenceImages: (ObjectData | undefined)[],
-        onProgress?: (sceneId: number, message: string, artifacts?: { startFrame?: ObjectData, endFrame?: ObjectData; }) => void
+        onProgress?: (sceneId: number, msg: string, status?: SceneStatus, artifacts?: { startFrame?: ObjectData, endFrame?: ObjectData; }) => void
     ) {
         console.log(`   [FrameCompositionAgent] Generating frame for scene ${pathParams.sceneId} (${pathParams.type})...`);
-        if (onProgress) onProgress(pathParams.sceneId, `Generating ${pathParams.type.includes('start') ? 'start' : 'end'} frame image...`);
+        if (onProgress) onProgress(pathParams.sceneId, `Generating ${pathParams.type.includes('start') ? 'start' : 'end'} frame image...`, "generating");
 
         const contents: Part[] = [ { text: prompt } ];
         const validReferenceImageUrls = [ previousFrame, ...referenceImages ].map(obj => obj?.storageUri).filter((url): url is string => typeof url === 'string' && url.length > 0);
@@ -299,6 +301,7 @@ export class FrameCompositionAgent {
         if (onProgress) onProgress(
             pathParams.sceneId,
             `Generated ${pathParams.type.includes('start') ? 'start' : 'end'} frame image`,
+            "complete",
             framePosition === "start" ? { startFrame: frame } : { endFrame: frame }
         );
 

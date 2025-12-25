@@ -9,6 +9,7 @@ import {
     Storyboard,
     GraphState,
     ObjectData,
+    SceneStatus,
 } from "../../shared/pipeline-types";
 import { GCPStorageManager } from "../storage-manager";
 import { ApiError, Modality } from "@google/genai";
@@ -102,7 +103,7 @@ export class ContinuityManagerAgent {
 
     async generateCharacterAssets(
         characters: Character[],
-        onProgress?: (id: string, msg: string, artifacts?: any) => Promise<void>
+        onProgress?: (id: string, msg: string, status?: SceneStatus, artifacts?: any) => Promise<void>
     ): Promise<Character[]> {
         console.log(`\n🎨 Checking for existing reference images for ${characters.length} characters...`);
 
@@ -248,7 +249,7 @@ export class ContinuityManagerAgent {
         scenes: Scene[],
         storyboardState: Storyboard,
         generationRules?: string[],
-        onProgress?: (sceneId: number, message: string, artifacts?: { startFrame?: ObjectData, endFrame?: ObjectData }) => void
+        onProgress?: (sceneId: number, msg: string, status?: SceneStatus, artifacts?: { startFrame?: ObjectData, endFrame?: ObjectData; }) => void
     ): Promise<Scene[]> {
         console.log(`\n🖼️ Generating start/end frames for ${scenes.length} scenes in batch...`);
         const updatedScenes: Scene[] = [];
@@ -263,7 +264,7 @@ export class ContinuityManagerAgent {
             const sceneLocations = storyboardState.locations.filter(loc => currentScene.locationId.includes(loc.id));
 
             // --- Generate Start Frame ---
-            if (!currentScene.startFrame) {
+            if (!currentScene.startFrame?.storageUri) {
                 const startFramePath = this.storageManager.getGcsObjectPath({ type: "scene_start_frame", sceneId: scene.id, attempt: 'latest' });
                 const startFrameExists = await this.storageManager.fileExists(startFramePath);
 
@@ -307,7 +308,7 @@ export class ContinuityManagerAgent {
                     );
                 }
             } else {
-                console.log(`  → Found existing START frame for Scene ${scene.id}: ${currentScene.startFrame.publicUri}`);
+                console.log(`  → Found existing START frame for Scene ${scene.id} in state: ${currentScene.startFrame.publicUri}`);
             }
 
             // --- Generate End Frame ---
@@ -354,8 +355,18 @@ export class ContinuityManagerAgent {
                     );
                 }
             } else {
-                console.log(`  → Found existing END frame for Scene ${scene.id}: ${currentScene.endFrame.publicUri}`);
+                console.log(`  → Found existing END frame for Scene ${scene.id} in state: ${currentScene.endFrame.publicUri}`);
             }
+
+            if (onProgress) onProgress(
+                scene.id,
+                `Saved START and END frame images`,
+                "complete",
+                {
+                    startFrame: currentScene.startFrame,
+                    endFrame: currentScene.endFrame
+                }
+            );
 
             updatedScenes.push(currentScene);
         }
@@ -364,7 +375,7 @@ export class ContinuityManagerAgent {
 
     async generateLocationAssets(
         locations: Location[],
-        onProgress?: (id: string, msg: string, artifacts?: any) => Promise<void>
+        onProgress?: (id: string, msg: string, status?: SceneStatus, artifacts?: any) => Promise<void>
     ): Promise<Location[]> {
         console.log(`\n🎨 Checking for existing reference images for ${locations.length} locations...`);
 
