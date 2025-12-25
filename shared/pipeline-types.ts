@@ -469,7 +469,7 @@ export type WorkflowMetrics = z.infer<typeof WorkflowMetricsSchema>;
 export const InitialGraphStateSchema = z.object({
   // Initial input
   localAudioPath: z.string().optional().describe("user-provided audio filepath"),
-  creativePrompt: z.string().describe("user's creative prompt with narrative, characters, settings"),
+  creativePrompt: z.string().optional().describe("user's creative prompt with narrative, characters, settings"),
   audioGcsUri: z.string().optional().describe("GCS URI of uploaded audio file"),
   audioPublicUri: z.string().optional().describe("Public URI of uploaded audio file"),
   hasAudio: z.boolean().default(false).describe("whether this workflow uses audio"),
