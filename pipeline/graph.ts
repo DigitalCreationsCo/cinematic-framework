@@ -38,7 +38,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { defaultCreativePrompt } from "./prompts/default-creative-prompt";
 import { imageModelName, textModelName, videoModelName } from "./llm/google/models";
-import { calculateLearningTrends } from "./utils";
+import { calculateLearningTrends, stripBogusUrls } from "./utils";
 import { QualityCheckAgent } from "./agents/quality-check-agent";
 import { CheckpointerManager } from "./checkpointer-manager";
 import { RunnableConfig } from "@langchain/core/runnables";
@@ -316,6 +316,9 @@ export class CinematicVideoWorkflow {
           state.creativePrompt
         );
 
+        // Sanitize to ensure no fake asset URLs are introduced
+        storyboard = stripBogusUrls(storyboard);
+
         const newState = {
           ...state,
           storyboard,
@@ -371,14 +374,21 @@ export class CinematicVideoWorkflow {
           state.creativePrompt,
         );
 
+        let storyboard: Storyboard = {
+          metadata: {
+            duration: totalDuration,
+          } as any, // Partial metadata is acceptable at this stage
+          scenes: segments,
+          characters: [],
+          locations: []
+        };
+
+        // Sanitize to ensure no fake asset URLs are introduced
+        storyboard = stripBogusUrls(storyboard);
+
         const newState = {
           ...state,
-          storyboard: {
-            metadata: {
-              duration: totalDuration
-            },
-            scenes: segments,
-          } as Storyboard,
+          storyboard: storyboard,
           __interrupt__: undefined,
           __interrupt_resolved__: false,
           attempts: {
@@ -430,6 +440,9 @@ export class CinematicVideoWorkflow {
           state.creativePrompt,
           { initialDelay: 30000 }
         );
+
+        // Sanitize to ensure no fake asset URLs are introduced
+        storyboard = stripBogusUrls(storyboard);
 
         const newState = {
           ...state,

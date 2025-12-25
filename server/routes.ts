@@ -49,7 +49,7 @@ export async function registerRoutes(
             const projectId = event.projectId;
 
             if (event.type === 'LLM_INTERVENTION_NEEDED') {
-                console.log(`[Server] Forwarding LLM_INTERVENTION_NEEDED for projectId: ${projectId}`, event.payload);
+              console.log(`[Server] Forwarding LLM_INTERVENTION_NEEDED for projectId: ${projectId}`, event.payload);
             }
 
             const clients = clientConnections.get(projectId);
@@ -84,11 +84,12 @@ export async function registerRoutes(
     return sharedEventsSubscription;
   }
 
-
-  async function publishCommand(command: Omit<PipelineCommand, 'timestamp' | 'payload'> & { payload?: any; }) {
-    const fullCommand: PipelineCommand = {
+  async function publishCommand<T extends PipelineCommand[ "type" ]>(command: Omit<Extract<PipelineCommand, { type: T; }>, "timestamp"> & {
+    type: T;
+  }) {
+    const fullCommand = {
       ...command,
-      payload: command.payload || {},
+      ...("payload" in command ? { payload: command.payload } : {}),
       timestamp: new Date().toISOString(),
     };
     const dataBuffer = Buffer.from(JSON.stringify(fullCommand));
@@ -100,9 +101,12 @@ export async function registerRoutes(
   // API Routes
   // ============================================================================
 
-  app.post("/api/video/start", async (req: Request, res: Response) => {
+  app.post("/api/video/start", async (
+    req: Request<any, any, Extract<PipelineCommand, { type: "START_PIPELINE"; }>[ 'payload' ] & { projectId: string }>,
+      res: Response
+  ) => {
     try {
-      const { projectId, audioUrl, creativePrompt } = req.body;
+      const { projectId, audioGcsUri, creativePrompt } = req.body;
       console.log(`Received START_PIPELINE command for projectId: ${projectId}`);
       if (!creativePrompt) {
         console.error("Validation error: creativePrompt missing.", { creativePrompt });
@@ -111,7 +115,7 @@ export async function registerRoutes(
 
       const effectiveProjectId = projectId || `project_${Date.now()}_${uuidv4().split('-')[ 0 ]}`;
 
-      await publishCommand({ type: "START_PIPELINE", projectId: effectiveProjectId, payload: { audioUrl, creativePrompt } });
+      await publishCommand({ type: "START_PIPELINE", projectId: effectiveProjectId, payload: { audioGcsUri, creativePrompt } });
       console.log(`Published START_PIPELINE command for projectId: ${effectiveProjectId} to PubSub.`);
       res.status(202).json({ message: "Pipeline start command issued.", projectId: effectiveProjectId });
     } catch (error) {
@@ -204,7 +208,7 @@ export async function registerRoutes(
 
   app.post("/api/video/:projectId/request-state", async (req: Request, res: Response) => {
     try {
-      const { projectId } = req.params;
+      const { projectId } = req.params; 
       await publishCommand({ type: "REQUEST_FULL_STATE", projectId });
       res.status(202).json({ message: "Full state request command issued.", projectId });
     } catch (error) {

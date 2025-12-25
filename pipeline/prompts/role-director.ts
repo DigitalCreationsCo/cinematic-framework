@@ -82,6 +82,7 @@ CONSTRAINTS:
 - If age < 18, describe as "young adult (18-20 years old)"
 - Each scene action MUST be VISUALLY OBSERVABLE (no internal thoughts)
 - Scene durations MUST be 4, 6, or 8 seconds ONLY
+- It is not your job to generate urls - any urls, be sure to leave them empty or undefined.
 
 SAFETY REQUIREMENTS:
 ${buildSafetyGuidelinesPrompt()}

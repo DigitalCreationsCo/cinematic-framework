@@ -1,4 +1,45 @@
-import { Character, Location, WorkflowMetrics, AttemptMetric, Trend, RegressionState, ValidDuration, VALID_DURATIONS } from "../shared/pipeline-types";
+import { Character, Location, WorkflowMetrics, AttemptMetric, Trend, RegressionState, ValidDuration, VALID_DURATIONS, Storyboard } from "../shared/pipeline-types";
+
+/**
+ * Sanitizes the storyboard by removing any potentially hallucinated asset URLs.
+ * This ensures that planning nodes do not accidentally introduce fake assets.
+ *
+ * @param storyboard - The storyboard to sanitize.
+ * @returns A deep copy of the storyboard with asset fields removed.
+ */
+export function stripBogusUrls(storyboard: Storyboard): Storyboard {
+  // Deep clone to avoid mutation side effects
+  const clean = JSON.parse(JSON.stringify(storyboard));
+
+  // Clean scenes
+  if (clean.scenes) {
+    clean.scenes = clean.scenes.map((s: any) => {
+      // Remove asset fields that shouldn't exist yet
+      delete s.generatedVideo;
+      delete s.startFrame;
+      delete s.endFrame;
+      return s;
+    });
+  }
+
+  // Clean characters
+  if (clean.characters) {
+    clean.characters = clean.characters.map((c: any) => {
+      delete c.referenceImages;
+      return c;
+    });
+  }
+
+  // Clean locations
+  if (clean.locations) {
+    clean.locations = clean.locations.map((l: any) => {
+      delete l.referenceImages;
+      return l;
+    });
+  }
+
+  return clean;
+}
 
 /**
  * Cleans the LLM output to extract the JSON string.

@@ -67,7 +67,7 @@ export default function Dashboard() {
     updateScene
   } = useStore();
 
-  const audioGcsUri = pipelineState?.audioGcsUri || "gs://cinematic-framework-6/audio/Day.mp3";
+  const audioGcsUri = pipelineState?.audioGcsUri;
   const creativePrompt = pipelineState?.creativePrompt || pipelineState?.storyboardState?.metadata.creativePrompt;
 
   usePipelineEvents({ projectId: selectedProject || null });

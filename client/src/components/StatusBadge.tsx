@@ -26,7 +26,7 @@ const statusConfig: Record<StatusType, { label: string; variant: "default" | "se
   REGENERATE_MINOR: { label: "Regen Minor", variant: "default", className: "bg-chart-4 text-white" },
   REGENERATE_MAJOR: { label: "Regen Major", variant: "default", className: "bg-chart-5 text-white" },
   paused: {
-    label: "",
+    label: "Paused",
     variant: "default",
     className: ""
   }

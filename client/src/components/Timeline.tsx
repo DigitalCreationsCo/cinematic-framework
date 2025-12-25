@@ -11,7 +11,6 @@ interface TimelineProps {
   selectedSceneId?: number;
   totalDuration: number;
   isPlaying: boolean;
-  audioUrl?: string;
   onSceneSelect?: (sceneId: number) => void;
   isLoading?: boolean;
   currentTime?: number;
@@ -33,7 +32,7 @@ const intensityOpacity: Record<string, string> = {
   extreme: "opacity-100",
 };
 
-const Timeline = memo(function Timeline({ scenes, selectedSceneId, totalDuration, isPlaying, audioUrl, onSceneSelect, isLoading, currentTime }: TimelineProps) {
+const Timeline = memo(function Timeline({ scenes, selectedSceneId, totalDuration, isPlaying, onSceneSelect, isLoading, currentTime }: TimelineProps) {
   const pixelsPerSecond = 20;
   const timelineWidth = totalDuration * pixelsPerSecond;
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);

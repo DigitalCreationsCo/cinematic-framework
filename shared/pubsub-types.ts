@@ -1,11 +1,15 @@
 import { GraphState, InitialGraphState, ObjectData, SceneStatus } from "./pipeline-types";
 
-export interface PubSubMessage<T extends string, P> {
+export type PubSubMessage<T extends string, P = undefined> = P extends undefined ? {
+    type: T;
+    projectId: string;
+    timestamp: string;
+} : {
     type: T;
     projectId: string;
     payload: P;
     timestamp: string;
-}
+};
 
 // ===== COMMANDS (Client -> Server -> Pipeline) =====
 
@@ -22,25 +26,25 @@ export type StartPipelineCommand = PubSubMessage<
     "START_PIPELINE",
     {
         audioGcsUri?: string;
+        audioPublicUri?: string;
         creativePrompt: string;
     }
 >;
 
 export type RequestFullStateCommand = PubSubMessage<
     "REQUEST_FULL_STATE",
-    Record<string, never> // No payload needed
+   ( Record<string, never> | undefined)
 >;
 
 export type ResumePipelineCommand = PubSubMessage<
     "RESUME_PIPELINE",
     {
         fromSceneIndex?: number;
-    }
+    } | undefined
 >;
 
 export type StopPipelineCommand = PubSubMessage<
-    "STOP_PIPELINE",
-    Record<string, never> // No payload needed
+    "STOP_PIPELINE"
 >;
 
 export type RegenerateSceneCommand = PubSubMessage<
@@ -48,7 +52,7 @@ export type RegenerateSceneCommand = PubSubMessage<
     {
         sceneId: number;
         forceRegenerate?: boolean;
-        promptModification?: string; // Optional modified prompt for this generation
+        promptModification?: string; 
     }
 >;
 
