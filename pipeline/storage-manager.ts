@@ -293,9 +293,10 @@ export class GCPStorageManager {
   ): Promise<string> {
     const bucket = this.storage.bucket(this.bucketName);
     const normalizedDest = this.normalizePath(destination);
+    const relativeDest = this.getBucketRelativePath(normalizedDest);
 
     await bucket.upload(localPath, {
-      destination: normalizedDest,
+      destination: relativeDest,
       metadata: {
         cacheControl: "public, max-age=31536000",
       },
@@ -317,7 +318,8 @@ export class GCPStorageManager {
   ): Promise<string> {
     const bucket = this.storage.bucket(this.bucketName);
     const normalizedDest = this.normalizePath(destination);
-    const file = bucket.file(normalizedDest);
+    const relativeDest = this.getBucketRelativePath(normalizedDest);
+    const file = bucket.file(relativeDest);
 
     await file.save(buffer, {
       contentType,
@@ -367,30 +369,39 @@ export class GCPStorageManager {
    */
   async downloadJSON<T>(source: string): Promise<T> {
     const bucket = this.storage.bucket(this.bucketName);
-    const path = this.parsePathFromUri(source);
+    const path = this.getBucketRelativePath(source);
     const file = bucket.file(path);
     const [ contents ] = await file.download();
     return JSON.parse(contents.toString()) as T;
   }
 
   private normalizePath(inputPath: string): string {
-    let cleanPath = inputPath.replace(/^gs:\/\/[^\/]+\//, '');
+    let cleanPath = inputPath.replace(/^gs:\/\//, '');
+
+    cleanPath = cleanPath.replace(/^https:\/\/storage\.googleapis\.com\//, '');
+
     cleanPath = path.posix.normalize(cleanPath);
+
     if (cleanPath.startsWith('/')) {
       cleanPath = cleanPath.substring(1);
     }
+
     return cleanPath;
   }
 
-  private parsePathFromUri(uriOrPath: string): string {
-    return this.normalizePath(uriOrPath);
+  private getBucketRelativePath(pathOrUri: string): string {
+    const fullPath = this.normalizePath(pathOrUri);
+    if (fullPath === this.bucketName) return '';
+
+    // Strip bucket name from start (we know it's there from normalizePath)
+    return fullPath.substring(this.bucketName.length + 1);
   }
 
   /**
    * Downloads a file from GCS to a local destination path.
    */
   async downloadFile(gcsPath: string, localDestination: string): Promise<void> {
-    const path = this.parsePathFromUri(gcsPath);
+    const path = this.getBucketRelativePath(gcsPath);
     const bucket = this.storage.bucket(this.bucketName);
     const file = bucket.file(path);
     await file.download({ destination: localDestination });
@@ -401,7 +412,7 @@ export class GCPStorageManager {
    * @returns The file contents as a Buffer.
    */
   async downloadToBuffer(gcsPath: string): Promise<Buffer> {
-    const path = this.parsePathFromUri(gcsPath);
+    const path = this.getBucketRelativePath(gcsPath);
     const bucket = this.storage.bucket(this.bucketName);
     const file = bucket.file(path);
     const [ contents ] = await file.download();
@@ -413,7 +424,7 @@ export class GCPStorageManager {
    * @param gcsPath - Relative path or gs:// URI.
    */
   async fileExists(gcsPath: string): Promise<boolean> {
-    const path = this.parsePathFromUri(gcsPath);
+    const path = this.getBucketRelativePath(gcsPath);
     const bucket = this.storage.bucket(this.bucketName);
     const file = bucket.file(path);
     const [ exists ] = await file.exists();
@@ -426,7 +437,7 @@ export class GCPStorageManager {
    */
   getPublicUrl(gcsPath: string): string {
     const normalizedPath = this.normalizePath(gcsPath);
-    return `https://storage.googleapis.com/${this.bucketName}/${normalizedPath}`;
+    return `https://storage.googleapis.com/${normalizedPath}`;
   }
 
   /**
@@ -435,7 +446,7 @@ export class GCPStorageManager {
    */
   getGcsUrl(gcsPath: string): string {
     const normalizedPath = this.normalizePath(gcsPath);
-    return `gs://${this.bucketName}/${normalizedPath}`;
+    return `gs://${normalizedPath}`;
   }
 
   /**
@@ -452,7 +463,7 @@ export class GCPStorageManager {
    * Retrieves the MIME type of a GCS object (e.g., 'video/mp4', 'image/png').
    */
   async getObjectMimeType(gcsPath: string): Promise<string | undefined> {
-    const path = this.parsePathFromUri(gcsPath);
+    const path = this.getBucketRelativePath(gcsPath);
     const bucket = this.storage.bucket(this.bucketName);
     const file = bucket.file(path);
     const [ metadata ] = await file.getMetadata();

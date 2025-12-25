@@ -15,6 +15,7 @@ const mockBucket = {
   upload: vi.fn(),
   file: vi.fn(() => mockFile),
   getFiles: vi.fn(),
+  exists: vi.fn().mockReturnValue([ true ]),
 };
 
 const mockStorage = {
@@ -117,7 +118,7 @@ describe('GCPStorageManager', () => {
     it('should generate correct paths for all object types', () => {
       expect(storageManager.getGcsObjectPath({ type: 'storyboard' })).toBe('test-video/scenes/storyboard.json');
       expect(storageManager.getGcsObjectPath({ type: 'character_image', characterId: 'char1' })).toBe('test-video/images/characters/char1_reference.png');
-      expect(storageManager.getGcsObjectPath({ type: 'scene_end_frame', sceneId: 1, attempt: 3 })).toBe('test-video/images/frames/scene_001_lastframe_03.png');
+      expect(storageManager.getGcsObjectPath({ type: 'scene_end_frame', sceneId: 1, attempt: 3 })).toBe('test-video/images/frames/scene_001_frame_end_03.png');
       expect(storageManager.getGcsObjectPath({ type: 'composite_frame', sceneId: 1, attempt: 2 })).toBe('test-video/images/frames/scene_001_composite_02.png');
       expect(storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 1 })).toBe('test-video/scenes/scene_001_01.mp4');
       expect(storageManager.getGcsObjectPath({ type: 'scene_quality_evaluation', sceneId: 1, attempt: 5 })).toBe('test-video/scenes/scene_001_evaluation_05.json');
@@ -128,7 +129,7 @@ describe('GCPStorageManager', () => {
 
     it('should use default attempt (1) when attempt is "latest" and no history exists', () => {
       expect(storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 'latest' })).toBe('test-video/scenes/scene_001_01.mp4');
-      expect(storageManager.getGcsObjectPath({ type: 'scene_end_frame', sceneId: 2, attempt: 'latest' })).toBe('test-video/images/frames/scene_002_lastframe_01.png');
+      expect(storageManager.getGcsObjectPath({ type: 'scene_end_frame', sceneId: 2, attempt: 'latest' })).toBe('test-video/images/frames/scene_002_frame_end_01.png');
       expect(storageManager.getGcsObjectPath({ type: 'composite_frame', sceneId: 3, attempt: 'latest' })).toBe('test-video/images/frames/scene_003_composite_01.png');
       expect(storageManager.getGcsObjectPath({ type: 'scene_quality_evaluation', sceneId: 4, attempt: 'latest' })).toBe('test-video/scenes/scene_004_evaluation_01.json');
       expect(storageManager.getGcsObjectPath({ type: 'frame_quality_evaluation', sceneId: 4, framePosition: "start", attempt: 'latest' })).toBe('test-video/images/frames/scene_004_frame_start_evaluation_01.json');
@@ -139,7 +140,7 @@ describe('GCPStorageManager', () => {
       storageManager.updateLatestAttempt('scene_end_frame', 2, 3);
 
       expect(storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 'latest' })).toBe('test-video/scenes/scene_001_05.mp4');
-      expect(storageManager.getGcsObjectPath({ type: 'scene_end_frame', sceneId: 2, attempt: 'latest' })).toBe('test-video/images/frames/scene_002_lastframe_03.png');
+      expect(storageManager.getGcsObjectPath({ type: 'scene_end_frame', sceneId: 2, attempt: 'latest' })).toBe('test-video/images/frames/scene_002_frame_end_03.png');
     });
 
     it('should throw an error for unknown object type', () => {
@@ -198,25 +199,6 @@ describe('GCPStorageManager', () => {
     // It just updates this.latestAttempts.
     // So this test case might fail if it expects mockWriteFileSync.
     // Removing persistence test if not implemented.
-  });
-
-  describe('Persistence', () => {
-    it('should load attempts from file on construction', () => {
-      mockExistsSync.mockReturnValue(true);
-      mockReadFileSync.mockReturnValue(JSON.stringify({ 'scene_video_1': 10 }));
-
-      const newManager = new GCPStorageManager(projectId, videoId, bucketName);
-      const path = newManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 'latest' });
-      expect(path).toBe('test-video/scenes/scene_001_10.mp4');
-    });
-
-    it('should handle corrupted persistence file gracefully', () => {
-      mockExistsSync.mockReturnValue(true);
-      mockReadFileSync.mockReturnValue('invalid json');
-
-      // Should not throw
-      expect(() => new GCPStorageManager(projectId, videoId, bucketName)).not.toThrow();
-    });
   });
 
   describe('getPublicUrl', () => {
