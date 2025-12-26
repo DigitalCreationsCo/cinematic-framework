@@ -72,11 +72,11 @@ export default function Dashboard() {
 
   usePipelineEvents({ projectId: selectedProject || null });
 
-  useEffect(() => {
-    if (pipelineState) {
-      setPipelineStatus(pipelineState.currentSceneIndex < (pipelineState.storyboardState?.scenes.length || 0) ? pipelineStatus : "complete");
-    }
-  }, [ pipelineState, setPipelineStatus ]);
+  // useEffect(() => {
+  //   if (pipelineState) {
+  //     setPipelineStatus(pipelineState.currentSceneIndex < (pipelineState.storyboardState?.scenes.length || 0) ? pipelineStatus : "complete");
+  //   }
+  // }, [ pipelineState, setPipelineStatus ]);
   
   useEffect(() => {
     if (isDark) {
@@ -87,7 +87,7 @@ export default function Dashboard() {
   }, [ isDark ]);
 
   const currentScenes = useMemo(() => pipelineState?.storyboardState?.scenes.reduce<Scene[]>((acc, scene) => {
-    const status = scene.generatedVideo.storageUri ? "complete" :
+    const status = scene.generatedVideo?.storageUri ? "complete" :
       ((pipelineStatus === "ready" || pipelineStatus === "paused" || pipelineStatus === "complete" || pipelineStatus === "error") && "pending") || scene.status || "pending";
     acc.push({ ...scene, status });
     return acc;

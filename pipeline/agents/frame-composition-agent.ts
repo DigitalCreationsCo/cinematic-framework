@@ -270,12 +270,13 @@ export class FrameCompositionAgent {
             model: imageModelName,
             contents: contents,
             config: {
+                abortSignal: this.options?.signal,
                 responseModalities: [ Modality.IMAGE ],
                 imageConfig: {
                     outputMimeType: outputMimeType
                 }
             }
-        }, { signal: this.options?.signal });
+        });
 
         if (!result.candidates || result.candidates?.[ 0 ]?.content?.parts?.length === 0) {
             throw new Error("Image generation failed to return any images.");

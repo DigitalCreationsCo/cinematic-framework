@@ -65,6 +65,31 @@ export class GCPStorageManager {
 
     this.bucketName = bucketName;
     this.videoId = videoId;
+
+    const permissionsToCheck = [
+      'storage.objects.get',
+      'storage.objects.list'
+    ];
+
+    console.log(`Checking storage permissions: \n${permissionsToCheck.join(`,\n `)}`);
+
+    this.storage.bucket(this.bucketName).iam.testPermissions(permissionsToCheck).then((res) => {
+      const [ permissions ] = res;
+
+      const hasAll = permissionsToCheck.every(p => permissions[ p ]);
+
+      console.log('Permissions found:', permissions);
+
+      if (hasAll) {
+        console.log("✅ Credentials have all the specified permissions.");
+      } else {
+        console.log("❌ Credentials are missing one or more storage permissions.");
+        throw Error(`Credentials are missing one or more storage permissions.`);
+      }
+    }, (err) => {
+      console.error("Error checking permissions:", err);
+      throw err;
+    });
   }
 
   /**

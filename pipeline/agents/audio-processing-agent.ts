@@ -4,7 +4,7 @@
 
 import { GCPStorageManager } from "../storage-manager";
 import { AudioAnalysis, AudioAnalysisSchema, AudioSegment, Scene, TransitionType, VALID_DURATIONS, zodToJSONSchema } from "../../shared/pipeline-types";
-import { FileData, GenerateContentResponse, GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { FileData, GenerateContentResponse, GoogleGenAI, PartMediaResolution, PartMediaResolutionLevel, ThinkingLevel } from "@google/genai";
 import path from "path";
 import { cleanJsonOutput, formatTime, roundToValidDuration } from "../utils";
 import ffmpeg from "fluent-ffmpeg";
@@ -33,6 +33,8 @@ export class AudioProcessingAgent {
         if (!audioPath) {
             console.log(`🎤 No audio file provided, skipping audio processing`);
             return {
+                bpm: 0,
+                keySignature: '',
                 totalDuration: 0,
                 segments: [],
                 audioGcsUri: '',
@@ -102,21 +104,57 @@ export class AudioProcessingAgent {
             jsonSchema
         );
 
+
+        const audioCountToken = await this.genAI.countTokens({
+            model: buildllmParams({} as any).model,
+            contents: {
+                parts: [ { fileData: audioFile } ]
+            }
+        })
+
+        /**
+         * ANALYZE AUDIO: Multimodal Storyboarding Logic
+         * * CRITICAL IMPLEMENTATION NOTES FOR GEMINI 3 PRO PREVIEW:
+         * * 1. MEDIA-FIRST POSITIONING: 
+         * The `fileData` is placed at index 0 of the parts array. This forces the model 
+         * to load the audio buffer into its attention head before parsing the instructions, 
+         * significantly reducing "blind" hallucinations based on text-only prompts.
+         * * 2. STOCHASTIC GROUNDING (audioEvidence):
+         * The schema now requires 'audioEvidence'. This acts as a 'Chain of Verification' 
+         * field, forcing the model to identify specific waveform events (transients, 
+         * frequency shifts) to justify the creative storyboard choices.
+         * * 3. TRANSIENT DETECTION:
+         * By asking for 'transientImpact', we force the model to look at the 'attack' 
+         * phase of the audio at the startTime, ensuring visual 'Cuts' align with 
+         * actual musical beats rather than generic time-slices.
+         * * 4. SYSTEM INSTRUCTION VS USER PROMPT:
+         * Instructions are separated to maintain a 'Master Musicologist' persona, 
+         * preventing the user's creative prompt from over-riding the technical 
+         * requirements of the segmentation philosophy.
+         */
         const result = await this.genAI.generateContent(buildllmParams({
             contents: [
                 {
                     role: "user",
                     parts: [
-                        { text: prompt },
-                        { text: userPrompt },
-                        { fileData: audioFile },
+                        // Media first mitigates "lost-in-the-middle" effect
+                        { fileData: audioFile, mediaResolution: { level: PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH, numTokens: audioCountToken.totalTokens } },
+                        { text: prompt },         // System-level instructions
+                        { text: userPrompt },     // Specific user request
                     ],
                 },
             ],
             config: {
+                abortSignal: this.options?.signal,
                 responseJsonSchema: jsonSchema,
+                thinkingConfig: {
+                    /** Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent. */
+                    thinkingBudget: -1,
+                    /** Optional. The level of thoughts tokens that the model should generate. */
+                    thinkingLevel: ThinkingLevel.HIGH
+                }
             }
-        }), { signal: this.options?.signal });
+        }));
 
         return result;
     }

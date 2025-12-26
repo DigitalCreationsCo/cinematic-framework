@@ -263,7 +263,7 @@ ${c.name}:
 - Hair: ${c.physicalTraits.hair}
 - Clothing: ${c.physicalTraits.clothing}
 - Accessories: ${c.physicalTraits.accessories?.join(", ") || "None"}
-- Reference Image: Match appearance to ${c.referenceImages?.[ 0 ] || "N/A"} EXACTLY${formatCharacterTemporalState(c)}
+- Reference Image: Match appearance to ${c.referenceImages?.[ 0 ]?.publicUri || "N/A"} EXACTLY${formatCharacterTemporalState(c)}
 `
     )
     .join("\n");

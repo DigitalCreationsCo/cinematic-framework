@@ -67,11 +67,11 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
             const newState = parsedEvent.payload.state;
             setPipelineState(newState);
 
-            if (newState.currentSceneIndex > (newState.storyboardState?.scenes.length || 0)) {
-              setPipelineStatus("complete");
-            } else if (newState.currentSceneIndex > 0) {
-              setPipelineStatus("ready");
-            }
+            // if (newState.currentSceneIndex > (newState.storyboardState?.scenes.length || 0)) {
+            //   setPipelineStatus("complete");
+            // } else if (newState.currentSceneIndex > 0) {
+            //   setPipelineStatus("ready");
+            // }
 
             if (!isHydrated) {
               setIsHydrated(true);

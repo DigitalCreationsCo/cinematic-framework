@@ -39,7 +39,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { defaultCreativePrompt } from "./prompts/default-creative-prompt";
 import { imageModelName, textModelName, videoModelName } from "./llm/google/models";
-import { calculateLearningTrends, stripBogusUrls } from "./utils";
+import { calculateLearningTrends, deleteBogusUrls } from "./utils";
 import { QualityCheckAgent } from "./agents/quality-check-agent";
 import { CheckpointerManager } from "./checkpointer-manager";
 import { RunnableConfig } from "@langchain/core/runnables";
@@ -229,7 +229,7 @@ export class CinematicVideoWorkflow {
     workflow.addEdge(START, "sync_state" as any);
 
     workflow.addConditionalEdges("sync_state" as any, (state: InitialGraphState) => {
-      if (state.storyboardState && state.storyboardState.scenes.some(s => s.generatedVideo.storageUri)) {
+      if (state.storyboardState && state.storyboardState.scenes.some(s => s.generatedVideo?.storageUri)) {
         console.log("   Resuming workflow from process_scene...");
         return "process_scene";
       }
@@ -317,7 +317,7 @@ export class CinematicVideoWorkflow {
           state.creativePrompt
         );
 
-        storyboard = stripBogusUrls(storyboard);
+        storyboard = deleteBogusUrls(storyboard);
 
         const newState = {
           ...state,
@@ -383,7 +383,7 @@ export class CinematicVideoWorkflow {
           locations: []
         };
 
-        storyboard = stripBogusUrls(storyboard);
+        storyboard = deleteBogusUrls(storyboard);
 
         const newState = {
           ...state,
@@ -440,7 +440,7 @@ export class CinematicVideoWorkflow {
           { initialDelay: 30000 }
         );
 
-        storyboard = stripBogusUrls(storyboard);
+        storyboard = deleteBogusUrls(storyboard);
 
         const newState = {
           ...state,

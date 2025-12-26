@@ -19,12 +19,21 @@ export const AudioSegmentSchema = z.object({
   mood: z.string().describe("Emotional tone (e.g., aggressive, melancholic, triumphant, mysterious)"),
   tempo: z.enum([ "slow", "moderate", "fast", "very_fast" ]).describe("Pace of the music"),
   transitionType: z.string().describe("cinematic transition type (e.g., Cut, Dissolve, Fade, Smash Cut, Wipe)"),
+  // --- NEW: GROUNDING FIELDS ---
+  audioEvidence: z.string().describe(
+    "Verifiable sonic proof from this segment (e.g., 'Heavy kick drum starts at 4.2s', 'Reverb-heavy female vocal enters', 'High-pass filter sweep')."
+  ),
+  transientImpact: z.enum([ "soft", "sharp", "explosive", "none" ]).describe(
+    "The physical nature of the audio onset at the start of this segment."
+  ),
 });
 export type AudioSegment = z.infer<typeof AudioSegmentSchema>;
 
 export const AudioAnalysisSchema = z.object({
-  totalDuration: z.number().describe("Total duration of the track in seconds"),
-  segments: z.array(AudioSegmentSchema).describe("list of analyzed musical segments"),
+  bpm: z.number().describe("The detected beats per minute of the track."),
+  keySignature: z.string().describe("The estimated musical key (e.g., C Minor, G Major)."),
+  totalDuration: z.number().describe("Total authoritative duration in seconds."),
+  segments: z.array(AudioSegmentSchema).describe("List of segments covering 0.0 to totalDuration without gaps."),
 });
 export type AudioAnalysis = z.infer<typeof AudioAnalysisSchema> & {
   audioGcsUri: string;
@@ -356,7 +365,7 @@ export const SceneGenerationOutputSchema = z.object({
   enhancedPrompt: z.string().optional().describe("composed prompt from all departments"),
   startFramePrompt: z.string().optional().describe("The exact prompt used to generate the start frame"),
   endFramePrompt: z.string().optional().describe("The exact prompt used to generate the end frame"),
-  generatedVideo: ObjectDataSchema.describe("GCS URL of generated video"),
+  generatedVideo: ObjectDataSchema.optional().describe("GCS URL of generated video"),
   startFrame: ObjectDataSchema.optional().describe("GCS URL of start keyframe"),
   endFrame: ObjectDataSchema.optional().describe("GCS URL of end keyframe"),
   bestAttempt: z.number().describe("The attempt number that was selected as the best result"),

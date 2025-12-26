@@ -66,9 +66,10 @@ export class CompositionalAgent {
             { role: 'user', parts: [ { text: context } ] }
           ],
           config: {
+            abortSignal: this.options?.signal,
             responseJsonSchema: zodToJSONSchema(SceneBatchSchema),
           }
-        }), { signal: this.options?.signal });
+        }));
         const content = response.text;
         if (!content) throw new Error("No content generated from LLM");
 
@@ -149,9 +150,10 @@ export class CompositionalAgent {
           { role: 'user', parts: [ { text: context } ] }
         ],
         config: {
+          abortSignal: this.options?.signal,
           responseJsonSchema: jsonSchema,
         }
-      }), { signal: this.options?.signal });
+      }));
       const content = response.text;
       if (!content) throw new Error("No content generated from LLM for initial context");
 
@@ -202,11 +204,12 @@ export class CompositionalAgent {
           { role: "user", parts: [ { text: systemPrompt } ] },
         ],
         config: {
+          abortSignal: this.options?.signal,
           temperature: 0.9,
         }
       });
 
-      const response = await this.llm.generateContent(params, { signal: this.options?.signal });
+      const response = await this.llm.generateContent(params);
 
       const expandedPrompt = response.text;
 
@@ -239,10 +242,11 @@ export class CompositionalAgent {
           { role: 'user', parts: [ { text: systemPrompt } ] },
         ],
         config: {
+          abortSignal: this.options?.signal,
           responseJsonSchema: jsonSchema,
           temperature: 0.8,
         }
-      }), { signal: this.options?.signal });
+      }));
 
       const content = response.text;
       if (!content) throw new Error("No content generated from LLM");

@@ -5,9 +5,10 @@ import { useStore } from '@/lib/store';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import { resumePipeline } from '@/lib/api';
 
 export function InterventionModal() {
-    const { interruptionState, setInterruptionState, selectedProject, setIsLoading } = useStore();
+    const { interruptionState, setInterruptionState, setPipelineStatus, selectedProject, setIsLoading } = useStore();
     const [ paramsJson, setParamsJson ] = useState('');
     const [ jsonError, setJsonError ] = useState<string | null>(null);
 
@@ -31,6 +32,9 @@ export function InterventionModal() {
                 throw new Error('Failed to resolve intervention');
             }
 
+            setPipelineStatus("analyzing");
+            await resumePipeline({ projectId: selectedProject });
+            
             setIsLoading(false);
             setInterruptionState(null);
         } catch (error) {

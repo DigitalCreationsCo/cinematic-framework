@@ -380,6 +380,7 @@ export class SceneGeneratorAgent {
             ...imageParam,
             // ...sourceParam, // veo2: 'Video and reference images cannot be both set.'
             config: {
+                abortSignal: this.options?.signal,
                 lastFrame: lastFrame,
                 generateAudio,
                 resolution: "720p",
@@ -392,7 +393,7 @@ export class SceneGeneratorAgent {
 
         let operation: Operation<GenerateVideosResponse>;
         try {
-            operation = await this.llm.generateVideos(videoGenParams, { signal: this.options?.signal });
+            operation = await this.llm.generateVideos(videoGenParams);
         } catch (error) {
             console.error("   Error generating video: ", error);
             throw error;
@@ -413,7 +414,7 @@ export class SceneGeneratorAgent {
             console.log(`   ... waiting ${SCENE_GEN_WAITTIME_MS / 1000}s for video generation to complete`);
             await new Promise(resolve => setTimeout(resolve, SCENE_GEN_WAITTIME_MS));
 
-            operation = await this.llm.getVideosOperation({ operation }, { signal: this.options?.signal });
+            operation = await this.llm.getVideosOperation({ operation, config: { abortSignal: this.options?.signal } });
         }
 
         if (operation.error) {

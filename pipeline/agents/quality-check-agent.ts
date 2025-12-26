@@ -73,8 +73,11 @@ export class QualityCheckAgent {
         // Attempt to repair the JSON using the LLM
         const repairResponse = await this.llm.generateContent(buildllmParams({
           contents: [ { role: "user", parts: [ { text: malformedJsonRepairPrompt(jsonString) } ] } ],
-          config: { temperature: 0.1 }
-        }), { signal: this.options?.signal });
+          config: {
+            abortSignal: this.options?.signal,
+            temperature: 0.1
+          }
+        }));
 
         if (!repairResponse.text) {
           throw new Error("Failed to repair JSON: LLM returned no text.");
@@ -134,10 +137,11 @@ export class QualityCheckAgent {
         }
       ],
       config: {
+        abortSignal: this.options?.signal,
         responseJsonSchema: zodToJSONSchema(QualityEvaluationSchema),
         temperature: 0.3,
       }
-    }), { signal: this.options?.signal });
+    }));
 
     if (!response.text) {
       throw new Error("No quality evaluation generated from LLM from Quality Check Agent");
@@ -199,10 +203,11 @@ export class QualityCheckAgent {
         }
       ],
       config: {
+        abortSignal: this.options?.signal,
         responseJsonSchema: zodToJSONSchema(QualityEvaluationSchema),
         temperature: 0.3,
       }
-    }), { signal: this.options?.signal });
+    }));
 
     if (!response.text) {
       throw new Error("No quality evaluation generated from LLM from Quality Check Agent");
@@ -252,8 +257,11 @@ export class QualityCheckAgent {
     try {
       const response = await this.llm.generateContent(buildllmParams({
         contents: [ { role: "user", parts: [ { text: correctionPrompt } ] } ],
-        config: { temperature: 0.5 }
-      }), { signal: this.options?.signal });
+        config: {
+          abortSignal: this.options?.signal,
+          temperature: 0.5
+        }
+      }));
 
       if (!response.text) throw new Error("No correction prompt generated from LLM from Quality Check Agent");
 
@@ -288,9 +296,10 @@ export class QualityCheckAgent {
           { role: "user", parts: [ { text: 'Output ONLY the corrected prompt text, no JSON, no preamble.' } ] }
         ],
         config: {
+          abortSignal: this.options?.signal,
           responseMimeType: 'text/plain'
         }
-      }), { signal: this.options?.signal });
+      }));
 
       const sanitized = response.text;
       console.log("   ✓ Prompt sanitized.");

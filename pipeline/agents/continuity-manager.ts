@@ -149,11 +149,11 @@ export class ContinuityManagerAgent {
                     const outputMimeType = "image/png";
 
                     const result = await retryLlmCall(
-                        (params) => this.imageModel.generateContent(params, { signal: this.options?.signal }),
-                        {
+                        (params) => this.imageModel.generateContent({
                             model: imageModelName,
-                            contents: [ imagePrompt ],
+                            contents: [ params.prompt ],
                             config: {
+                                abortSignal: this.options?.signal,
                                 candidateCount: 1,
                                 responseModalities: [ Modality.IMAGE ],
                                 seed: Math.floor(Math.random() * 1000000),
@@ -161,19 +161,13 @@ export class ContinuityManagerAgent {
                                     outputMimeType: outputMimeType
                                 }
                             }
+                        }),
+                        {
+                            prompt: imagePrompt,
                         },
                         {
                             initialDelay: this.ASSET_GEN_COOLDOWN_MS,
                         },
-                        async (error: any, attempt: number, currentParams) => {
-                            if (error instanceof ApiError) {
-                                if (error.message.includes("Resource exhausted") && attempt > 1) {
-                                    currentParams.model = "imagen-4.0-generate-001";
-                                    console.log('image model now using imagen-4.0-generate-001');
-                                }
-                            }
-                            return currentParams;
-                        }
                     );
 
                     if (!result.candidates || result.candidates?.[ 0 ]?.content?.parts?.length === 0) {
@@ -425,6 +419,7 @@ export class ContinuityManagerAgent {
                             model: imageModelName,
                             contents: [ params.prompt ],
                             config: {
+                                abortSignal: this.options?.signal,
                                 candidateCount: 1,
                                 responseModalities: [ Modality.IMAGE ],
                                 seed: Math.floor(Math.random() * 1000000),
@@ -432,7 +427,7 @@ export class ContinuityManagerAgent {
                                     outputMimeType: outputMimeType
                                 }
                             }
-                        }, { signal: this.options?.signal });
+                        });
                     };
 
                     const result = await retryLlmCall(

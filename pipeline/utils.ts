@@ -7,14 +7,11 @@ import { Character, Location, WorkflowMetrics, AttemptMetric, Trend, RegressionS
  * @param storyboard - The storyboard to sanitize.
  * @returns A deep copy of the storyboard with asset fields removed.
  */
-export function stripBogusUrls(storyboard: Storyboard): Storyboard {
-  // Deep clone to avoid mutation side effects
-  const clean = JSON.parse(JSON.stringify(storyboard));
+export function deleteBogusUrls(storyboard: Storyboard): Storyboard {
+  const clean: Storyboard = JSON.parse(JSON.stringify(storyboard));
 
-  // Clean scenes
   if (clean.scenes) {
-    clean.scenes = clean.scenes.map((s: any) => {
-      // Remove asset fields that shouldn't exist yet
+    clean.scenes = clean.scenes.map((s) => {
       delete s.generatedVideo;
       delete s.startFrame;
       delete s.endFrame;
@@ -22,18 +19,16 @@ export function stripBogusUrls(storyboard: Storyboard): Storyboard {
     });
   }
 
-  // Clean characters
   if (clean.characters) {
-    clean.characters = clean.characters.map((c: any) => {
-      delete c.referenceImages;
+    clean.characters = clean.characters.map((c) => {
+      c.referenceImages = [];
       return c;
     });
   }
 
-  // Clean locations
   if (clean.locations) {
-    clean.locations = clean.locations.map((l: any) => {
-      delete l.referenceImages;
+    clean.locations = clean.locations.map((l) => {
+      l.referenceImages = [];
       return l;
     });
   }
@@ -94,7 +89,7 @@ export function formatCharacterSpecs(characters: Character[]): string {
   - Hair: ${char.physicalTraits.hair}
   - Clothing: ${char.physicalTraits.clothing}
   - Accessories: ${char.physicalTraits.accessories.join(", ")}
-  - Reference: ${char.referenceImages?.[ 0 ].publicUri || "None"}`;
+  - Reference: ${char.referenceImages?.[ 0 ]?.publicUri || "None"}`;
     })
     .join("\n\n");
 }
@@ -109,7 +104,7 @@ export function formatLocationSpecs(locations: Location[]): string {
   - Description: ${location.description}
   - Lighting: ${location.lightingConditions}
   - Time of Day: ${location.timeOfDay}
-  - Reference: ${location.referenceImages?.[ 0 ].publicUri || "None"}`;
+  - Reference: ${location.referenceImages?.[ 0 ]?.publicUri || "None"}`;
     })
     .join("\n\n");
 }

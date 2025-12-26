@@ -1,5 +1,5 @@
-import { GoogleGenAI, GenerateContentParameters, Operation, GenerateContentResponse, GenerateVideosResponse, GenerateVideosParameters, GenerateImagesParameters, GenerateImagesResponse } from "@google/genai";
-import { LlmProvider } from "../types";
+import { GoogleGenAI, GenerateContentParameters, Operation, GenerateContentResponse, GenerateVideosResponse, GenerateVideosParameters, GenerateImagesParameters, GenerateImagesResponse, CountTokensParameters, CountTokensResponse, OperationGetParameters, GenerateVideosOperation } from "@google/genai";
+import { LlmProvider } from "../provider-types";
 
 export class GoogleProvider implements LlmProvider {
     public llm: GoogleGenAI;
@@ -17,19 +17,23 @@ export class GoogleProvider implements LlmProvider {
         this.videoModel = llm;
     }
 
-    async generateContent(params: GenerateContentParameters, options?: { signal?: AbortSignal; }): Promise<GenerateContentResponse> {
-        return (this.llm.models as any).generateContent(params, { signal: options?.signal });
+    async generateContent(params: GenerateContentParameters): Promise<GenerateContentResponse> {
+        return this.llm.models.generateContent(params);
     }
 
-    async generateImages(params: GenerateImagesParameters, options?: { signal?: AbortSignal; }): Promise<GenerateImagesResponse> {
-        return (this.videoModel.models as any).generateImages(params, { signal: options?.signal });
+    async generateImages(params: GenerateImagesParameters): Promise<GenerateImagesResponse> {
+        return this.videoModel.models.generateImages(params);
     }
 
-    async generateVideos(params: GenerateVideosParameters, options?: { signal?: AbortSignal; }): Promise<Operation<GenerateVideosResponse>> {
-        return (this.videoModel.models as any).generateVideos(params, { signal: options?.signal });
+    async generateVideos(params: GenerateVideosParameters): Promise<Operation<GenerateVideosResponse>> {
+        return this.videoModel.models.generateVideos(params);
     }
 
-    async getVideosOperation(params: { operation: Operation<GenerateVideosResponse>; }, options?: { signal?: AbortSignal; }): Promise<Operation<GenerateVideosResponse>> {
-        return (this.videoModel.operations as any).getVideosOperation(params, { signal: options?.signal });
+    async getVideosOperation(params: OperationGetParameters<GenerateVideosResponse, GenerateVideosOperation>): Promise<Operation<GenerateVideosResponse>> {
+        return this.videoModel.operations.getVideosOperation(params);
+    }
+
+    async countTokens(params: CountTokensParameters): Promise<CountTokensResponse> {
+        return this.llm.models.countTokens(params);
     }
 }
