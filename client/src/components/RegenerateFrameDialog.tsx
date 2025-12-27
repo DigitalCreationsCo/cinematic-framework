@@ -7,9 +7,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Scene } from "@shared/pipeline-types";
 
 interface RegenerateFrameDialogProps {
+    scene: Scene;
+    frameToRegenerate: "start" | "end" | null;
     isOpen: boolean;
     onOpenChange: () => void;
     onSubmit: (prompt: string, originalPrompt: string) => void;
@@ -17,12 +20,24 @@ interface RegenerateFrameDialogProps {
 }
 
 export function RegenerateFrameDialog({
+    scene,
+    frameToRegenerate,
     isOpen,
     onOpenChange,
     onSubmit,
-    originalPrompt = "",
 }: RegenerateFrameDialogProps) {
+    
+    const originalPrompt = (frameToRegenerate === "start"
+        ? scene.startFramePrompt
+        : scene.endFramePrompt) || "";
+    
     const [ prompt, setPrompt ] = useState(originalPrompt);
+
+    useEffect(() => {
+        setPrompt((frameToRegenerate === "start"
+            ? scene.startFramePrompt
+            : scene.endFramePrompt) || "");
+    }, [ scene, frameToRegenerate, isOpen, onOpenChange, onSubmit ]);
 
     const handleSubmit = () => {
         onSubmit(prompt, originalPrompt);
@@ -33,10 +48,11 @@ export function RegenerateFrameDialog({
         <Dialog open={ isOpen } onOpenChange={ onOpenChange }>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Regenerate Frame</DialogTitle>
+                    <DialogTitle className="capitalize">{ `Regenerate ${frameToRegenerate} Frame (Scene ${scene.id})` }</DialogTitle>
                 </DialogHeader>
                 <Textarea
                     value={ prompt }
+                    rows={ 8 }
                     onChange={ (e) => setPrompt(e.target.value) }
                     placeholder="Enter a new prompt for the frame..."
                 />
@@ -44,7 +60,7 @@ export function RegenerateFrameDialog({
                     <Button variant="ghost" onClick={ onOpenChange }>
                         Cancel
                     </Button>
-                    <Button onClick={ handleSubmit }>Regenerate</Button>
+                    <Button onClick={ () => { confirm('Are you sure you want to regenerate the image?') && handleSubmit(); } }>Regenerate</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

@@ -51,8 +51,7 @@ export class SceneGeneratorAgent {
         generationRules?: string[],
     ): Promise<SceneGenerationResult> {
 
-        console.log(`\n🎬 Generating Scene ${scene.id}: ${formatTime(scene.duration)}`);
-        console.log(`   Duration: ${scene.duration}s | Shot: ${scene.shotType}`);
+        console.log(`\n[Scene Generator]: Generating Scene ${scene.id}: ${formatTime(scene.duration)}`);
 
         const prevAttempt = currentAttempt;
 
@@ -464,7 +463,7 @@ export class SceneGeneratorAgent {
         const gcsUri = await this.storageManager.uploadBuffer(videoBuffer, objectPath, outputMimeType);
 
         console.log(`   ✓ Video generated and uploaded: ${this.storageManager.getPublicUrl(gcsUri)}`);
-        const generatedVideo = this.storageManager.buildObjectData(gcsUri);
+        const generatedVideo = this.storageManager.buildObjectData(gcsUri, videoGenParams.model);
 
         if (onProgress) onProgress(sceneId, "Video generated", { generatedVideo });
 
@@ -603,7 +602,7 @@ export class SceneGeneratorAgent {
 
             console.log(`   ✓ Rendered video uploaded: ${this.storageManager.getPublicUrl(gcsUri)}`);
 
-            const video = this.storageManager.buildObjectData(gcsUri);
+            const video = this.storageManager.buildObjectData(gcsUri, "");
             return video;
 
         } catch (error) {
@@ -657,7 +656,7 @@ export class SceneGeneratorAgent {
 
             console.log(`   ✓ Rendered video uploaded: ${this.storageManager.getPublicUrl(gcsUri)}`);
 
-            const video = this.storageManager.buildObjectData(gcsUri);
+            const video = this.storageManager.buildObjectData(gcsUri, "");
             return video;
 
         } catch (error) {

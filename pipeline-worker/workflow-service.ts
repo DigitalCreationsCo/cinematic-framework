@@ -274,7 +274,7 @@ export class WorkflowService {
         const textLlm = new LlmController();
         const imageLlm = new LlmController();
         const qualityAgent = new QualityCheckAgent(textLlm, storageManager, undefined, options);
-        const frameComposer = new FrameCompositionAgent(imageLlm, qualityAgent, storageManager, options);
+        const frameComposer = new FrameCompositionAgent(textLlm, imageLlm, qualityAgent, storageManager, options);
 
         const sceneCharacters = currentState.storyboardState!.characters.filter(char => scene.characters.includes(char.id));
         const sceneLocation = currentState.storyboardState!.locations.find(loc => scene.locationId.includes(loc.id));

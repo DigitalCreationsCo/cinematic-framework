@@ -1,4 +1,4 @@
-import { FileData, Modality, Part } from "@google/genai";
+import { FileData, Modality, Part, ThinkingLevel } from "@google/genai";
 import { GCPStorageManager, GcsObjectPathParams } from "../storage-manager";
 import { LlmController } from "../llm/controller";
 import { buildllmParams } from "../llm/google/llm-params";
@@ -8,21 +8,26 @@ import { Character, FrameGenerationResult, Location, ObjectData, QualityEvaluati
 import { retryLlmCall } from "../lib/llm-retry";
 import { RAIError } from "../lib/errors";
 import { GraphInterrupt } from "@langchain/langgraph";
+import { composeFrameGenerationPromptMeta } from "pipeline/prompts/prompt-composer";
+import { cleanJsonOutput } from "pipeline/utils";
 
 type FrameImageObjectParams = Extract<GcsObjectPathParams, ({ type: "scene_start_frame"; } | { type: "scene_end_frame"; })>;
 
 export class FrameCompositionAgent {
+    private llm: LlmController;
     private imageModel: LlmController;
     private qualityAgent: QualityCheckAgent;
     private storageManager: GCPStorageManager;
     private options?: { signal?: AbortSignal; };
 
     constructor(
+        llm: LlmController,
         imageModel: LlmController,
         qualityAgent: QualityCheckAgent,
         storageManager: GCPStorageManager,
         options?: { signal?: AbortSignal; }
     ) {
+        this.llm = llm;
         this.imageModel = imageModel;
         this.qualityAgent = qualityAgent;
         this.storageManager = storageManager;
@@ -265,7 +270,7 @@ export class FrameCompositionAgent {
         console.log(`   [FrameCompositionAgent] Generating frame for scene ${pathParams.sceneId} (${pathParams.type})...`);
         if (onProgress) onProgress(pathParams.sceneId, `Generating ${pathParams.type.includes('start') ? 'start' : 'end'} frame image...`, "generating");
 
-        let contents: Part[] = [ { text: prompt } ];
+        let contents: Part[] = [ { text: `Frame Description: ${prompt}` } ];
         const validReferenceImageUrls = [ previousFrame, ...referenceImages ].map(obj => obj?.storageUri).filter((url): url is string => typeof url === 'string' && url.length > 0);
 
         if (validReferenceImageUrls.length > 0) {
@@ -283,6 +288,7 @@ export class FrameCompositionAgent {
             model: imageModelName,
             contents: contents,
             config: {
+                abortSignal: this.options?.signal,
                 responseModalities: [ Modality.IMAGE ],
                 imageConfig: {
                     outputMimeType: outputMimeType
@@ -311,7 +317,7 @@ export class FrameCompositionAgent {
         console.log(`   ... Uploading frame to ${outputPath}`);
         const gcsUri = await this.storageManager.uploadBuffer(imageBuffer, outputPath, outputMimeType);
 
-        const frame = this.storageManager.buildObjectData(gcsUri);
+        const frame = this.storageManager.buildObjectData(gcsUri, result.modelVersion || imageModelName);
         console.log(`   ✓ Frame generated and uploaded: ${this.storageManager.getPublicUrl(gcsUri)}`);
 
         if (onProgress) onProgress(
@@ -322,5 +328,52 @@ export class FrameCompositionAgent {
         );
 
         return frame;
+    }
+
+    async generateFrameGenerationPrompt(
+        framePosition: "start" | "end",
+        scene: Scene,
+        characters: Character[],
+        locations: Location[],
+        previousScene?: Scene,
+        generationRules?: string[]
+    ): Promise<string> {
+
+        let generateFramePromptInstructions = composeFrameGenerationPromptMeta(scene,
+            framePosition,
+            characters,
+            locations,
+            previousScene
+        );
+
+        const rules = generationRules && generationRules.length > 0
+            ? `\nGENERATION RULES:\n${generationRules.map((rule) => `- ${rule}`).join("\n")}`
+            : "";
+        generateFramePromptInstructions += rules;
+
+        const generateFrameGenerationPrompt = async () => {
+            const response = await this.llm.generateContent(buildllmParams({
+                contents: generateFramePromptInstructions,
+                config: {
+                    abortSignal: this.options?.signal,
+                    thinkingConfig: {
+                        thinkingLevel: ThinkingLevel.HIGH
+                    }
+                }
+            }));
+
+            const content = response.text;
+
+            if (!content) {
+                console.warn("! generateFramePrompt was not generated. Using generateFramePromptInstructions");
+                return generateFramePromptInstructions;
+            }
+
+            const cleanedContent = cleanJsonOutput(content);
+            return cleanedContent;
+        };
+
+        const frameGenerationPrompt = await generateFrameGenerationPrompt();
+        return frameGenerationPrompt;
     }
 }

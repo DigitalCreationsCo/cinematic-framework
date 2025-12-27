@@ -8,11 +8,13 @@ import {
   StoryboardSchema,
   getJsonSchema,
   InitialContextSchema,
-  SceneBatchSchema
+  SceneBatchSchema,
+  Character,
+  Location
 } from "../../shared/pipeline-types";
 import { cleanJsonOutput } from "../utils";
 import { GCPStorageManager } from "../storage-manager";
-import { composeStoryboardEnrichmentPrompt } from "../prompts/prompt-composer";
+import { composeFrameGenerationPromptMeta, composeStoryboardEnrichmentPrompt } from "../prompts/prompt-composer";
 import { buildDirectorVisionPrompt } from "../prompts/role-director";
 import { retryLlmCall, RetryConfig } from "../lib/llm-retry";
 import { LlmController } from "../llm/controller";

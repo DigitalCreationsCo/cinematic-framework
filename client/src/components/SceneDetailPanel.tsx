@@ -99,14 +99,11 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
   return (
     <>
       <RegenerateFrameDialog
+        scene={ scene }
+        frameToRegenerate={ frameToRegenerate }
         isOpen={ dialogOpen }
         onOpenChange={ toggleDialog }
         onSubmit={ handleRegenerateSubmit }
-        originalPrompt={
-          frameToRegenerate === "start"
-            ? scene.startFramePrompt
-            : scene.endFramePrompt
-        }
       />
       <div className="h-full flex flex-col" data-testid={ `panel-scene-detail-${scene.id}` }>
         <div className="p-4 border-b flex items-center justify-between gap-4 shrink-0">

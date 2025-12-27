@@ -491,10 +491,11 @@ export class GCPStorageManager {
   /**
    * Constructs a standard ObjectData structure containing both public and storage URIs.
    */
-  buildObjectData(uri: string): ObjectData {
+  buildObjectData(uri: string, model: string): ObjectData {
     return {
       storageUri: this.getGcsUrl(uri),
-      publicUri: this.getPublicUrl(uri)
+      publicUri: this.getPublicUrl(uri),
+      model: model
     };
   }
 

@@ -141,7 +141,8 @@ export type AudioAnalysis = z.infer<typeof AudioAnalysisSchema> & {
 
 export const ObjectDataSchema = z.object({
   storageUri: z.string(),
-  publicUri: z.string()
+  publicUri: z.string(),
+  model: z.string().describe("Model used to generate the asset")
 });
 export type ObjectData = z.infer<typeof ObjectDataSchema>;
 
@@ -162,11 +163,26 @@ export type Cinematography = z.infer<typeof CinematographySchema>;
 // ============================================================================
 
 export const LightingSchema = z.object({
-  quality: z.string().describe("lighting quality specification"),
-  colorTemperature: z.string().optional().describe("Warm/Neutral/Cool with Kelvin"),
-  intensity: z.string().optional().describe("Low/Medium/High"),
-  motivatedSources: z.string().optional().describe("where light comes from"),
-  direction: z.string().optional().describe("key light position, shadow direction"),
+  quality: z.object({
+    Hardness: z.string().optional().describe("e.g. Soft (diffused, gentle shadows), Hard (sharp, defined shadows)"),
+    colorTemperature: z.string().optional().describe("Warm (2700-3500K), Neutral (4000-5000K), Cool (5500-7000K)"),
+    intensity: z.string().optional().describe("e.g., Low (dim, moody), Medium (balanced), High (bright, energetic)"),
+  }).describe("Lighting quality specification, "),
+  motivatedSources: z.object({
+    "Primary Light": z.string().optional().describe("e.g., Sun through window, street lamp, overhead ceiling, firelight, etc"),
+    "Fill Light": z.string().optional().describe("e.g., Ambient skylight, reflected surfaces, secondary practicals"),
+    "Practical Lights": z.string().describe("List visible light sources in frame: lamps, candles, screens"),
+    "Accent Light": z.string().optional().describe("e.g., Rim light from behind, side window, bounce from ground"),
+    "Light Beams": z.string().describe("e.g., Visible shafts, rays, None"),
+  }).describe("Light sources"),
+  direction: z.object({
+    "Key Light Position": z.string().optional().describe("e.g., Front - left, right 45°, Side 90°, Back 135 - 180°, Top-down, etc"),
+    "Shadow Direction": z.string().optional().describe("e.g, Falling left, right, forward, behind subject, etc"),
+    "Contrast Ratio": z.string().optional().describe("e.g., Low(1: 2) flat, Medium(1: 4) standard, High(1: 8 +) dramatic, etc"),
+  }).describe("Key light position, shadow direction"),
+  atmosphere: z.object({
+    "Haze": z.string().describe("e.g., None, Light mist, Dense fog"),
+  }).describe("Atmospheric lighting effects")
 });
 export type Lighting = z.infer<typeof LightingSchema>;
 
@@ -364,7 +380,6 @@ export type VideoMetadata = z.infer<typeof VideoMetadataSchema>;
 // QUALITY EVALUATION SCHEMAS (Quality Control Supervisor)
 // ============================================================================
 
-// Shared department enum (eliminates repetition)
 export const DepartmentEnum = z.enum([
   "director",
   "cinematographer",

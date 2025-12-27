@@ -21,7 +21,7 @@ const FramePreview = memo(function FramePreview({ title, imageUrl, alt, isLoadin
           { isLoading ? <Skeleton className="h-4 w-24" /> : title }
         </CardTitle>
         { onRegenerate && !isLoading && (
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={ () => { confirm('Are you sure you want to regenerate the image?') && onRegenerate(); } }>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={ onRegenerate }>
             <RefreshCw className="h-3 w-3" />
             <span className="sr-only">Regenerate</span>
           </Button>

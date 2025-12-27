@@ -17,7 +17,6 @@ import { FrameCompositionAgent } from "./frame-composition-agent";
 import { buildCharacterImagePrompt } from "../prompts/character-image-instruction";
 import { buildLocationImagePrompt } from "../prompts/location-image-instruction";
 import { composeEnhancedSceneGenerationPrompt } from "../prompts/prompt-composer";
-import { buildFrameGenerationPrompt } from "../prompts/frame-generation-instruction";
 import { LlmController, LlmProvider } from "../llm/controller";
 import { imageModelName } from "../llm/google/models";
 import { QualityCheckAgent } from "./quality-check-agent";
@@ -124,7 +123,7 @@ export class ContinuityManagerAgent {
                 if (characterIndex > -1) {
                     updatedCharacters[ characterIndex ] = {
                         ...updatedCharacters[ characterIndex ],
-                        referenceImages: [ this.storageManager.buildObjectData(imageUrl) ],
+                        referenceImages: [ this.storageManager.buildObjectData(imageUrl, "") ],
                     };
                 }
             } else {
@@ -190,7 +189,7 @@ export class ContinuityManagerAgent {
 
                     const characterIndex = updatedCharacters.findIndex(c => c.id === character.id);
                     if (characterIndex > -1) {
-                        updatedCharacters[ characterIndex ].referenceImages = [ this.storageManager.buildObjectData(imageUrl) ];
+                        updatedCharacters[ characterIndex ].referenceImages = [ this.storageManager.buildObjectData(imageUrl, result.modelVersion || imageModelName) ];
                     }
                     console.log(`    ✓ Saved: ${this.storageManager.getPublicUrl(imageUrl)}`);
 
@@ -267,10 +266,10 @@ export class ContinuityManagerAgent {
 
                 if (startFrameExists) {
                     console.log(`  → Found existing START frame for Scene ${scene.id} in storage`);
-                    currentScene.startFrame = this.storageManager.buildObjectData(startFramePath);
+                    currentScene.startFrame = this.storageManager.buildObjectData(startFramePath, "");
 
                     // Reconstruct the prompt for state consistency
-                    currentScene.startFramePrompt = buildFrameGenerationPrompt(
+                    currentScene.startFramePrompt = currentScene.startFramePrompt || await this.frameComposer.generateFrameGenerationPrompt(
                         "start",
                         currentScene,
                         sceneCharacters,
@@ -280,7 +279,7 @@ export class ContinuityManagerAgent {
                     );
                 } else {
                     console.log(`  → Generating START frame for Scene ${scene.id}...`);
-                    const startFramePrompt = buildFrameGenerationPrompt(
+                    const startFramePrompt = await this.frameComposer.generateFrameGenerationPrompt(
                         "start",
                         currentScene,
                         sceneCharacters,
@@ -315,10 +314,10 @@ export class ContinuityManagerAgent {
 
                 if (endFrameExists) {
                     console.log(`  → Found existing END frame for Scene ${scene.id} in storage`);
-                    currentScene.endFrame = this.storageManager.buildObjectData(endFramePath);
+                    currentScene.endFrame = this.storageManager.buildObjectData(endFramePath, "");
 
                     // Reconstruct the prompt for state consistency
-                    currentScene.endFramePrompt = buildFrameGenerationPrompt(
+                    currentScene.endFramePrompt = currentScene.endFramePrompt || await this.frameComposer.generateFrameGenerationPrompt(
                         "end",
                         currentScene,
                         sceneCharacters,
@@ -328,7 +327,7 @@ export class ContinuityManagerAgent {
                     );
                 } else {
                     console.log(`  → Generating END frame for Scene ${scene.id}...`);
-                    const endFramePrompt = buildFrameGenerationPrompt(
+                    const endFramePrompt = await this.frameComposer.generateFrameGenerationPrompt(
                         "end",
                         currentScene,
                         sceneCharacters,
@@ -390,7 +389,7 @@ export class ContinuityManagerAgent {
                 if (locationIndex > -1) {
                     updatedLocations[ locationIndex ] = {
                         ...updatedLocations[ locationIndex ],
-                        referenceImages: [ this.storageManager.buildObjectData(imageUrl) ],
+                        referenceImages: [ this.storageManager.buildObjectData(imageUrl, "") ],
                     };
                 }
             } else {
@@ -414,25 +413,26 @@ export class ContinuityManagerAgent {
                 try {
                     const outputMimeType = "image/png";
 
-                    const generateLocationImage = (params: any) => {
-                        return this.imageModel.generateContent({
-                            model: imageModelName,
-                            contents: [ params.prompt ],
-                            config: {
-                                abortSignal: this.options?.signal,
-                                candidateCount: 1,
-                                responseModalities: [ Modality.IMAGE ],
-                                seed: Math.floor(Math.random() * 1000000),
-                                imageConfig: {
-                                    outputMimeType: outputMimeType
-                                }
-                            }
-                        });
-                    };
-
                     const result = await retryLlmCall(
-                        generateLocationImage,
-                        { prompt: imagePrompt },
+                        (params) => {
+                            return this.imageModel.generateContent({
+                                model: params.model,
+                                contents: [ params.prompt ],
+                                config: {
+                                    abortSignal: this.options?.signal,
+                                    candidateCount: 1,
+                                    responseModalities: [ Modality.IMAGE ],
+                                    seed: Math.floor(Math.random() * 1000000),
+                                    imageConfig: {
+                                        outputMimeType: outputMimeType
+                                    }
+                                }
+                            });
+                        },
+                        {
+                            prompt: imagePrompt,
+                            model: imageModelName
+                        },
                         {
                             initialDelay: this.ASSET_GEN_COOLDOWN_MS,
                         },
@@ -458,7 +458,7 @@ export class ContinuityManagerAgent {
 
                     const locationIndex = updatedLocations.findIndex(l => l.id === location.id);
                     if (locationIndex > -1) {
-                        updatedLocations[ locationIndex ].referenceImages = [ this.storageManager.buildObjectData(imageUrl) ];
+                        updatedLocations[ locationIndex ].referenceImages = [ this.storageManager.buildObjectData(imageUrl, imageModelName) ];
                     }
                     console.log(`    ✓ Saved: ${this.storageManager.getPublicUrl(imageUrl)}`);
 

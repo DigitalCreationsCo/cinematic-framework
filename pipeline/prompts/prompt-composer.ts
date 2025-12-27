@@ -17,7 +17,7 @@ import { formatCharacterSpecs, formatLocationSpecs } from "../utils";
 /**
  * Format character temporal state for prompts
  */
-const formatCharacterTemporalState = (character: Character): string => {
+export const formatCharacterTemporalState = (character: Character): string => {
   if (!character.state) return "";
 
   const state = character.state;
@@ -75,7 +75,7 @@ const formatCharacterTemporalState = (character: Character): string => {
 /**
  * Format location temporal state for prompts
  */
-const formatLocationTemporalState = (location: Location): string => {
+export const formatLocationTemporalState = (location: Location): string => {
   if (!location.state) return "";
 
   const state = location.state;
@@ -174,16 +174,15 @@ ${schema}
 `;
 
 /**
- * Compose frame generation prompt (Cinematographer + Gaffer + Script Supervisor)
+ * Compose frame generation prompt meta instructions (Cinematographer + Gaffer + Script Supervisor)
  * Used in Generation Points 3.1 and 3.2
  */
-export const composeFrameGenerationPrompt = (
+export const composeFrameGenerationPromptMeta = (
   scene: Scene,
   framePosition: "start" | "end",
   characters: Character[],
   locations: Location[],
   previousScene?: Scene,
-  generationRules?: string[]
 ) => {
   const location = locations.find((l) => l.id === scene.locationId);
 
@@ -194,15 +193,11 @@ export const composeFrameGenerationPrompt = (
     ? characters.map((c) => buildCostumeAndMakeupNarrative(c)).join("\n\n")
     : "No specific characters in this shot.";
 
-  const rules = generationRules && generationRules.length > 0
-    ? `\nGENERATION RULES:\n${generationRules.map((rule) => `- ${rule}`).join("\n")}`
-    : "";
-
   return `${cinematography}
 
-ACTION & MOOD:
 ${scene.description}
-Mood: ${scene.mood}
+
+MOOD: ${scene.mood}
 
 CHARACTERS:
 ${characterNarratives}
@@ -212,12 +207,10 @@ ENVIRONMENT:
 ${locationNarrative}
 ${location ? formatLocationTemporalState(location) : ""}
 
-LIGHTING:
+Lighting specifications for Scene ${scene.id}:
 ${buildGafferLightingSpec(scene, location, location?.timeOfDay)}
 
-CONTINUITY:
 ${buildScriptSupervisorContinuityChecklist(scene, previousScene, characters, locations)}
-${rules}
 
 REFERENCE IMAGES:
 ${previousScene && framePosition === "start" ? `- Previous scene end frame` : ""}
@@ -260,7 +253,7 @@ Mood: ${scene.mood} (Intensity: ${scene.intensity})
 
 VISUAL STYLE:
 ${buildCinematographerNarrative(scene)}
-Lighting: ${scene.lighting.quality || "Standard"}, ${scene.lighting.colorTemperature || "Neutral"}.
+Lighting: ${JSON.stringify(scene.lighting, null, 2)}
 
 CHARACTERS:
 ${characters.map((c) => buildCostumeAndMakeupNarrative(c)).join("\n\n")}
@@ -312,14 +305,14 @@ Mood: ${scene.mood} | Intensity: ${scene.intensity} | Tempo: ${scene.tempo}`,
 Camera Movement: ${scene.cameraMovement}
 Composition: ${scene.composition || "Standard for shot type"}`,
 
-    gaffer: `Lighting: ${scene.lighting.quality} (${scene.lighting.colorTemperature || "Neutral"})
+    gaffer: `Lighting: ${JSON.stringify(scene.lighting, null, 2)}
 Time of Day: ${location.timeOfDay}
 Weather: ${location.weather || "Clear"}`,
 
     scriptSupervisor: previousScene
       ? `Continuity from Scene ${previousScene.id}:
 - Previous action: ${previousScene.description}
-- Previous lighting: ${previousScene.lighting.quality}
+- Previous lighting: ${JSON.stringify(previousScene.lighting)}
 - Continuity notes: ${scene.continuityNotes?.join("; ") || "Standard continuity"}`
       : "First scene - baseline established",
 

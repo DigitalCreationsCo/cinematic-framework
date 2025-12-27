@@ -91,6 +91,7 @@ export class CinematicVideoWorkflow {
 
     this.frameCompositionAgent = new FrameCompositionAgent(
       llmWrapper,
+      llmWrapper,
       this.qualityAgent,
       this.storageManager,
       agentOptions
@@ -722,7 +723,7 @@ export class CinematicVideoWorkflow {
 
         const scene = state.storyboardState.scenes[ state.currentSceneIndex ];
         console.log(
-          `\n🎬 PHASE 3: Processing Scene ${scene.id}/${state.storyboardState.scenes.length}`
+          `\n[process scene]: Processing Scene ${scene.id}/${state.storyboardState.scenes.length}`
         );
 
         await this.publishEvent({
@@ -749,14 +750,14 @@ export class CinematicVideoWorkflow {
             payload: {
               sceneId: scene.id,
               reason: "Video already exists",
-              videoUrl: this.storageManager.buildObjectData(sceneVideoPath).publicUri,
+              videoUrl: this.storageManager.buildObjectData(sceneVideoPath, "").publicUri,
             },
             timestamp: new Date().toISOString(),
           });
 
           const generatedScene = {
             ...scene,
-            generatedVideo: this.storageManager.buildObjectData(sceneVideoPath),
+            generatedVideo: this.storageManager.buildObjectData(sceneVideoPath, ""),
           } as GeneratedScene;
 
           const updatedStoryboardState = this.continuityAgent.updateStoryboardState(
