@@ -33,7 +33,9 @@ export function InterventionModal() {
             }
 
             setPipelineStatus("analyzing");
-            await resumePipeline({ projectId: selectedProject });
+            if (action === "retry" || action === "skip") {
+                await resumePipeline({ projectId: selectedProject });
+            }
             
             setIsLoading(false);
             setInterruptionState(null);

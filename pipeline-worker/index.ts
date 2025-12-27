@@ -107,7 +107,7 @@ async function main() {
 
         try {
             await projectIdStore.run(command.projectId, async () => {
-                switch (command.type) {
+                    switch (command.type) {
                     case "START_PIPELINE":
                         await handleStartPipelineCommand(command, workflowService);
                         break;

@@ -8,6 +8,7 @@ import { LlmController } from "../llm/controller";
 import { z } from "zod";
 import { FileData } from "@google/genai";
 import { buildSafetyGuidelinesPrompt } from "../prompts/safety-instructions";
+import { detectRelevantDomainRules, getProactiveRules } from "../prompts/generation-rules-presets";
 
 const malformedJsonRepairPrompt = (malformedJson: string) => `
 The following string is not valid JSON. Please fix it and return only the valid JSON.
@@ -100,8 +101,16 @@ export class QualityCheckAgent {
     framePosition: "start" | "end",
     characters: Character[],
     locations: Location[],
-    previousFrameUrl?: FileData
+    previousFrameUrl?: FileData,
+    activeRules?: string[]
   ): Promise<QualityEvaluationResult> {
+    const relevantRules = activeRules && activeRules.length > 0
+      ? activeRules
+      : [
+        ...getProactiveRules(),
+        ...detectRelevantDomainRules([ scene.description ])
+      ];
+
     const evaluationPrompt = buildFrameEvaluationPrompt(
       scene,
       frame.publicUri,
@@ -109,7 +118,8 @@ export class QualityCheckAgent {
       QualityEvaluationSchema,
       characters,
       locations,
-      previousFrameUrl
+      previousFrameUrl,
+      relevantRules
     );
 
     const frameUri = frame.storageUri;
@@ -174,9 +184,18 @@ export class QualityCheckAgent {
     location: Location,
     attempt: number,
     previousScene?: Scene,
-    onProgress?: (sceneId: number, message: string) => void
+    onProgress?: (sceneId: number, message: string) => void,
+    activeRules?: string[]
   ): Promise<QualityEvaluationResult> {
     if (onProgress) onProgress(scene.id, "Evaluating scene quality...");
+
+    const relevantRules = activeRules && activeRules.length > 0
+      ? activeRules
+      : [
+        ...getProactiveRules(),
+        ...detectRelevantDomainRules([ scene.description ])
+      ];
+
     const evaluationPrompt = buildSceneVideoEvaluationPrompt(
       scene,
       generatedVideo.publicUri,
@@ -184,7 +203,8 @@ export class QualityCheckAgent {
       QualityEvaluationSchema,
       characters,
       location,
-      previousScene
+      previousScene,
+      relevantRules
     );
 
     const response = await this.llm.generateContent(buildllmParams({

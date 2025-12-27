@@ -34,6 +34,7 @@ import { ContinuityManagerAgent } from "./agents/continuity-manager";
 import { GCPStorageManager } from "./storage-manager";
 import { FrameCompositionAgent } from "./agents/frame-composition-agent";
 import { AudioProcessingAgent } from "./agents/audio-processing-agent";
+import { SemanticExpertAgent } from "./agents/semantic-expert-agent";
 import { LlmController, GoogleProvider } from "./llm/controller";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
@@ -54,6 +55,7 @@ export class CinematicVideoWorkflow {
   private frameCompositionAgent: FrameCompositionAgent;
   private audioProcessingAgent: AudioProcessingAgent;
   private qualityAgent: QualityCheckAgent;
+  private semanticExpert: SemanticExpertAgent;
   private projectId: string;
   private videoId: string;
   private SCENE_GEN_COOLDOWN_MS = 30000;
@@ -84,6 +86,8 @@ export class CinematicVideoWorkflow {
     this.qualityAgent = new QualityCheckAgent(llmWrapper, this.storageManager, {
       enabled: process.env.ENABLE_QUALITY_CONTROL === "true" || true, // always enabled
     }, agentOptions);
+
+    this.semanticExpert = new SemanticExpertAgent(llmWrapper);
 
     this.frameCompositionAgent = new FrameCompositionAgent(
       llmWrapper,
@@ -302,7 +306,7 @@ export class CinematicVideoWorkflow {
     });
 
     // Non-audio workflow path
-    workflow.addEdge("generate_storyboard_exclusively_from_prompt" as any, "generate_character_assets" as any);
+    workflow.addEdge("generate_storyboard_exclusively_from_prompt" as any, "semantic_analysis" as any);
 
     workflow.addNode("generate_storyboard_exclusively_from_prompt", async (state: GraphState) => {
       const nodeName = "generate_storyboard_exclusively_from_prompt";
@@ -359,7 +363,7 @@ export class CinematicVideoWorkflow {
 
     // Audio-based workflow path
     workflow.addEdge("create_scenes_from_audio" as any, "enrich_storyboard_and_scenes" as any);
-    workflow.addEdge("enrich_storyboard_and_scenes" as any, "generate_character_assets" as any);
+    workflow.addEdge("enrich_storyboard_and_scenes" as any, "semantic_analysis" as any);
 
     workflow.addNode("create_scenes_from_audio", async (state: GraphState) => {
       const nodeName = "create_scenes_from_audio";
@@ -421,6 +425,51 @@ export class CinematicVideoWorkflow {
         };
 
         throw new NodeInterrupt(interruptValue);
+      }
+    });
+
+    workflow.addNode("semantic_analysis", async (state: GraphState) => {
+      const nodeName = "semantic_analysis";
+      const currentAttempt = (state.attempts?.[ nodeName ] || 0) + 1;
+
+      try {
+        if (!state.storyboardState) throw new Error("No storyboard state available");
+
+        console.log("\n🧠 PHASE 1c: Semantic Rule Analysis...");
+
+        const { getProactiveRules } = await import("./prompts/generation-rules-presets");
+        const proactiveRules = getProactiveRules();
+
+        const dynamicRules = await this.semanticExpert.generateRules(state.storyboardState);
+
+        const allRules = [ ...proactiveRules, ...dynamicRules ];
+        const uniqueRules = Array.from(new Set(allRules));
+
+        console.log(`   📚 Rules Initialized: ${proactiveRules.length} Global, ${dynamicRules.length} Semantic.`);
+
+        const newState = {
+          ...state,
+          generationRules: uniqueRules,
+          refinedRules: uniqueRules,
+          attempts: {
+            ...state.attempts,
+            [ nodeName ]: 0
+          }
+        };
+
+        await this.saveStateToStorage(newState);
+        await this.publishStateUpdate(newState, "semantic_analysis");
+        return newState;
+
+      } catch (error) {
+        console.error(`[${nodeName}] Error on attempt ${currentAttempt}:`, error);
+        console.log('Falling back to generation rules presets')
+        const { getProactiveRules } = await import("./prompts/generation-rules-presets");
+        return {
+          ...state,
+          generationRules: getProactiveRules(),
+          attempts: { ...state.attempts, [ nodeName ]: 0 } 
+        };
       }
     });
 
@@ -489,28 +538,6 @@ export class CinematicVideoWorkflow {
 
       try {
         if (!state.storyboardState) throw new Error("No storyboard state available");
-
-        // Initialize generation rules if not already set
-        if (!state.generationRules || state.generationRules.length === 0) {
-          const { detectRelevantDomainRules, getProactiveRules } = await import("./prompts/generation-rules-presets");
-
-          const sceneDescriptions = state.storyboardState.scenes.map(s => s.description);
-          const domainRules = detectRelevantDomainRules(sceneDescriptions);
-          const proactiveRules = getProactiveRules();
-
-          const allRules = [ ...proactiveRules, ...domainRules ];
-          const uniqueRules = Array.from(new Set(allRules));
-
-          console.log(`\n📚 GENERATION RULES INITIALIZED`);
-          console.log(`   Proactive rules: ${proactiveRules.length}`);
-          console.log(`   Domain-specific rules: ${domainRules.length}`);
-          console.log(`   Total active rules: ${uniqueRules.length}`);
-
-          state = {
-            ...state,
-            generationRules: uniqueRules
-          };
-        }
 
         console.log("\n🎨 PHASE 2a: Generating Character References...");
 
@@ -831,7 +858,8 @@ export class CinematicVideoWorkflow {
           locationReferenceImages,
           !state.hasAudio,
           onAttemptComplete,
-          onProgress
+          onProgress,
+          state.generationRules
         );
 
         if (result.evaluation) {
@@ -1014,6 +1042,7 @@ export class CinematicVideoWorkflow {
       return state;
     });
 
+    workflow.addEdge("semantic_analysis" as any, "generate_character_assets" as any);
     workflow.addEdge("generate_character_assets" as any, "generate_location_assets" as any);
     workflow.addEdge("generate_location_assets" as any, "generate_scene_assets" as any);
     workflow.addEdge("generate_scene_assets" as any, "process_scene" as any);

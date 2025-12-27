@@ -250,7 +250,8 @@ export class GCPStorageManager {
    * @returns The relative path string (e.g., 'video_123/scenes/storyboard.json').
    */
   getGcsObjectPath(params: GcsObjectPathParams): string {
-    const basePath = this.videoId;
+    // Always include bucket name to ensure full path validity for gs:// URIs
+    const basePath = path.posix.join(this.bucketName, this.videoId);
 
     switch (params.type) {
       case 'state':
@@ -418,8 +419,14 @@ export class GCPStorageManager {
     const fullPath = this.normalizePath(pathOrUri);
     if (fullPath === this.bucketName) return '';
 
-    // Strip bucket name from start (we know it's there from normalizePath)
-    return fullPath.substring(this.bucketName.length + 1);
+    // If path starts with bucket name, strip it to get the object name relative to bucket
+    if (fullPath.startsWith(this.bucketName + '/')) {
+      return fullPath.substring(this.bucketName.length + 1);
+    }
+
+    // If path doesn't start with bucket name, assume it's already relative (or from a different bucket, which we don't support here)
+    // This is a safety fallback for legacy calls that might pass relative paths
+    return fullPath;
   }
 
   /**
@@ -460,8 +467,8 @@ export class GCPStorageManager {
    * Returns the HTTPS public URL for a GCS object.
    * Useful for frontend display.
    */
-  getPublicUrl(gcsPath: string): string {
-    const normalizedPath = this.normalizePath(gcsPath);
+  getPublicUrl(path: string): string {
+    const normalizedPath = this.normalizePath(path);
     return `https://storage.googleapis.com/${normalizedPath}`;
   }
 
@@ -469,8 +476,8 @@ export class GCPStorageManager {
    * Returns the gs:// URI for a GCS object.
    * Useful for backend/API operations.
    */
-  getGcsUrl(gcsPath: string): string {
-    const normalizedPath = this.normalizePath(gcsPath);
+  getGcsUrl(path: string): string {
+    const normalizedPath = this.normalizePath(path);
     return `gs://${normalizedPath}`;
   }
 

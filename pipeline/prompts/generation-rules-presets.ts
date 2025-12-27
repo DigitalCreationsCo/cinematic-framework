@@ -5,14 +5,14 @@
 
 export const DOMAIN_SPECIFIC_RULES = {
   surfing: [
-    "SURFING TERMINOLOGY: 'barrel' or 'tube' refers to the hollow curved interior of a breaking wave (liquid water forming a tunnel), NOT a physical pipe or solid structure. 'Riding' means actively surfing on moving water, NOT sitting stationary. 'Wipeout' means falling into water, NOT falling on sand.",
-    "SURFING ACTIONS: 'Paddling out' shows arms moving in water, 'catching a wave' shows transition from paddling to standing, 'riding' shows active balance and movement on board. All actions must show interaction with liquid water.",
-    "OCEAN PHYSICS: Waves are liquid water in motion. Water is translucent/reflective, NOT solid blue or opaque. Breaking waves create spray and foam. Surfboards float on water surface, NOT above or below it artificially."
+    "[DOMAIN_SEMANTICS_SURFING] TOKEN OVERRIDE 'BARREL': In this context, 'barrel' or 'tube' = [Liquid water, hollow wave interior, translucent, moving fluid]. NEGATIVE CONSTRAINT: [No concrete pipes, no blue plastic tunnels, no solid structures, no dry interiors]. The camera is inside the splash zone.",
+    "[DOMAIN_SEMANTICS_ACTION] PHYSICS ANCHORING: 'Riding' = [Standing on board, weight compression on knees, wake trailing behind board]. 'Wipeout' = [Submersion into liquid, splash particles, loss of board contact]. NEGATIVE CONSTRAINT: [Sitting on water, standing on still water, floating above water].",
+    "[PHYSICS_ENGINE] FLUID DYNAMICS: Water is a translucent liquid that refracts light. It is NOT opaque blue paint. Breaking waves generate white foam/spray. Surfboards displace water (create wakes/ripples). NEGATIVE CONSTRAINT: [No floating objects without displacement, no solid blue surfaces]."
   ],
 
   sports: [
-    "MOTION AUTHENTICITY: Sports actions (running, jumping, throwing) must show authentic biomechanics with appropriate muscle tension, weight distribution, and momentum. No floating, hovering, or physics-defying poses.",
-    "EQUIPMENT HANDLING: Sports equipment must be held and used correctly (proper grip, stance, contact points). Equipment interacts physically with environment (ball bounces, bat hits, racket tension visible)."
+    "[BIOMECHANICS] SKELETAL INTEGRITY: High-action sports (running, surfing) require visible muscle tension and weight distribution. Center of gravity must align with stance. NEGATIVE CONSTRAINT: [Sliding without foot movement, floating jumps, disjointed limbs].",
+    "[EQUIPMENT_HANDLING] PHYSICS INTERACTION: Sports equipment must have realistic contact points and tension. Rackets/bats must compress on impact. Hands must grip handles firmly. NEGATIVE CONSTRAINT: [Floating equipment, hands clipping through objects, weak/loose grip]."
   ],
 
   medical: [
@@ -62,12 +62,11 @@ export const QUALITY_ISSUE_RULES = {
 };
 
 export const PROACTIVE_QUALITY_RULES = [
-  "All character facial features, bone structure, and body proportions must remain pixel-consistent with reference images across all generations. Use reference images as ground truth.",
-  "Character count specifications are strict requirements. If '5 characters' specified, all 5 must be visible and distinguishable in every frame where they should appear.",
-  "Motion and action verbs specify exact physical movements. 'Sprinting' shows fast running with appropriate biomechanics. 'Walking' shows normal gait. 'Standing' shows stationary position. No ambiguous interpretations.",
-  "Temporal state changes accumulate. Wet stays wet until drying scene occurs. Torn stays torn. Dirt accumulates, not disappears. Injuries persist until healing specified.",
-  "Camera angles and directions are specified from camera perspective. 'Toward camera' = approaching viewer. 'Away from camera' = receding from viewer. Maintain this perspective.",
-  "Background layers specified in composition (crowd, buildings, mountains) are MANDATORY scene elements, not optional. Missing background layers is a critical error.",
+  "[GLOBAL_IDENTITY] STRICT IDENTITY LOCK: Character facial features, bone structure, and body proportions must strictly match reference embeddings. 28-year-old male = masculine features. NO gender swapping. NO age drifting. Reference images are GROUND TRUTH, not suggestions.",
+  "[CRITICAL_COUNTING] QUANTITY ENFORCEMENT: Character counts are binary requirements. If '5 characters' are prompted, exactly 5 distinct entities must be visible. 4 is a CRITICAL FAILURE. 6 is a CRITICAL FAILURE. Crowds must be separated from named characters.",
+  "[TEMPORAL_CONTINUITY] STATE PERSISTENCE: Material states (Wet, Dirty, Torn, Injured) are IMMUTABLE unless a specific 'Cleaning/Healing' event occurs. If Frame 1 is wet, Frame 100 MUST be wet. Drying requires a time-lapse transition.",
+  "[CAMERA_VECTOR] VECTOR LOGIC: Camera directions are absolute relative to the lens. 'Toward Camera' = Object scale increasing, distance decreasing. 'Away from Camera' = Object scale decreasing, distance increasing. NEGATIVE CONSTRAINT: [Lateral movement when depth movement is requested].",
+  "[ENVIRONMENT_MANDATE] LAYER COMPOSITION: Specified background layers (mountains, crowds) are REQUIRED to establish scale and parallax. However, Character Consistency takes priority over Background Detail in low-bitrate situations.",
 ];
 
 /**
@@ -133,5 +132,5 @@ export function getQualityRulesForIssues(issueCategories: string[]): string[] {
  * Get all proactive rules to include from the start
  */
 export function getProactiveRules(): string[] {
-  return [...PROACTIVE_QUALITY_RULES];
+  return [ ...PROACTIVE_QUALITY_RULES ];
 }

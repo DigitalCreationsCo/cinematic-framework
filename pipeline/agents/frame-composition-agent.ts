@@ -33,12 +33,16 @@ export class FrameCompositionAgent {
 
         return Promise.all(
             urls.map(async (u) => {
-                const filePathParts = u.split('/');
                 const mimeType = await this.storageManager.getObjectMimeType(u);
                 if (!mimeType) {
                     throw new Error(`Could not determine mime type for ${u}`);
                 }
-                return { fileData: { mimeType, fileUri: u, displayName: filePathParts[ filePathParts.length - 1 ] } };
+                return {
+                    fileData: {
+                        mimeType,
+                        fileUri: u,
+                    }
+                };
             })
         );
     }
@@ -257,12 +261,13 @@ export class FrameCompositionAgent {
         console.log(`   [FrameCompositionAgent] Generating frame for scene ${pathParams.sceneId} (${pathParams.type})...`);
         if (onProgress) onProgress(pathParams.sceneId, `Generating ${pathParams.type.includes('start') ? 'start' : 'end'} frame image...`, "generating");
 
-        const contents: Part[] = [ { text: prompt } ];
+        let contents: Part[] = [ { text: prompt } ];
         const validReferenceImageUrls = [ previousFrame, ...referenceImages ].map(obj => obj?.storageUri).filter((url): url is string => typeof url === 'string' && url.length > 0);
 
-        if (referenceImages.length) {
+        if (validReferenceImageUrls.length > 0) {
             const referenceInput = await this.prepareImageInputs(validReferenceImageUrls);
-            contents.push(...referenceInput);
+            // Prepend images to the prompt
+            contents = [ ...referenceInput, ...contents ];
         }
 
         const outputMimeType = "image/png";
@@ -270,7 +275,6 @@ export class FrameCompositionAgent {
             model: imageModelName,
             contents: contents,
             config: {
-                abortSignal: this.options?.signal,
                 responseModalities: [ Modality.IMAGE ],
                 imageConfig: {
                     outputMimeType: outputMimeType
@@ -290,7 +294,7 @@ export class FrameCompositionAgent {
         const imageBuffer = Buffer.from(generatedImageData, "base64");
 
         // Update storage state with the current attempt if applicable
-        if ('sceneId' in pathParams && 'attempt' in pathParams && pathParams.attempt) {
+        if ('sceneId' in pathParams && 'attempt' in pathParams && typeof pathParams.attempt === 'number') {
             this.storageManager.updateLatestAttempt(pathParams.type, pathParams.sceneId, pathParams.attempt);
         }
 

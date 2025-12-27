@@ -18,6 +18,7 @@ import { retryLlmCall, RetryConfig } from "../lib/llm-retry";
 import { LlmController } from "../llm/controller";
 import { buildllmParams } from "../llm/google/llm-params";
 import { imageModelName, textModelName, videoModelName } from "../llm/google/models";
+import { ThinkingLevel } from "@google/genai";
 
 export class CompositionalAgent {
   private llm: LlmController;
@@ -68,6 +69,9 @@ export class CompositionalAgent {
           config: {
             abortSignal: this.options?.signal,
             responseJsonSchema: zodToJSONSchema(SceneBatchSchema),
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.HIGH
+            }
           }
         }));
         const content = response.text;
@@ -114,25 +118,10 @@ export class CompositionalAgent {
   private async _generateInitialStoryboardContext(creativePrompt: string, scenes: Scene[], retryConfig?: RetryConfig): Promise<Storyboard> {
     console.log("   ... Generating initial context (metadata, characters, locations)...");
 
-    // Use Director's vision prompt for initial context
-    const audioSegments = scenes.map(s => ({
-      startTime: s.startTime,
-      endTime: s.endTime,
-      duration: s.duration,
-      type: s.type || "lyrical",
-      mood: s.mood,
-      intensity: s.intensity || "medium",
-      tempo: s.tempo || "moderate",
-      lyrics: s.lyrics || "",
-      musicalDescription: s.musicalDescription || "",
-      musicChange: s.musicChange || "",
-      transitionType: s.transitionType || "smooth"
-    }));
-
     const totalDuration = scenes.length > 0 ? scenes[ scenes.length - 1 ].endTime : 0;
 
     const jsonSchema = zodToJSONSchema(InitialContextSchema);
-    const systemPrompt = buildDirectorVisionPrompt(creativePrompt, jsonSchema, audioSegments, totalDuration);
+    const systemPrompt = buildDirectorVisionPrompt(creativePrompt, jsonSchema, scenes, totalDuration);
 
     const context = `
       Generate the initial storyboard context including:
@@ -152,6 +141,9 @@ export class CompositionalAgent {
         config: {
           abortSignal: this.options?.signal,
           responseJsonSchema: jsonSchema,
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.HIGH
+          }
         }
       }));
       const content = response.text;
@@ -206,6 +198,9 @@ export class CompositionalAgent {
         config: {
           abortSignal: this.options?.signal,
           temperature: 0.9,
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.HIGH
+          }
         }
       });
 
@@ -245,6 +240,9 @@ export class CompositionalAgent {
           abortSignal: this.options?.signal,
           responseJsonSchema: jsonSchema,
           temperature: 0.8,
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.HIGH
+          }
         }
       }));
 

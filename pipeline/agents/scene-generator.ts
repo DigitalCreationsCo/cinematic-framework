@@ -48,6 +48,7 @@ export class SceneGeneratorAgent {
         generateAudio: boolean = false,
         onAttemptComplete?: (metric: AttemptMetric) => void,
         onProgress?: (sceneId: number, message: string, artifacts?: { generatedVideo: ObjectData; }) => void,
+        generationRules?: string[],
     ): Promise<SceneGenerationResult> {
 
         console.log(`\n🎬 Generating Scene ${scene.id}: ${formatTime(scene.duration)}`);
@@ -66,7 +67,8 @@ export class SceneGeneratorAgent {
                 locationReferenceImages,
                 previousScene,
                 generateAudio,
-                onProgress
+                onProgress,
+                generationRules
             );
 
             if (onAttemptComplete) {
@@ -99,7 +101,8 @@ export class SceneGeneratorAgent {
             locationReferenceImages,
             generateAudio,
             onAttemptComplete,
-            onProgress
+            onProgress,
+            generationRules
         );
     }
 
@@ -121,6 +124,7 @@ export class SceneGeneratorAgent {
         generateAudio = false,
         onAttemptComplete?: (metric: AttemptMetric) => void,
         onProgress?: (sceneId: number, message: string, artifacts?: { generatedVideo: ObjectData; }) => void,
+        generationRules?: string[],
     ): Promise<SceneGenerationResult> {
 
         const acceptanceThreshold = this.qualityAgent.qualityConfig.minorIssueThreshold;
@@ -151,7 +155,8 @@ export class SceneGeneratorAgent {
                     locationReferenceImages,
                     previousScene,
                     generateAudio,
-                    onProgress
+                    onProgress,
+                    generationRules
                 );
 
                 if (onProgress) onProgress(scene.id, "Evaluating quality...");
@@ -164,7 +169,8 @@ export class SceneGeneratorAgent {
                     location,
                     lastestAttempt,
                     previousScene,
-                    onProgress
+                    onProgress,
+                    generationRules
                 );
 
                 score = this.qualityAgent[ "calculateOverallScore" ](evaluation.scores);
@@ -264,9 +270,16 @@ export class SceneGeneratorAgent {
         previousScene?: Scene,
         generateAudio = false,
         onProgress?: (sceneId: number, message: string, artifacts?: { generatedVideo: ObjectData; }) => void,
+        generationRules?: string[],
     ): Promise<GeneratedScene> {
         console.log(`\n🎬 Generating Scene ${scene.id}: ${formatTime(scene.duration)}`);
         console.log(`   Duration: ${scene.duration}s | Shot: ${scene.shotType}`);
+
+        // Inject generation rules into the prompt if present
+        let finalPrompt = enhancedPrompt;
+        if (generationRules && generationRules.length > 0) {
+            finalPrompt += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nMANDATORY GENERATION CONSTRAINTS (STRICT ADHERENCE REQUIRED):\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${generationRules.join('\n')}`;
+        }
 
         const attemptLabel = attempt ? ` (Quality Attempt ${attempt})` : "";
 
@@ -285,7 +298,7 @@ export class SceneGeneratorAgent {
                 onProgress
             ),
             {
-                prompt: enhancedPrompt,
+                prompt: finalPrompt,
                 startFrame: startFrame,
                 endFrame: endFrame,
             },

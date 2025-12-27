@@ -17,6 +17,7 @@ export const buildSceneVideoEvaluationPrompt = (
   characters: Character[],
   location: Location,
   previousScene?: Scene,
+  generationRules: string[] = []
 ): string => {
   // Compose department specifications for evaluation
   const departmentSpecs = composeDepartmentSpecs(
@@ -34,7 +35,8 @@ export const buildSceneVideoEvaluationPrompt = (
     departmentSpecs,
     schema,
     characters,
-    previousScene
+    previousScene,
+    generationRules
   );
 };
 
@@ -215,6 +217,7 @@ export const buildFrameEvaluationPrompt = (
   characters: Character[],
   locations: Location[],
   previousFrame?: any,
+  generationRules: string[] = []
 ): string => {
   // Get location for department specs
   const location = locations.find(l => l.id === scene.locationId) || locations[ 0 ];
@@ -235,7 +238,8 @@ export const buildFrameEvaluationPrompt = (
     schema,
     characters,
     locations,
-    previousFrame
+    previousFrame,
+    generationRules
   );
 };
 

@@ -138,9 +138,9 @@ export class AudioProcessingAgent {
                     role: "user",
                     parts: [
                         // Media first mitigates "lost-in-the-middle" effect
-                        { fileData: audioFile, mediaResolution: { level: PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH, numTokens: audioCountToken.totalTokens } },
-                        { text: prompt },         // System-level instructions
-                        { text: userPrompt },     // Specific user request
+                        { fileData: audioFile, mediaResolution: { numTokens: audioCountToken.totalTokens } },
+                        { text: prompt },
+                        { text: userPrompt },
                     ],
                 },
             ],
@@ -148,9 +148,6 @@ export class AudioProcessingAgent {
                 abortSignal: this.options?.signal,
                 responseJsonSchema: jsonSchema,
                 thinkingConfig: {
-                    /** Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent. */
-                    thinkingBudget: -1,
-                    /** Optional. The level of thoughts tokens that the model should generate. */
                     thinkingLevel: ThinkingLevel.HIGH
                 }
             }

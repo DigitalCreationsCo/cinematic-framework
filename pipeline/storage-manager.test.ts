@@ -16,6 +16,9 @@ const mockBucket = {
   file: vi.fn(() => mockFile),
   getFiles: vi.fn(),
   exists: vi.fn().mockReturnValue([ true ]),
+  iam: {
+    testPermissions: vi.fn().mockResolvedValue([ { 'storage.objects.get': true, 'storage.objects.list': true } ]),
+  },
 };
 
 const mockStorage = {
@@ -86,10 +89,10 @@ describe('GCPStorageManager', () => {
 
       // Verify state by checking path generation (synchronous)
       const path1 = storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 'latest' });
-      expect(path1).toBe('test-video/scenes/scene_001_05.mp4');
+      expect(path1).toBe('test-bucket/test-video/scenes/scene_001_05.mp4');
 
       const path2 = storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 2, attempt: 'latest' });
-      expect(path2).toBe('test-video/scenes/scene_002_03.mp4');
+      expect(path2).toBe('test-bucket/test-video/scenes/scene_002_03.mp4');
 
       // Note: Test setup used _lastframe_ but code uses _frame_end_?
       // Check storage-manager.ts regex.
@@ -104,7 +107,7 @@ describe('GCPStorageManager', () => {
       const attempts = await storageManager.scanCurrentAttempts();
       storageManager.initializeAttempts(attempts);
       const path = storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 'latest' });
-      expect(path).toBe('test-video/scenes/scene_001_01.mp4'); // Default to 1
+      expect(path).toBe('test-bucket/test-video/scenes/scene_001_01.mp4'); // Default to 1
     });
 
     it('should handle GCS errors gracefully', async () => {
@@ -115,32 +118,32 @@ describe('GCPStorageManager', () => {
   });
 
   describe('getGcsObjectPath', () => {
-    it('should generate correct paths for all object types', () => {
-      expect(storageManager.getGcsObjectPath({ type: 'storyboard' })).toBe('test-video/scenes/storyboard.json');
-      expect(storageManager.getGcsObjectPath({ type: 'character_image', characterId: 'char1' })).toBe('test-video/images/characters/char1_reference.png');
-      expect(storageManager.getGcsObjectPath({ type: 'scene_end_frame', sceneId: 1, attempt: 3 })).toBe('test-video/images/frames/scene_001_frame_end_03.png');
-      expect(storageManager.getGcsObjectPath({ type: 'composite_frame', sceneId: 1, attempt: 2 })).toBe('test-video/images/frames/scene_001_composite_02.png');
-      expect(storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 1 })).toBe('test-video/scenes/scene_001_01.mp4');
-      expect(storageManager.getGcsObjectPath({ type: 'scene_quality_evaluation', sceneId: 1, attempt: 5 })).toBe('test-video/scenes/scene_001_evaluation_05.json');
-      expect(storageManager.getGcsObjectPath({ type: 'frame_quality_evaluation', sceneId: 1, framePosition: "end", attempt: 5 })).toBe('test-video/images/frames/scene_001_frame_end_evaluation_05.json');
-      expect(storageManager.getGcsObjectPath({ type: 'stitched_video' })).toBe('test-video/final/movie.mp4');
-      expect(storageManager.getGcsObjectPath({ type: 'final_output' })).toBe('test-video/final/final_output.json');
+    it('should generate correct paths for all object types (including bucket)', () => {
+      expect(storageManager.getGcsObjectPath({ type: 'storyboard' })).toBe('test-bucket/test-video/scenes/storyboard.json');
+      expect(storageManager.getGcsObjectPath({ type: 'character_image', characterId: 'char1' })).toBe('test-bucket/test-video/images/characters/char1_reference.png');
+      expect(storageManager.getGcsObjectPath({ type: 'scene_end_frame', sceneId: 1, attempt: 3 })).toBe('test-bucket/test-video/images/frames/scene_001_frame_end_03.png');
+      expect(storageManager.getGcsObjectPath({ type: 'composite_frame', sceneId: 1, attempt: 2 })).toBe('test-bucket/test-video/images/frames/scene_001_composite_02.png');
+      expect(storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 1 })).toBe('test-bucket/test-video/scenes/scene_001_01.mp4');
+      expect(storageManager.getGcsObjectPath({ type: 'scene_quality_evaluation', sceneId: 1, attempt: 5 })).toBe('test-bucket/test-video/scenes/scene_001_evaluation_05.json');
+      expect(storageManager.getGcsObjectPath({ type: 'frame_quality_evaluation', sceneId: 1, framePosition: "end", attempt: 5 })).toBe('test-bucket/test-video/images/frames/scene_001_frame_end_evaluation_05.json');
+      expect(storageManager.getGcsObjectPath({ type: 'stitched_video' })).toBe('test-bucket/test-video/final/movie.mp4');
+      expect(storageManager.getGcsObjectPath({ type: 'final_output' })).toBe('test-bucket/test-video/final/final_output.json');
     });
 
     it('should use default attempt (1) when attempt is "latest" and no history exists', () => {
-      expect(storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 'latest' })).toBe('test-video/scenes/scene_001_01.mp4');
-      expect(storageManager.getGcsObjectPath({ type: 'scene_end_frame', sceneId: 2, attempt: 'latest' })).toBe('test-video/images/frames/scene_002_frame_end_01.png');
-      expect(storageManager.getGcsObjectPath({ type: 'composite_frame', sceneId: 3, attempt: 'latest' })).toBe('test-video/images/frames/scene_003_composite_01.png');
-      expect(storageManager.getGcsObjectPath({ type: 'scene_quality_evaluation', sceneId: 4, attempt: 'latest' })).toBe('test-video/scenes/scene_004_evaluation_01.json');
-      expect(storageManager.getGcsObjectPath({ type: 'frame_quality_evaluation', sceneId: 4, framePosition: "start", attempt: 'latest' })).toBe('test-video/images/frames/scene_004_frame_start_evaluation_01.json');
+      expect(storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 'latest' })).toBe('test-bucket/test-video/scenes/scene_001_01.mp4');
+      expect(storageManager.getGcsObjectPath({ type: 'scene_end_frame', sceneId: 2, attempt: 'latest' })).toBe('test-bucket/test-video/images/frames/scene_002_frame_end_01.png');
+      expect(storageManager.getGcsObjectPath({ type: 'composite_frame', sceneId: 3, attempt: 'latest' })).toBe('test-bucket/test-video/images/frames/scene_003_composite_01.png');
+      expect(storageManager.getGcsObjectPath({ type: 'scene_quality_evaluation', sceneId: 4, attempt: 'latest' })).toBe('test-bucket/test-video/scenes/scene_004_evaluation_01.json');
+      expect(storageManager.getGcsObjectPath({ type: 'frame_quality_evaluation', sceneId: 4, framePosition: "start", attempt: 'latest' })).toBe('test-bucket/test-video/images/frames/scene_004_frame_start_evaluation_01.json');
     });
 
     it('should use latest attempt when attempt is "latest"', () => {
       storageManager.updateLatestAttempt('scene_video', 1, 5);
       storageManager.updateLatestAttempt('scene_end_frame', 2, 3);
 
-      expect(storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 'latest' })).toBe('test-video/scenes/scene_001_05.mp4');
-      expect(storageManager.getGcsObjectPath({ type: 'scene_end_frame', sceneId: 2, attempt: 'latest' })).toBe('test-video/images/frames/scene_002_frame_end_03.png');
+      expect(storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 'latest' })).toBe('test-bucket/test-video/scenes/scene_001_05.mp4');
+      expect(storageManager.getGcsObjectPath({ type: 'scene_end_frame', sceneId: 2, attempt: 'latest' })).toBe('test-bucket/test-video/images/frames/scene_002_frame_end_03.png');
     });
 
     it('should throw an error for unknown object type', () => {
@@ -151,47 +154,33 @@ describe('GCPStorageManager', () => {
 
   describe('getNextAttemptPath', () => {
     it('should return path with attempt 1 if no history exists', () => {
-      // attempt is optional in getNextAttemptPath params if we want it to auto-calculate
-      // but GcsObjectPathParams now requires attempt.
-      // Wait, getNextAttemptPath signature: getNextAttemptPath(params: GcsObjectPathParams): string
-      // If GcsObjectPathParams requires attempt, we must pass it?
-      // No, getNextAttemptPath logic checks if 'attempt' in params.
-      // Let's verify type definition again.
-      // Versioned params require attempt.
-      // So we must pass attempt... but getNextAttemptPath ignores it?
-      // Or we should relax the type for getNextAttemptPath input?
-      // The implementation does: if (!('attempt' in params)) return getGcsObjectPath(params).
-      // But we can't pass params without attempt in TS.
-      // So we must pass a dummy attempt or 'latest'.
-      // Let's check implementation again.
-
       const path = storageManager.getNextAttemptPath({ type: 'scene_video', sceneId: 10, attempt: 'latest' });
-      expect(path).toBe('test-video/scenes/scene_010_01.mp4');
+      expect(path).toBe('test-bucket/test-video/scenes/scene_010_01.mp4');
     });
 
     it('should increment existing latest attempt', () => {
       storageManager.updateLatestAttempt('scene_video', 10, 5);
       const path = storageManager.getNextAttemptPath({ type: 'scene_video', sceneId: 10, attempt: 'latest' });
-      expect(path).toBe('test-video/scenes/scene_010_06.mp4');
+      expect(path).toBe('test-bucket/test-video/scenes/scene_010_06.mp4');
     });
 
     it('should update internal state', () => {
       storageManager.getNextAttemptPath({ type: 'scene_video', sceneId: 20, attempt: 'latest' }); // attempt 1
       const path = storageManager.getNextAttemptPath({ type: 'scene_video', sceneId: 20, attempt: 'latest' }); // attempt 2
-      expect(path).toBe('test-video/scenes/scene_020_02.mp4');
+      expect(path).toBe('test-bucket/test-video/scenes/scene_020_02.mp4');
     });
   });
 
   describe('updateLatestAttempt', () => {
     it('should set the latest attempt for a given object type and sceneId', () => {
       storageManager.updateLatestAttempt('scene_video', 1, 3);
-      expect(storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 'latest' })).toBe('test-video/scenes/scene_001_03.mp4');
+      expect(storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 'latest' })).toBe('test-bucket/test-video/scenes/scene_001_03.mp4');
     });
 
     it('should only update if the new attempt is greater than the current', () => {
       storageManager.updateLatestAttempt('scene_video', 1, 5);
       storageManager.updateLatestAttempt('scene_video', 1, 3); // Should not update
-      expect(storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 'latest' })).toBe('test-video/scenes/scene_001_05.mp4');
+      expect(storageManager.getGcsObjectPath({ type: 'scene_video', sceneId: 1, attempt: 'latest' })).toBe('test-bucket/test-video/scenes/scene_001_05.mp4');
     });
 
     // Note: updateLatestAttempt in source does NOT save to persistence file anymore?
@@ -203,7 +192,7 @@ describe('GCPStorageManager', () => {
 
   describe('getPublicUrl', () => {
     it('should return the correct public URL', () => {
-      const path = 'test-video/final/movie.mp4';
+      const path = 'test-bucket/test-video/final/movie.mp4';
       const expectedUrl = 'https://storage.googleapis.com/test-bucket/test-video/final/movie.mp4';
       expect(storageManager.getPublicUrl(path)).toBe(expectedUrl);
     });
@@ -211,7 +200,7 @@ describe('GCPStorageManager', () => {
 
   describe('getGcsUrl', () => {
     it('should return the correct GCS URL', () => {
-      const path = 'test-video/final/movie.mp4';
+      const path = 'test-bucket/test-video/final/movie.mp4';
       const expectedUrl = 'gs://test-bucket/test-video/final/movie.mp4';
       expect(storageManager.getGcsUrl(path)).toBe(expectedUrl);
     });

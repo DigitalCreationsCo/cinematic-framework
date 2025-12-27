@@ -110,9 +110,8 @@ export default function DebugStatePanel() {
             <Card className="h-full flex flex-col">
                 <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0 shrink-0">
                     <CardTitle className="text-sm font-semibold">Application State (Debug)</CardTitle>
-                    <Button variant="outline" size="sm" onClick={ handleCopy }>
-                        <Copy className="w-4 h-4 mr-2" />
-                        Copy JSON
+                    <Button variant="ghost" size="sm" onClick={ handleCopy }>
+                        <Copy className="w-4 h-4" />
                     </Button>
                 </CardHeader>
                 <CardContent className="flex-1 p-0 overflow-hidden">

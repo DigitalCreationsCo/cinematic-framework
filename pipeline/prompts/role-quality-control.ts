@@ -22,12 +22,23 @@ export const buildQualityControlPrompt = (
   generatedAsset: string,
   assetType: "video" | "frame",
   departmentSpecs: DepartmentSpecs,
-  schema: object
+  schema: object,
+  generationRules: string[] = []
 ) => `
 You are the QUALITY CONTROL SUPERVISOR evaluating ${assetType} for Scene ${scene.id}.
 
 ASSET LOCATION: ${generatedAsset}
 
+${generationRules.length > 0 ? `━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GENERATION RULES COMPLIANCE (STRICT):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The following rules are MANDATORY constraints. Any violation is a CRITICAL FAILURE.
+
+${generationRules.map(r => `• ${r}`).join('\n')}
+
+INSTRUCTION: You must explicitly check the asset against EACH of these rules.
+If any rule is violated, you must report it as a MAJOR or CRITICAL issue.
+` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EVALUATION RUBRIC (Department-by-Department):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -164,9 +175,10 @@ export const buildQualityControlVideoPrompt = (
   departmentSpecs: DepartmentSpecs,
   schema: object,
   characters: any[],
-  previousScene?: Scene
+  previousScene?: Scene,
+  generationRules: string[] = []
 ) => `
-${buildQualityControlPrompt(scene, videoUrl, "video", departmentSpecs, schema)}
+${buildQualityControlPrompt(scene, videoUrl, "video", departmentSpecs, schema, generationRules)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ADDITIONAL CONTEXT:
@@ -199,9 +211,10 @@ export const buildQualityControlFramePrompt = (
   schema: object,
   characters: any[],
   locations: any[],
-  previousFrameUrl?: any
+  previousFrameUrl?: any,
+  generationRules: string[] = []
 ) => `
-${buildQualityControlPrompt(scene, frameUrl, "frame", departmentSpecs, schema)}
+${buildQualityControlPrompt(scene, frameUrl, "frame", departmentSpecs, schema, generationRules)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 KEYFRAME CONTEXT:
