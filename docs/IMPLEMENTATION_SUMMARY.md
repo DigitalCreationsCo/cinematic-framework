@@ -116,6 +116,7 @@ The project now includes the following new/modified files/directories:
 The `GCPStorageManager` has been enhanced to enforce strict attempt versioning for all generated assets, preventing the accidental creation of invalid files (e.g., `scene_001_00.mp4`).
 
 **Key Changes:**
+
 - **Explicit Attempt Requirements**: The `GcsObjectPathParams` type now enforces an explicit `attempt` parameter for all versioned assets (`scene_video`, `scene_start_frame`, etc.). Developers must specify either a specific version number or `'latest'`.
 - **Strict Defaulting**: The internal resolution logic now defaults to attempt `1` (instead of `0`) when no history exists, ensuring that the first generated file is always indexed as `01`.
 - **Safety Checks**: Implicit calls to `getGcsObjectPath` without an attempt strategy are now caught by the TypeScript compiler.
@@ -126,4 +127,32 @@ The `GCPStorageManager` has been enhanced to enforce strict attempt versioning f
 
 The shift to a command-driven, persistent state model is robust. The introduction of the **Human-in-the-Loop LLM Retry** utility and **Enhanced Asset Attempt Tracking** ensures reliability and durability, supporting new client control commands like `REGENERATE_FRAME` and `RESOLVE_INTERVENTION`. The Distributed Locking mechanism remains a future enhancement, currently disabled.
 
-**Implementation Status:** **✅ Complete** (All core architecture, persistence, command handling, temporal state tracking, real-time logging, and new media synchronization logic are implemented and documented.)
+---
+
+## 8. Semantic Constraint & Physics Framework
+
+### Semantic Expert Agent Integration
+
+- **Workflow**: `semantic_analysis` node has been added to `pipeline/graph.ts`. It runs *before* character and scene generation, ensuring that all downstream agents receive context-aware constraints.
+- **Function**: It analyzes the full storyboard and generates rules like `[DOMAIN_KEYWORD] RULE TITLE: <Definition> NEGATIVE CONSTRAINT: <What to avoid>`, matching your rigorous specification.
+
+#### Constraint-Injection Framework Adoption
+
+- **Updated Presets**: `pipeline/prompts/generation-rules-presets.ts` has been overhauled.
+  - **Global Invariants**: `PROACTIVE_QUALITY_RULES` now include strict rules for Identity, Counting, Continuity, and Vector Logic.
+  - **Semantic Overrides**: Domain rules now define what tokens *mean* (e.g., "Barrel = Liquid water") and what they *are not* (Negative Embeddings).
+- **Prompt Instruction**: `pipeline/prompts/semantic-rules-instruction.ts` instructs the new agent to strictly follow this framework.
+
+#### End-to-End Enforcement
+
+- **Scene Generation**: `SceneGeneratorAgent` now injects these rules directly into the video generation prompt as "MANDATORY GENERATION CONSTRAINTS". This fixes the "weak generative constraints" issue by providing the model with explicit physics anchors and negative prompts during generation.
+- **Quality Control**: `QualityCheckAgent` and the underlying `role-quality-control.ts` prompts have been updated to evaluate against these specific, dynamic rules.
+
+#### Backward Compatibility
+
+- The `generationRules` state remains a `string[]`, but the *content* of those strings is now structured (e.g., `[CATEGORY] Rule...`).
+- All new arguments in agents are optional (`?`), ensuring existing code paths (if any bypass the graph) remain functional.
+
+The system is now capable of identifying domain-specific physics (e.g., "Low Gravity", "Underwater") and enforcing them as strict, binary constraints throughout the generation and evaluation lifecycle.
+
+**Implementation Status:** **✅ Complete** (All core architecture, persistence, command handling, temporal state tracking, real-time logging, new media synchronization logic, and semantic constraint framework are implemented and documented.)
