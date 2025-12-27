@@ -29,7 +29,7 @@ export class FrameCompositionAgent {
         this.options = options;
     }
 
-    async prepareImageInputs(urls: string[]): Promise<Part[]> {
+    async prepareImageInputs(urls: string[]): Promise<FileData[]> {
 
         return Promise.all(
             urls.map(async (u) => {
@@ -37,11 +37,12 @@ export class FrameCompositionAgent {
                 if (!mimeType) {
                     throw new Error(`Could not determine mime type for ${u}`);
                 }
+                const fileParts = u.split('/');
+                const displayName = fileParts[ fileParts.length - 1 ];
                 return {
-                    fileData: {
-                        mimeType,
-                        fileUri: u,
-                    }
+                    displayName,
+                    mimeType,
+                    fileUri: u,
                 };
             })
         );
@@ -268,9 +269,13 @@ export class FrameCompositionAgent {
         const validReferenceImageUrls = [ previousFrame, ...referenceImages ].map(obj => obj?.storageUri).filter((url): url is string => typeof url === 'string' && url.length > 0);
 
         if (validReferenceImageUrls.length > 0) {
-            const referenceInput = await this.prepareImageInputs(validReferenceImageUrls);
-            // Prepend images to the prompt
-            contents = [ ...referenceInput, ...contents ];
+            const fileDataInputs = await this.prepareImageInputs(validReferenceImageUrls);
+            const referenceInputs: Part[] = [];
+            fileDataInputs.map(({ displayName, ...file }) => {
+                referenceInputs.push({ text: displayName });
+                referenceInputs.push({ fileData: file });
+            });
+            contents = [ ...referenceInputs, ...contents ];
         }
 
         const outputMimeType = "image/png";

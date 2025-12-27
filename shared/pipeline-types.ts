@@ -3,6 +3,102 @@ import { z } from "zod";
 export const getJsonSchema = (schema: z.ZodType) => z.toJSONSchema(schema, { target: "openapi-3.0" });
 
 // ============================================================================
+// CONSTANTS
+// ============================================================================
+
+export const VALID_DURATIONS = [ 5, 6, 7, 8 ] as const;
+export type ValidDuration = typeof VALID_DURATIONS[ number ];
+
+export const TransitionTypesSchema = z.enum([
+  "Cut",
+  "Hard Cut",
+  "Jump Cut",
+  "Smash Cut",
+  "Dissolve",
+  "Cross Fade",
+  "Fade",
+  "Fade to Black",
+  "Wipe",
+  "Iris In",
+  "Iris Out",
+  "Push",
+  "Slide",
+  "none"
+]);
+export type TransitionType = z.infer<typeof TransitionTypesSchema.options[ number ]>;
+
+// Cinematographer shot type menu (aligned with role-cinematographer.ts)
+export const ShotTypesSchema = z.union([
+  z.literal("Extreme Close-Up").describe("Eyes, hands, small object details"),
+  z.literal("Close-Up").describe("Head and shoulders only"),
+  z.literal("Medium Close-Up").describe("Chest up"),
+  z.literal("Medium Shot").describe("Waist up"),
+  z.literal("Medium Wide").describe("Knees up"),
+  z.literal("Wide Shot").describe("Full body head-to-toe visible"),
+  z.literal("Very Wide/Establishing").describe("Environment dominates, characters small in frame"),
+]);
+export const shotTypesWithDescriptions = ShotTypesSchema.options.map(option => ({
+  value: option.value,
+  description: option.description
+}));
+export type ShotType = z.Infer<typeof ShotTypesSchema.options[ number ]>;
+
+// Cinematographer camera movement menu (aligned with role-cinematographer.ts)
+export const CameraMovementsSchema = z.union([
+  z.literal("Static").describe("No movement [use for: stable moments, observation]"),
+  z.literal("Pan Left").describe("Horizontal rotation [use for: following action, revealing space]"),
+  z.literal("Pan Right").describe("Horizontal rotation [use for: following action, revealing space]"),
+  z.literal("Pan").describe("Horizontal rotation [use for: following action, revealing space]"),
+  z.literal("Tilt Up").describe("Vertical rotation [use for: revealing scale, subject to context]"),
+  z.literal("Tilt Down").describe("Vertical rotation [use for: revealing scale, subject to context]"),
+  z.literal("Tilt").describe("Vertical rotation [use for: revealing scale, subject to context]"),
+  z.literal("Dolly In").describe("Moving toward subject [use for: intensifying focus, building tension]"),
+  z.literal("Dolly Out").describe("Moving away [use for: revealing context, showing isolation]"),
+  z.literal("Track Left").describe("Moving alongside [use for: dynamic action, following character]"),
+  z.literal("Track Right").describe("Moving alongside [use for: dynamic action, following character]"),
+  z.literal("Track").describe("Moving alongside [use for: dynamic action, following character]"),
+  z.literal("Crane Up").describe("Sweeping vertical [use for: grand reveals, transitions]"),
+  z.literal("Crane Down").describe("Sweeping vertical [use for: grand reveals, transitions]"),
+  z.literal("Crane").describe("Sweeping vertical [use for: grand reveals, transitions]"),
+  z.literal("Handheld").describe("Unstable, organic [use for: intimacy, chaos, urgency]"),
+  z.literal("Steadicam").describe(""),
+  z.literal("Drone").describe(""),
+  z.literal("Aerial").describe(""),
+  z.literal("Orbit").describe(""),
+  z.literal("Zoom In").describe(""),
+  z.literal("Zoom Out").describe(""),
+]);
+export const cameraMovementsWithDescriptions = CameraMovementsSchema.options.map(option => ({
+  value: option.value,
+  description: option.description
+}));
+export type CameraMovement = z.infer<typeof CameraMovementsSchema.options[ number ]>;
+
+// Cinematographer camera angle menu (aligned with role-cinematographer.ts)
+export const CameraAnglesSchema = z.union([
+  z.literal("Eye Level").describe("Neutral, relatable perspective"),
+  z.literal("High Angle").describe("15-45° looking down (subject appears smaller/vulnerable)"),
+  z.literal("Low Angle").describe("15-45° looking up (subject appears larger/powerful)"),
+  z.literal("Bird's Eye").describe("90° directly overhead"),
+  z.literal("Dutch Angle").describe("Tilted horizon (creates psychological unease)"),
+]);
+export const cameraAnglesWithDescriptions = CameraAnglesSchema.options.map(option => ({
+  value: option.value,
+  description: option.description
+}));
+export type CameraAngle = z.infer<typeof CameraAnglesSchema.options[ number ]>;
+
+export const CompositionSchema = z.object({
+  "Subject Placement": z.string().describe("e.g., Left third, Center, Right third"),
+  "Focal Point": z.string().describe("What draws the eye first"),
+  "Depth Layers": z.string().describe("Foreground: X, Midground: Y, Background: Z"),
+  "Leading Lines": z.string().describe("Deliberate edges, shapes, or trajectories directing a viewer's eyes toward subject"),
+  "Headroom": z.string().describe("Space above a subject's head. e.g., Tight, Standard, Generous"),
+  "Look Room": z.string().describe("negative intentional space between a subject's face and the edge of the frame in the direction they are looking"),
+});
+export type Composition = z.infer<typeof CompositionSchema>;
+
+// ============================================================================
 // AUDIO ANALYSIS SCHEMAS (Director: Musical Structure)
 // ============================================================================
 
@@ -17,7 +113,7 @@ export const AudioSegmentSchema = z.object({
   intensity: z.enum([ "low", "medium", "high", "extreme" ]).describe("Energy level of this segment"),
   mood: z.string().describe("Emotional tone (e.g., aggressive, melancholic, triumphant, mysterious)"),
   tempo: z.enum([ "slow", "moderate", "fast", "very_fast" ]).describe("Pace of the music"),
-  transitionType: z.string().describe("cinematic transition type (e.g., Cut, Dissolve, Fade, Smash Cut, Wipe)"),
+  transitionType: TransitionTypesSchema.describe("cinematic transition type"),
   // --- NEW: GROUNDING FIELDS ---
   audioEvidence: z.string().describe(
     "Verifiable sonic proof from this segment (e.g., 'Heavy kick drum starts at 4.2s', 'Reverb-heavy female vocal enters', 'High-pass filter sweep')."
@@ -581,79 +677,6 @@ export interface FrameGenerationResult {
   evaluation: QualityEvaluationResult | null;
   warning?: string;
 }
-
-// ============================================================================
-// CONSTANTS (Cinematographer & Director Reference)
-// ============================================================================
-
-export const VALID_DURATIONS = [ 5, 6, 7, 8 ] as const;
-export type ValidDuration = typeof VALID_DURATIONS[ number ];
-
-export const TRANSITION_TYPES = [
-  "Cut",
-  "Hard Cut",
-  "Jump Cut",
-  "Smash Cut",
-  "Dissolve",
-  "Cross Fade",
-  "Fade",
-  "Fade to Black",
-  "Wipe",
-  "Iris In",
-  "Iris Out",
-  "Push",
-  "Slide",
-] as const;
-export type TransitionType = typeof TRANSITION_TYPES[ number ];
-
-// Cinematographer shot type menu (aligned with role-cinematographer.ts)
-export const SHOT_TYPES = [
-  "ECU", // Extreme Close-Up
-  "CU", // Close-Up
-  "MCU", // Medium Close-Up
-  "MS", // Medium Shot
-  "MW", // Medium Wide
-  "WS", // Wide Shot
-  "VW", // Very Wide/Establishing
-] as const;
-export type ShotType = typeof SHOT_TYPES[ number ];
-
-// Cinematographer camera movement menu (aligned with role-cinematographer.ts)
-export const CAMERA_MOVEMENTS = [
-  "Static",
-  "Pan Left",
-  "Pan Right",
-  "Pan", // Generic pan
-  "Tilt Up",
-  "Tilt Down",
-  "Tilt", // Generic tilt
-  "Dolly In",
-  "Dolly Out",
-  "Track Left",
-  "Track Right",
-  "Track", // Generic track
-  "Crane Up",
-  "Crane Down",
-  "Crane", // Generic crane
-  "Handheld",
-  "Steadicam",
-  "Drone",
-  "Aerial",
-  "Orbit",
-  "Zoom In",
-  "Zoom Out",
-] as const;
-export type CameraMovement = typeof CAMERA_MOVEMENTS[ number ];
-
-// Cinematographer camera angle menu (aligned with role-cinematographer.ts)
-export const CAMERA_ANGLES = [
-  "Eye Level",
-  "High Angle",
-  "Low Angle",
-  "Bird's Eye",
-  "Dutch Angle",
-] as const;
-export type CameraAngle = typeof CAMERA_ANGLES[ number ];
 
 export interface QualityConfig {
   enabled: boolean;

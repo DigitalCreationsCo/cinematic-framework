@@ -198,10 +198,7 @@ export const composeFrameGenerationPrompt = (
     ? `\nGENERATION RULES:\n${generationRules.map((rule) => `- ${rule}`).join("\n")}`
     : "";
 
-  return `
-IMAGE GENERATION PROMPT:
-
-${cinematography}
+  return `${cinematography}
 
 ACTION & MOOD:
 ${scene.description}

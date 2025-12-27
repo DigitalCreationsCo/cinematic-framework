@@ -1,10 +1,12 @@
 export const promptVersion = "3.0.0-cinematographer";
 
-import { Scene } from "../../shared/pipeline-types";
+import { cameraAnglesWithDescriptions, cameraMovementsWithDescriptions, CompositionSchema, getJsonSchema, Scene, shotTypesWithDescriptions, TransitionTypesSchema } from "../../shared/pipeline-types";
 
 /**
  * CINEMATOGRAPHER - Shot Composition & Framing
  * Specifies shot type, camera angle, camera movement, and composition
+ * 
+ * (Currently not used in favoer of narraitve approach by buildCinematographerNarrative)
  */
 
 export const buildCinematographerGuidelines = () => `
@@ -15,44 +17,22 @@ For each scene, select from these options:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SHOT TYPE (choose ONE):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- ECU (Extreme Close-Up): Eyes, hands, small object details
-- CU (Close-Up): Head and shoulders only
-- MCU (Medium Close-Up): Chest up
-- MS (Medium Shot): Waist up
-- MW (Medium Wide): Knees up
-- WS (Wide Shot): Full body head-to-toe visible
-- VW (Very Wide/Establishing): Environment dominates, characters small in frame
+${JSON.stringify(shotTypesWithDescriptions)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CAMERA ANGLE (choose ONE):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- Eye Level: Neutral, relatable perspective
-- High Angle: 15-45° looking down (subject appears smaller/vulnerable)
-- Low Angle: 15-45° looking up (subject appears larger/powerful)
-- Bird's Eye: 90° directly overhead
-- Dutch Angle: Tilted horizon (creates psychological unease)
+${JSON.stringify(cameraAnglesWithDescriptions)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CAMERA MOVEMENT (choose ONE):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- Static: No movement [use for: stable moments, observation]
-- Pan Left/Right: Horizontal rotation [use for: following action, revealing space]
-- Tilt Up/Down: Vertical rotation [use for: revealing scale, subject to context]
-- Dolly In: Moving toward subject [use for: intensifying focus, building tension]
-- Dolly Out: Moving away [use for: revealing context, showing isolation]
-- Track/Follow: Moving alongside [use for: dynamic action, following character]
-- Handheld: Unstable, organic [use for: intimacy, chaos, urgency]
-- Crane/Aerial: Sweeping vertical [use for: grand reveals, transitions]
+${JSON.stringify(cameraMovementsWithDescriptions)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 COMPOSITION (specify all):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- Subject Placement: [Left third / Center / Right third]
-- Focal Point: [What draws the eye first]
-- Depth Layers: [Foreground: X, Midground: Y, Background: Z]
-- Leading Lines: [Any lines guiding viewer's eye toward subject]
-- Headroom: [Tight/Standard/Generous - space above subject's head]
-- Look Room: [Space in direction subject faces or moves]
+${JSON.stringify(getJsonSchema(CompositionSchema))}
 `;
 
 export const buildCinematographerFrameComposition = (
@@ -69,22 +49,14 @@ FRAME POSITION: ${framePosition.toUpperCase()}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SHOT SELECTION:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Shot Type: ${scene.shotType || "[Select from: ECU, CU, MCU, MS, MW, WS, VW]"}
-Camera Angle: [Select from: Eye Level, High Angle, Low Angle, Bird's Eye, Dutch]
-Camera Movement: ${scene.cameraMovement || "[Select from: Static, Pan, Tilt, Dolly In/Out, Track, Handheld, Crane]"}
+Shot Type: ${scene.shotType || JSON.stringify(shotTypesWithDescriptions)}
+Camera Angle: ${JSON.stringify(cameraAnglesWithDescriptions)}
+Camera Movement: ${scene.cameraMovement || JSON.stringify(cameraMovementsWithDescriptions)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 COMPOSITION:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Subject Placement: [Left third / Center / Right third]
-Focal Point: [Primary element that draws viewer's eye]
-Depth Layers:
-  - Foreground: [What's closest to camera]
-  - Midground: [Where main action occurs]
-  - Background: [Environmental context]
-Leading Lines: [Describe any lines guiding eye to subject]
-Headroom: [Tight / Standard / Generous]
-Look Room: [Space in direction of subject's gaze or motion]
+${JSON.stringify(getJsonSchema(CompositionSchema))}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${framePosition === "start" ? "START FRAME" : "END FRAME"} SPECIFIC:
