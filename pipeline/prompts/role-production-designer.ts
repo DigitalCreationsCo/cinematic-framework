@@ -101,3 +101,27 @@ REFERENCE IMAGE: ${location.referenceImages?.[ 0 ] || "Not yet generated"}
 CONSTRAINT: Environment MUST match reference image EXACTLY in all scenes at this location.
 `;
 };
+
+export const buildProductionDesignerNarrative = (location: Location): string => {
+  const timeAndWeather = [
+    location.timeOfDay,
+    location.weather !== "Clear" ? location.weather : null
+  ].filter(Boolean).join(", ");
+
+  const elements = [
+    ...(location.naturalElements || []),
+    ...(location.manMadeObjects || [])
+  ];
+
+  const elementDesc = elements.length > 0
+    ? ` The scene features ${elements.join(", ")}.`
+    : "";
+
+  const lighting = location.lightingConditions?.quality
+    ? ` The lighting is ${location.lightingConditions.quality.toLowerCase()}.`
+    : "";
+
+  const mood = location.mood ? ` The atmosphere is ${location.mood.toLowerCase()}.` : "";
+
+  return `Setting: ${location.name}, a ${location.type || "location"} during ${timeAndWeather}.${elementDesc}${lighting}${mood} ${location.description}`;
+};

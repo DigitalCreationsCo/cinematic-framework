@@ -47,7 +47,7 @@ const buildLegacySceneVideoEvaluationPrompt = (
   schema: object,
   characters: Character[],
   previousScene?: Scene,
-): string => `You are a professional video quality control specialist for a cinema production. Evaluate this generated scene against the production requirements.
+): string => `As a professional video quality control specialist for a cinema production, evaluate this generated scene against the production requirements.
 
 ========================================
 SCENE SPECIFICATIONS
@@ -186,7 +186,7 @@ Reasoning: "Specific spatial positioning maintains geography and adds symbolic d
 
 GENERATION RULE SUGGESTION (Optional)
 
-If you identify a fundamental flaw that is likely to recur in future scenes (e.g., inconsistent art style, persistent character distortion, incorrect lighting motifs), suggest a new, globally applicable "Generation Rule" to prevent it. This rule should be a concise, positive instruction.
+Identify a fundamental flaw that is likely to recur in future scenes (e.g., inconsistent art style, persistent character distortion, incorrect lighting motifs), suggest a new, globally applicable "Generation Rule" to prevent it. This rule should be a concise, positive instruction.
 
 - DO suggest rules for systemic issues (e.g., "All scenes must maintain a shallow depth of field (f/1.4-f/2.8) to isolate characters.")
 - DO NOT suggest rules for scene-specific content (e.g., "The character should be smiling in this scene.")
@@ -257,7 +257,7 @@ const buildLegacyFrameEvaluationPrompt = (
   const sceneLocation = locations.find(l => l.id === scene.locationId);
   if (!sceneLocation) throw Error("[buildLegacyFrameEvaluationPrompt]: Location not found");
 
-  return `You are a professional cinematography and VFX specialist evaluating keyframes for high-end video production. Evaluate this generated still frame that will serve as a ${framePosition === "start" ? "starting" : "ending"} keyframe anchor for video generation.
+  return `As a professional cinematography and VFX specialist evaluating keyframes for high-end video production, evaluate this generated still frame that will serve as a ${framePosition === "start" ? "starting" : "ending"} keyframe anchor for video generation.
 
 This frame must work both as a standalone cinematic image AND as a reliable anchor point for generating the video sequence described below.
 
@@ -431,7 +431,7 @@ Reasoning: "${framePosition} frames must bridge scenes logically. Reference prev
 GENERATION RULE SUGGESTION (Optional)
 ========================================
 
-If you identify a fundamental flaw likely to recur in future keyframes (e.g., inconsistent art style, persistent character distortion, poor keyframe pose selection, incorrect lighting motifs), suggest a new globally applicable "Generation Rule" to prevent it. This rule should be a concise, positive instruction applicable to keyframe generation broadly.
+Identify a fundamental flaw likely to recur in future keyframes (e.g., inconsistent art style, persistent character distortion, poor keyframe pose selection, incorrect lighting motifs), suggest a new globally applicable "Generation Rule" to prevent it. This rule should be a concise, positive instruction applicable to keyframe generation broadly.
 
 - DO suggest rules for systemic issues (e.g., "All keyframes must capture characters in clear, stable poses with weight fully settled—avoid mid-transition or mid-gesture moments.")
 - DO NOT suggest rules for scene-specific content (e.g., "The character should be smiling in this scene.")
@@ -447,7 +447,7 @@ OUTPUT FORMAT
 Return JSON in this exact structure:
 ${schema}
 
-Be thorough but fair in your evaluation. Minor imperfections are acceptable if they don't impact the frame's usability as a keyframe anchor. Focus on issues that would:
+Conduct thorough evaluation. Minor imperfections are acceptable if they don't impact the frame's usability as a keyframe anchor. Focus on issues that would:
 1. Significantly impact viewer experience
 2. Cause problems during video generation
 3. Break character/scene continuity

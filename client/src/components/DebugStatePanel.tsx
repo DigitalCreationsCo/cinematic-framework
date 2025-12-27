@@ -106,7 +106,7 @@ export default function DebugStatePanel() {
     };
 
     return (
-        <div className="h-full p-4">
+        <div className="h-full p-4 select-text">
             <Card className="h-full flex flex-col">
                 <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0 shrink-0">
                     <CardTitle className="text-sm font-semibold">Application State (Debug)</CardTitle>

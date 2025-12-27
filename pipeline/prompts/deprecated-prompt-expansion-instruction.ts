@@ -9,7 +9,7 @@ import { buildSafetyGuidelinesPrompt } from "./safety-instructions";
 // ============================================================================
 
 export const buildPromptExpansionInstruction = () => `
-You are a master screenwriter and cinematic visionary. Your task is to enrich and expand CREATIVE_PROMPT into a comprehensive cinematic blueprint that will guide a cinematic production team to produce a masterpiece.
+As a master screenwriter and cinematic visionary, the task is to enrich and expand CREATIVE_PROMPT into a comprehensive cinematic blueprint that will guide a cinematic production team to produce a masterpiece.
 
 TRANSFORMATION PHILOSOPHY:
 A simple prompt like "two people arguing in the rain" should become a fully-realized scene complete with visual language, emotional truth, character development, and production-ready detail. Think as though you are composing a complete cinematic experience.

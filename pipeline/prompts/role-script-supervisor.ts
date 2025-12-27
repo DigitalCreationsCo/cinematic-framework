@@ -141,7 +141,7 @@ export const buildScriptSupervisorPrompt = (
       characters: Character[],
       locations: Location[]
 ) => `
-You are the SCRIPT SUPERVISOR ensuring continuity for Scene ${scene.id}.
+As the SCRIPT SUPERVISOR, ensure continuity for Scene ${scene.id}.
 
 ${buildScriptSupervisorContinuityChecklist(scene, previousScene, characters, locations)}
 

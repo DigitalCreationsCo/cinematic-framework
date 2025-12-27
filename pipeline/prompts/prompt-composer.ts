@@ -7,11 +7,11 @@
 
 import { Scene, Character, Location, QualityEvaluationResult } from "../../shared/pipeline-types";
 import { buildDirectorSceneBeatPrompt } from "./role-director";
-import { buildCinematographerGuidelines, buildCinematographerFrameComposition } from "./role-cinematographer";
+import { buildCinematographerGuidelines, buildCinematographerFrameComposition, buildCinematographerNarrative } from "./role-cinematographer";
 import { buildGafferGuidelines, buildGafferLightingSpec } from "./role-gaffer";
 import { buildScriptSupervisorContinuityChecklist } from "./role-script-supervisor";
-import { buildCostumeAndMakeupSpec } from "./role-costume-makeup";
-import { buildProductionDesignerSpec } from "./role-production-designer";
+import { buildCostumeAndMakeupSpec, buildCostumeAndMakeupNarrative } from "./role-costume-makeup";
+import { buildProductionDesignerSpec, buildProductionDesignerNarrative } from "./role-production-designer";
 import { formatCharacterSpecs, formatLocationSpecs } from "../utils";
 
 /**
@@ -187,60 +187,50 @@ export const composeFrameGenerationPrompt = (
 ) => {
   const location = locations.find((l) => l.id === scene.locationId);
 
+  // Build the narrative components
+  const cinematography = buildCinematographerNarrative(scene, framePosition);
+  const locationNarrative = location ? buildProductionDesignerNarrative(location) : "The scene is set in an unspecified location.";
+  const characterNarratives = characters.length > 0
+    ? characters.map((c) => buildCostumeAndMakeupNarrative(c)).join("\n\n")
+    : "No specific characters in this shot.";
+
+  const rules = generationRules && generationRules.length > 0
+    ? `\nGENERATION RULES:\n${generationRules.map((rule) => `- ${rule}`).join("\n")}`
+    : "";
+
   return `
-GENERATE ${framePosition.toUpperCase()} KEYFRAME for Scene ${scene.id}
+IMAGE GENERATION PROMPT:
 
-═══════════════════════════════════════════════════════════
-CINEMATOGRAPHER - Frame Composition
-═══════════════════════════════════════════════════════════
-${buildCinematographerFrameComposition(scene, framePosition)}
+${cinematography}
 
-═══════════════════════════════════════════════════════════
-GAFFER - Lighting Specification
-═══════════════════════════════════════════════════════════
+ACTION & MOOD:
+${scene.description}
+Mood: ${scene.mood}
+
+CHARACTERS:
+${characterNarratives}
+${characters.map(c => formatCharacterTemporalState(c)).join("\n")}
+
+ENVIRONMENT:
+${locationNarrative}
+${location ? formatLocationTemporalState(location) : ""}
+
+LIGHTING:
 ${buildGafferLightingSpec(scene, location, location?.timeOfDay)}
 
-═══════════════════════════════════════════════════════════
-SCRIPT SUPERVISOR - Continuity Requirements
-═══════════════════════════════════════════════════════════
+CONTINUITY:
 ${buildScriptSupervisorContinuityChecklist(scene, previousScene, characters, locations)}
+${rules}
 
-═══════════════════════════════════════════════════════════
-COSTUME & MAKEUP - Character Appearance
-═══════════════════════════════════════════════════════════
-${characters.map((c) => `${buildCostumeAndMakeupSpec(c)}${formatCharacterTemporalState(c)}`).join("\n\n")}
+REFERENCE IMAGES:
+${previousScene && framePosition === "start" ? `- Previous scene end frame` : ""}
+${characters.map((c) => `- ${c.name} Reference Image`).join("\n")}
+${location ? `- ${location.name} Reference Image` : ""}
 
-═══════════════════════════════════════════════════════════
-PRODUCTION DESIGN - Location Environment
-═══════════════════════════════════════════════════════════
-${location ? `${buildProductionDesignerSpec(location)}${formatLocationTemporalState(location)}` : "No location specified"}
-
-${generationRules && generationRules.length > 0
-      ? `
-═══════════════════════════════════════════════════════════
-GLOBAL GENERATION RULES (from previous quality evaluations):
-═══════════════════════════════════════════════════════════
-${generationRules.map((rule) => `- ${rule}`).join("\n")}
-`
-      : ""
-    }
-
-═══════════════════════════════════════════════════════════
-REFERENCE IMAGES ATTACHED:
-═══════════════════════════════════════════════════════════
-${previousScene && framePosition === "start" ? `- Previous scene end frame (for transition continuity)` : ""}
-${characters.map((c) => `- ${c.name} reference: ${c.referenceImages?.[ 0 ] || "Not available"}`).join("\n")}
-${location ? `- ${location.name} reference: ${location.referenceImages?.[ 0 ] || "Not available"}` : ""}
-
-CRITICAL INSTRUCTIONS:
-- Match character appearances to reference images EXACTLY
-- Match location environment to reference image EXACTLY
-- Follow Script Supervisor continuity checklist precisely
-- Compose frame according to Cinematographer specifications
-- Light scene according to Gaffer specifications
-- Frame must show clear ${framePosition === "start" ? "BEGINNING" : "ENDING"} state (not mid-action)
-
-OUTPUT: Generate photorealistic ${framePosition} keyframe image. No text in image.
+INSTRUCTIONS:
+- Generate a photorealistic ${framePosition} keyframe image.
+- Strictly adhere to the visual descriptions above.
+- Match all reference images EXACTLY for character and location consistency.
 `;
 };
 
@@ -255,110 +245,46 @@ export const composeEnhancedSceneGenerationPrompt = (
   previousScene?: Scene,
   generationRules?: string[]
 ): string => {
-  const characterSpecs = characters
-    .map(
-      (c) => `
-${c.name}:
-- Physical: ${c.description}
-- Hair: ${c.physicalTraits.hair}
-- Clothing: ${c.physicalTraits.clothing}
-- Accessories: ${c.physicalTraits.accessories?.join(", ") || "None"}
-- Reference Image: Match appearance to ${c.referenceImages?.[ 0 ]?.publicUri || "N/A"} EXACTLY${formatCharacterTemporalState(c)}
-`
-    )
-    .join("\n");
 
   const continuityNotes = previousScene
     ? `
-CONTINUITY FROM PREVIOUS SCENE ${previousScene.id}:
-- Previous action: ${previousScene.description}
-- Previous lighting: ${previousScene.lighting}
-- Previous mood: ${previousScene.mood}
-- Character positions: Maintain spatial logic (if exited left, enters right)
-- Character states: Carry forward any dirt, damage, exhaustion
-- End frame reference: ${previousScene.endFrame?.publicUri || "N/A"}
+CONTINUITY FROM SCENE ${previousScene.id}:
+- Action Flows From: ${previousScene.description}
+- Reference End Frame: ${previousScene.endFrame?.publicUri || "N/A"}
 `
-    : "This is the FIRST scene - establish all baselines.";
+    : "First scene - establish baselines.";
 
   return `
-SCENE ${scene.id}: ${scene.startTime}s - ${scene.endTime}s (${scene.duration}s)
+VIDEO GENERATION PROMPT FOR SCENE ${scene.id}:
 
-═══════════════════════════════════════════════════════════
-NARRATIVE (Director):
-═══════════════════════════════════════════════════════════
+NARRATIVE & ACTION:
 ${scene.description}
+Mood: ${scene.mood} (Intensity: ${scene.intensity})
 
-Mood: ${scene.mood}
-Intensity: ${scene.intensity}
-Tempo: ${scene.tempo}
-Musical Context: ${scene.musicalDescription || "N/A"}
+VISUAL STYLE:
+${buildCinematographerNarrative(scene)}
+Lighting: ${scene.lighting.quality || "Standard"}, ${scene.lighting.colorTemperature || "Neutral"}.
 
-═══════════════════════════════════════════════════════════
-CHARACTERS (Costume & Makeup):
-═══════════════════════════════════════════════════════════
-${characterSpecs}
+CHARACTERS:
+${characters.map((c) => buildCostumeAndMakeupNarrative(c)).join("\n\n")}
+${characters.map(c => formatCharacterTemporalState(c)).join("\n")}
 
-═══════════════════════════════════════════════════════════
-LOCATION (Production Design):
-═══════════════════════════════════════════════════════════
-${location.name}:
-- Type: ${location.type || "Unspecified"}
-- Description: ${location.description}
-- Time of Day: ${location.state?.timeOfDay || location.timeOfDay}
-- Weather: ${location.state?.weather || location.weather || "Clear"}
-- Key Elements: ${[ ...(location.naturalElements || []), ...(location.manMadeObjects || []) ].join(", ")}
-- Reference Image: Match environment to ${location.referenceImages?.[ 0 ] || "N/A"} EXACTLY${formatLocationTemporalState(location)}
+SETTING:
+${buildProductionDesignerNarrative(location)}
+${formatLocationTemporalState(location)}
 
-═══════════════════════════════════════════════════════════
-CINEMATOGRAPHY:
-═══════════════════════════════════════════════════════════
-Shot Type: ${scene.shotType}
-Camera Movement: ${scene.cameraMovement}
-Camera Angle: ${scene.cameraAngle}
-Composition: ${scene.composition || "Standard framing for shot type"}
-
-═══════════════════════════════════════════════════════════
-LIGHTING (Gaffer):
-═══════════════════════════════════════════════════════════
-${scene.lighting}
-
-═══════════════════════════════════════════════════════════
-CONTINUITY (Script Supervisor):
-═══════════════════════════════════════════════════════════
+CONTINUITY & INSTRUCTIONS:
 ${continuityNotes}
+${scene.continuityNotes?.map((n) => `- ${n}`).join("\n") || ""}
 
-${scene.continuityNotes && scene.continuityNotes.length > 0
-      ? `
-SPECIFIC CONTINUITY REQUIREMENTS:
-${scene.continuityNotes.map((note) => `- ${note}`).join("\n")}
-`
-      : ""
-    }
+${generationRules ? generationRules.map(r => `- ${r}`).join("\n") : ""}
 
-${generationRules && generationRules.length > 0
-      ? `
-═══════════════════════════════════════════════════════════
-GLOBAL GENERATION RULES:
-═══════════════════════════════════════════════════════════
-${generationRules.map((rule) => `- ${rule}`).join("\n")}
-`
-      : ""
-    }
+DURATION: ${scene.duration}s
+KEYFRAMES:
+- Start: ${scene.startFrame?.publicUri || "Missing"}
+- End: ${scene.endFrame?.publicUri || "Missing"}
 
-═══════════════════════════════════════════════════════════
-KEYFRAMES PROVIDED:
-═══════════════════════════════════════════════════════════
-- Start Frame: ${scene.startFrame?.publicUri || "Not yet generated"}
-- End Frame: ${scene.endFrame?.publicUri || "Not yet generated"}
-
-CRITICAL INSTRUCTIONS:
-- Generate video matching ALL specifications above
-- Character appearances MUST match reference images EXACTLY throughout video
-- Location environment MUST match reference image EXACTLY
-- Video must transition smoothly from start frame to end frame
-- Maintain continuity with previous scene
-- Follow lighting and camera specifications precisely
-- Duration MUST be exactly ${scene.duration} seconds
+Generate a coherent video clip transitioning between the provided keyframes, adhering to the narrative and visual details described.
 `;
 };
 
@@ -389,14 +315,14 @@ Mood: ${scene.mood} | Intensity: ${scene.intensity} | Tempo: ${scene.tempo}`,
 Camera Movement: ${scene.cameraMovement}
 Composition: ${scene.composition || "Standard for shot type"}`,
 
-    gaffer: `Lighting: ${scene.lighting}
+    gaffer: `Lighting: ${scene.lighting.quality} (${scene.lighting.colorTemperature || "Neutral"})
 Time of Day: ${location.timeOfDay}
 Weather: ${location.weather || "Clear"}`,
 
     scriptSupervisor: previousScene
       ? `Continuity from Scene ${previousScene.id}:
 - Previous action: ${previousScene.description}
-- Previous lighting: ${previousScene.lighting}
+- Previous lighting: ${previousScene.lighting.quality}
 - Continuity notes: ${scene.continuityNotes?.join("; ") || "Standard continuity"}`
       : "First scene - baseline established",
 

@@ -25,7 +25,7 @@ export const buildQualityControlPrompt = (
   schema: object,
   generationRules: string[] = []
 ) => `
-You are the QUALITY CONTROL SUPERVISOR evaluating ${assetType} for Scene ${scene.id}.
+As the production QUALITY CONTROL SUPERVISOR, evaluate ${assetType} for Scene ${scene.id}.
 
 ASSET LOCATION: ${generatedAsset}
 
@@ -36,8 +36,8 @@ The following rules are MANDATORY constraints. Any violation is a CRITICAL FAILU
 
 ${generationRules.map(r => `• ${r}`).join('\n')}
 
-INSTRUCTION: You must explicitly check the asset against EACH of these rules.
-If any rule is violated, you must report it as a MAJOR or CRITICAL issue.
+INSTRUCTION: Must explicitly check the asset against EACH of these rules.
+If any rule is violated, must report it as a MAJOR or CRITICAL issue.
 ` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EVALUATION RUBRIC (Department-by-Department):

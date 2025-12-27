@@ -13,7 +13,7 @@ import { qualityCheckModelName } from "pipeline/llm/google/models";
 
 const malformedJsonRepairPrompt = (malformedJson: string) => `
 The following string is not valid JSON. Please fix it and return only the valid JSON.
-Do not include any other text in your response, only the JSON object.
+Do not include any other text in response, only the JSON object.
 Do not include the markdown characters that denote a a code block.
 
 ${malformedJson}

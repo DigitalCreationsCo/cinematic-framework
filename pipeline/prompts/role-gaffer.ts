@@ -97,7 +97,7 @@ OUTPUT: Concise lighting specification using model-friendly language (not techni
 `;
 
 export const buildGafferPrompt = (scene: Scene, location: Location, timeOfDay: string) => `
-You are the GAFFER designing lighting for Scene ${scene.id}.
+As the GAFFER, design lighting for Scene ${scene.id}.
 
 LOCATION: ${location.name} | TIME: ${timeOfDay} | WEATHER: ${location.weather}
 MOOD: ${scene.mood} | INTENSITY: ${scene.intensity}

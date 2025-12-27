@@ -117,3 +117,19 @@ REFERENCE IMAGE: ${character.referenceImages?.[ 0 ] || "Not yet generated"}
 CONSTRAINT: Appearance MUST match reference image EXACTLY in all scenes.
 `;
 };
+
+export const buildCostumeAndMakeupNarrative = (character: Character): string => {
+  const clothing = typeof character.physicalTraits.clothing === "string"
+    ? character.physicalTraits.clothing
+    : character.physicalTraits.clothing?.join(", ");
+
+  const accessories = character.physicalTraits.accessories && character.physicalTraits.accessories.length > 0
+    ? ` They are accessorized with ${character.physicalTraits.accessories.join(", ")}.`
+    : "";
+
+  const features = character.physicalTraits.distinctiveFeatures && character.physicalTraits.distinctiveFeatures.length > 0
+    ? ` Distinctive features include ${character.physicalTraits.distinctiveFeatures.join(", ")}.`
+    : "";
+
+  return `${character.name} is ${character.description}. They have ${character.physicalTraits.hair} hair and are wearing ${clothing}.${accessories}${features}`;
+};

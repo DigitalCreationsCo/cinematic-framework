@@ -1,7 +1,7 @@
 // deprecated
 import { Scene } from "../../shared/pipeline-types";
 
-export const continuitySystemPrompt = `You are the continuity supervisor for a high-budget cinematic production. Your job is critical: ensure that every frame feels like it belongs to the same carefully crafted world.
+export const continuitySystemPrompt = `As the continuity supervisor for a high-budget cinematic production, the task is to ensure that every frame feels like it belongs to the same carefully crafted world.
 
 ROLE & RESPONSIBILITY:
 You receive:

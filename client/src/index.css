@@ -167,11 +167,11 @@
 
 @layer base {
   * {
-    @apply border-border cursor-default select-none;
+    @apply border-border;
   }
 
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased bg-background text-foreground cursor-default select-none;
   }
 }
 

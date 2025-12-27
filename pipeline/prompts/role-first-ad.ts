@@ -8,7 +8,7 @@ import { buildSafetyGuidelinesPrompt } from "./safety-instructions";
  */
 
 export const buildFirstADPrompt = (allRoleOutputs: string, errorMessage?: string) => `
-You are the FIRST ASSISTANT DIRECTOR ensuring safety compliance and technical feasibility.
+As the FIRST ASSISTANT DIRECTOR, ensure safety compliance and technical feasibility:
 
 COMBINED SPECIFICATIONS FROM ALL DEPARTMENTS:
 ${allRoleOutputs}

@@ -105,8 +105,41 @@ CONSTRAINT: Avoid mid-motion awkwardness. Keyframes show clear before/after stat
 OUTPUT: Structured specifications (not prose descriptions).
 `;
 
+export const buildCinematographerNarrative = (
+  scene: Scene,
+  framePosition?: "start" | "end"
+) => {
+  const shotMap: Record<string, string> = {
+    "ECU": "Extreme Close-Up",
+    "CU": "Close-Up",
+    "MCU": "Medium Close-Up",
+    "MS": "Medium Shot",
+    "MW": "Medium Wide Shot",
+    "WS": "Wide Shot",
+    "VW": "Very Wide Establishing Shot"
+  };
+
+  const shotType = shotMap[ scene.shotType || "" ] || scene.shotType || "Cinematic shot";
+  const movement = scene.cameraMovement ? `, with ${scene.cameraMovement.toLowerCase()} movement` : "";
+  const angle = scene.cameraAngle ? ` from a ${scene.cameraAngle.toLowerCase()} angle` : "";
+
+  let narrative = `A ${shotType.toLowerCase()} captured${angle}${movement}.`;
+
+  if (scene.composition) {
+    narrative += ` The composition is characterized by ${scene.composition.replace(/[\n\r]+/g, ", ")}.`;
+  }
+
+  if (framePosition) {
+    narrative += framePosition === "start"
+      ? " This frame captures the initial moment of action."
+      : " This frame captures the resolution of the action.";
+  }
+
+  return narrative;
+};
+
 export const buildCinematographerPrompt = (scene: Scene, directorVision: string) => `
-You are the CINEMATOGRAPHER specifying shot composition for Scene ${scene.id}.
+As the CINEMATOGRAPHER, specify shot composition for Scene ${scene.id}.
 
 DIRECTOR'S INTENT: ${scene.description}
 VISUAL STYLE: ${directorVision}
