@@ -541,6 +541,8 @@ The following environment variables are configured in the `pipeline-worker` serv
 ### Modified
 - ✅ `pipeline/prompts/prompt-correction-instruction.ts` - Enhanced correction principles
 - ✅ `pipeline/prompts/role-quality-control.ts` - Integrated evaluation guidelines
+- ✅ `pipeline/agents/continuity-manager.ts` - Added verbose logging for Meta-Prompt instructions and generated prompts
+- ✅ `pipeline/agents/frame-composition-agent.ts` - Added verbose logging for Frame Meta-Prompts
 
 ### Recommended Updates
 - `pipeline/agents/frame-composition-agent.ts` - Use QualityRetryHandler

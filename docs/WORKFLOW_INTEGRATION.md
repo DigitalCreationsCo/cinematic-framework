@@ -100,6 +100,7 @@ The `ContinuityManagerAgent` now checks Google Cloud Storage for existing `scene
 - **Composition Used:** `composeEnhancedSceneGenerationPrompt()` from [pipeline/prompts/prompt-composer.ts](pipeline/prompts/prompt-composer.ts)
 - **Roles Combined:** Director, Cinematographer, Gaffer, Script Supervisor, Costume & Makeup, Production Designer.
 - **Key Improvement:** Enhanced prompt generation incorporating full temporal state context, which is reliable due to checkpointing.
+- **Observability:** Now logs the Meta-Prompt instructions (first 500 chars) and the final generated video prompt to the console, providing transparency into the LLM's synthesis process.
 
 ---
 
@@ -112,6 +113,7 @@ The `ContinuityManagerAgent` now checks Google Cloud Storage for existing `scene
 - **Composition Used:** `composeFrameGenerationPrompt()` via wrapper [pipeline/prompts/frame-generation-instruction.ts](pipeline/prompts/frame-generation-instruction.ts)
 - **Roles Combined:** Cinematographer, Gaffer, Script Supervisor, Costume & Makeup, Production Designer.
 - **Output:** Start and end keyframes for each scene. **Crucially, the `ContinuityManagerAgent` now ensures these frames are persistent in GCS before the graph proceeds, allowing for robust pipeline resumption.**
+- **Observability:** Includes verbose logging of the Frame Meta-Prompt instructions and the resulting generated prompt, aiding in debugging frame composition issues.
 
 ---
 

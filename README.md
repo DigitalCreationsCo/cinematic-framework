@@ -27,6 +27,7 @@ Cinematic Framework leverages Google's Vertex AI (Gemini models) and LangGraph t
 - **Distributed Architecture & Resilience**: Supports safe horizontal scaling across multiple worker replicas. Workflow state is persisted in PostgreSQL via LangGraph checkpointers, allowing for robust resumption and enabling command-driven operations like `START/STOP/REGENERATE` via Pub/Sub commands. **Graceful Cancellation** is now supported via `AbortSignal` propagation, allowing pipelines to safely interrupt long-running LLM and API calls. Distributed Locking mechanism has been temporarily removed.
 - **Comprehensive Schemas**: Type-safe data structures using Zod for all workflow stages, defined in [shared/schema.ts](shared/schema.ts).
 - **Human-in-the-Loop Retry Logic**: Implements `retryLlmCall` with LangGraph Interrupts, replacing automatic retries with a controlled loop that allows humans or specialized agents to inspect failures, revise inputs (`llm_intervention` event), and retry deterministically. This handles API failures, safety filter violations, and LLM retry exhaustion.
+- **Enhanced Observability**: Provides verbose logging of Meta-Prompt instructions and generated prompts during the workflow, enabling transparent inspection of the LLM's prompt synthesis and decision-making process.
 
 ## Architecture
 
