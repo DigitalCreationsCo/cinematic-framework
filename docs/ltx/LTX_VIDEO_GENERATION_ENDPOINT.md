@@ -1,29 +1,32 @@
-# LTX Video Generation on GCP Vertex AI
+# LTX Video Generation on GCP Compute Engine
 
-Production-ready deployment of LTX-Video text-to-video model on Google Cloud Platform using Vertex AI with custom GCS destination control.
+Production-ready deployment of LTX-Video text-to-video model on Google Cloud Platform using Compute Engine Managed Instance Groups (MIG) with Global Load Balancing and Auto-scaling.
 
 ## Features
 
 - 🎥 Text-to-video generation using Lightricks LTX-Video model
-- ☁️ Deployed on GCP Vertex AI with GPU acceleration
-- 📦 Custom GCS destination paths for generated videos
-- 🔄 Auto-scaling from 0 to N replicas (cost-effective)
-- 🚀 Built from Hugging Face model repository
-- 🔐 Secure with IAM and service accounts
-- 📊 Monitoring and logging included
+- ⚡ **High Performance**: Deployed on G2 instances (NVIDIA L4 GPUs) with local execution
+- 🔄 **Auto-scaling**: Automatically scales from 0 to N instances based on load (CPU/Queue)
+- 🌐 **Global Access**: Global Load Balancer with Cloud Armor security
+- 🔐 **Secure**: API Key authentication and Service Account Identity
+- 💰 **Cost Optimized**: Scale-to-zero when idle, optional Preemptible/Spot instances
+- 📦 **Flexible Output**: Videos saved to GCS with custom path support
 
 ## Architecture
 
 ```
-User Request → Vertex AI Endpoint → Custom Container (serve.py)
-                                    ↓
-                                LTX-Video Model (GPU)
-                                    ↓
-                            Generate Video Frames
-                                    ↓
-                        Save to GCS (custom or default path)
-                                    ↓
-                            Return Video URL
+User Request (HTTPS) 
+      ↓
+Global Load Balancer (Cloud Armor)
+      ↓
+Managed Instance Group (Auto-scaling)
+      ↓
+Compute Engine VM (NVIDIA L4)
+  └─ FastAPI Server (serve.py)
+      ↓
+LTX-Video Model (GPU)
+      ↓
+Save to GCS (Output Bucket)
 ```
 
 ## Prerequisites
@@ -31,380 +34,198 @@ User Request → Vertex AI Endpoint → Custom Container (serve.py)
 1. **GCP Project** with billing enabled
 2. **gcloud CLI** installed and authenticated
 3. **Terraform** v1.0+ installed
-4. **GitHub repository** for source code
-5. **Required GCP APIs** (enabled automatically by Terraform):
-   - Vertex AI API
-   - Cloud Build API
-   - Artifact Registry API
+4. **Required GCP APIs** (enabled automatically by Terraform):
+   - Compute Engine API
    - Cloud Storage API
+   - Artifact Registry API
+   - Secret Manager API
+   - Autoscaling API
 
-## Repository Structure
+## Infrastructure
 
-```
-.
-├── terraform/
-|     main.tf                           # Terraform infrastructure
-|     variables.tf                      # Terraform variables
-|     terraform.tfvars                  # Your configuration (create from example)
-|     terraform.tfvars.example          # Example configuration
-├── models/
-|     serve.py                          # FastAPI serving application
-|     Dockerfile                        # Container image definition
-|     requirements.txt                  # Python dependencies
-|     cloudbuild.yaml                   # Cloud Build configuration
-├── .gitignore                          # Git ignore rules
-└── docs/
-      LTX_VIDEO_GENERATION_ENDPOINT.md  # This file
-      
-```
+The solution is defined in `terraform/main.tf` and deploys:
+
+- **VPC Network**: Dedicated network for LTX resources
+- **Managed Instance Group (MIG)**: Handles VM lifecycle and auto-scaling
+- **Load Balancer**: External HTTP(S) Load Balancer
+- **Secret Manager**: Stores API keys securely
+- **GCS Buckets**:
+  - `*-ltx-model-cache`: Caches model weights to speed up boot times
+  - `*-ltx-video-output`: Stores generated videos
 
 ## Quick Start
 
-### 1. Clone and Configure
+### 1. Configure
+
+Ensure you have the repository cloned and are in the project root.
 
 ```bash
-# Clone your repository
-git clone https://github.com/your-org/ltx-video-gcp.git
-cd ltx-video-gcp
-
-# Create configuration from example
+cd terraform
 cp terraform.tfvars.example terraform.tfvars
-
-# Edit with your values
-nano terraform.tfvars
+# Edit terraform.tfvars with your project_id and region
 ```
 
-### 2. Configure GCP Authentication
+### 2. Deploy
 
 ```bash
-# Authenticate with GCP
-gcloud auth login
-gcloud auth application-default login
-
-# Set your project
-gcloud config set project YOUR_PROJECT_ID
-```
-
-### 3. Build and Push Container Image
-
-```bash
-# Option A: Build locally and push
-PROJECT_ID=$(gcloud config get-value project)
-REGION="us-central1"
-
-docker build -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/video-gen-repo/ltx-video-serve:latest .
-docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/video-gen-repo/ltx-video-serve:latest
-
-# Option B: Use Cloud Build
-gcloud builds submit --config=cloudbuild.yaml
-```
-
-### 4. Deploy Infrastructure
-
-```bash
-# Initialize Terraform
 terraform init
-
-# Review the plan
-terraform plan
-
-# Deploy (takes 15-30 minutes for endpoint deployment)
 terraform apply
 ```
 
-### 5. Test the Endpoint
+This process typically takes:
+
+- Infrastructure creation: ~5 minutes
+- Initial VM startup and model download: ~10-15 minutes
+
+### 3. Get Credentials
+
+After deployment, retrieve your API credentials and endpoint:
 
 ```bash
-# Get endpoint URL
-ENDPOINT=$(terraform output -raw predict_url)
+# Get the Load Balancer IP
+terraform output -raw load_balancer_ip
 
-# Make a prediction
-curl -X POST "$ENDPOINT" \
-  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "instances": [{
-      "prompt": "A serene mountain lake at sunset with reflections",
-      "num_frames": 121,
-      "height": 704,
-      "width": 1216,
-      "seed": 42
-    }]
-  }'
+# Get the API Key
+terraform output -raw api_key
 ```
 
-## Using Custom GCS Destinations
+## API Reference
 
-### Default Behavior (No Custom Path)
+The service exposes a FastAPI endpoint protected by API Key authentication.
+
+### Endpoint
+
+`POST http://<LB_IP>/predict`
+
+### Headers
+
+| Header | Value | Description |
+|--------|-------|-------------|
+| `Content-Type` | `application/json` | Required |
+| `X-API-Key` | `<YOUR_API_KEY>` | Required |
+
+### Request Body
+
+**Note**: This API uses a flat JSON structure, unlike the previous Vertex AI implementation.
 
 ```json
 {
-  "instances": [{
-    "prompt": "A cat playing piano",
-    "num_frames": 121
-  }]
+  "prompt": "string",
+  "negative_prompt": "string (optional)",
+  "seed": 171198,
+  "height": 704,
+  "width": 1216,
+  "num_frames": 121,
+  "num_inference_steps": 50,
+  "fps": 24,
+  "gcs_destination": "gs://bucket/path/video.mp4 (optional)"
 }
 ```
 
-**Result**: Video saved to `gs://YOUR_PROJECT-ltx-video-output/videos/ltx_video_TIMESTAMP_ID.mp4`
-
-### Custom GCS Path
-
-```json
-{
-  "instances": [{
-    "prompt": "A cat playing piano",
-    "num_frames": 121,
-    "gcs_destination": "gs://my-custom-bucket/my-folder/custom-name.mp4"
-  }]
-}
-```
-
-**Result**: Video saved to `gs://my-custom-bucket/my-folder/custom-name.mp4`
-
-## Client Examples
-
-### Node.js with @google-cloud/aiplatform
-
-```javascript
-const aiplatform = require('@google-cloud/aiplatform');
-const {PredictionServiceClient} = aiplatform.v1;
-
-const client = new PredictionServiceClient();
-
-async function generateVideo() {
-  const endpoint = 'projects/PROJECT_ID/locations/REGION/endpoints/ENDPOINT_ID';
-  
-  const instance = {
-    prompt: "A beautiful sunset over the ocean",
-    num_frames: 121,
-    gcs_destination: "gs://my-bucket/videos/sunset.mp4"  // Optional
-  };
-
-  const request = {
-    endpoint,
-    instances: [instance]
-  };
-
-  const [response] = await client.predict(request);
-  console.log('Video URL:', response.predictions[0].video_url);
-}
-
-generateVideo();
-```
-
-### Python
-
-```python
-from google.cloud import aiplatform
-
-aiplatform.init(project='YOUR_PROJECT', location='us-central1')
-
-endpoint = aiplatform.Endpoint('projects/PROJECT_ID/locations/REGION/endpoints/ENDPOINT_ID')
-
-response = endpoint.predict(
-    instances=[{
-        'prompt': 'A robot dancing in the rain',
-        'num_frames': 121,
-        'gcs_destination': 'gs://my-bucket/videos/robot-dance.mp4'  # Optional
-    }]
-)
-
-print(f"Video URL: {response.predictions[0]['video_url']}")
-```
-
-### cURL
-
-```bash
-curl -X POST \
-  "https://REGION-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/REGION/endpoints/ENDPOINT_ID:predict" \
-  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "instances": [{
-      "prompt": "A futuristic city at night",
-      "num_frames": 121,
-      "height": 704,
-      "width": 1216,
-      "num_inference_steps": 50,
-      "fps": 24,
-      "seed": 42,
-      "gcs_destination": "gs://my-bucket/city-video.mp4"
-    }]
-  }'
-```
-
-## API Parameters
+#### Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `prompt` | string | **required** | Text description of the video to generate |
-| `negative_prompt` | string | "" | What to avoid in the generation |
-| `seed` | integer | 42 | Random seed for reproducibility |
-| `height` | integer | 704 | Video height (256-1024) |
-| `width` | integer | 1216 | Video width (256-1920) |
-| `num_frames` | integer | 121 | Number of frames (1-240) |
-| `num_inference_steps` | integer | 50 | Denoising steps (1-100) |
-| `fps` | integer | 24 | Frames per second (1-60) |
-| `gcs_destination` | string | null | Custom GCS path (e.g., `gs://bucket/path/file.mp4`) |
+| `prompt` | string | **required** | Description of the video to generate |
+| `negative_prompt` | string | "" | Elements to avoid in the video |
+| `seed` | int | 171198 | Random seed for reproducibility |
+| `height` | int | 704 | Video height (must be divisible by 32) |
+| `width` | int | 1216 | Video width (must be divisible by 32) |
+| `num_frames` | int | 121 | Number of frames to generate |
+| `num_inference_steps`| int | 50 | Number of denoising steps |
+| `fps` | int | 24 | Frame rate of output video |
+| `gcs_destination` | string | null | Custom GCS path for output |
 
-## Cost Optimization
-
-### Current Configuration
-
-- **Min replicas**: 0 (scales to zero when idle)
-- **Max replicas**: 1
-- **Machine**: G2-standard-8 with NVIDIA L4 GPU
-- **Cost**: ~$1.29/hour when active, $0 when idle
-
-### Cost-Saving Tips
-
-1. **Scale to Zero**: Keep `min_replicas = 0` in `terraform.tfvars`
-2. **Right-size GPU**: Use L4 ($1.29/hr) instead of V100 ($2.48/hr) for most workloads
-3. **Batch requests**: Process multiple videos in sequence
-4. **Storage lifecycle**: Auto-archive old videos (configured in Terraform)
-5. **Monitor usage**: Check Cloud Monitoring for idle time
-
-## Monitoring
-
-### View Logs
+### Example Request (cURL)
 
 ```bash
-gcloud logging read "resource.type=aiplatform.googleapis.com/Endpoint" --limit 50
+LB_IP=$(terraform output -raw load_balancer_ip)
+API_KEY=$(terraform output -raw api_key)
+
+curl -X POST "http://$LB_IP/predict" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "prompt": "A cinematic shot of a cyberpunk city in rain",
+    "num_frames": 121,
+    "width": 1216,
+    "height": 704
+  }'
 ```
 
-### Check Endpoint Status
-
-```bash
-gcloud ai endpoints describe ENDPOINT_ID --region=us-central1
-```
-
-### Monitor GPU Usage
-
-Navigate to: Cloud Console → Vertex AI → Endpoints → Your Endpoint → Monitoring
-
-## Troubleshooting
-
-### Model Not Loading
-
-```bash
-# Check container logs
-gcloud logging read "resource.type=aiplatform.googleapis.com/Endpoint AND severity>=ERROR" --limit 50
-```
-
-### GCS Upload Fails
-
-Ensure service account has `roles/storage.objectAdmin`:
-
-```bash
-gcloud projects add-iam-policy-binding PROJECT_ID \
-  --member="serviceAccount:vertex-ai-video-gen@PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/storage.objectAdmin"
-```
-
-### Out of Memory
-
-Reduce video resolution or frame count:
+### Response
 
 ```json
 {
-  "height": 512,
-  "width": 896,
-  "num_frames": 81
+  "video_url": "https://storage.googleapis.com/...",
+  "video_path": "videos/ltx_video_....mp4",
+  "seed": 171198,
+  "gcs_bucket": "project-ltx-video-output",
+  "gcs_blob": "videos/ltx_video_....mp4",
+  "generation_time_seconds": 45.2,
+  "metadata": { ... }
 }
 ```
 
-## Updating the Deployment
+## Operations & Monitoring
 
-### Update Container Image
-
-```bash
-# Make changes to serve.py or Dockerfile
-git commit -am "Update serving logic"
-git push origin main
-
-# Cloud Build trigger will automatically build and push
-# Or build manually:
-gcloud builds submit --config=cloudbuild.yaml
-```
-
-### Update Infrastructure
+### Check Service Health
 
 ```bash
-# Modify main.tf or variables.tf
-terraform plan
-terraform apply
+curl http://<LB_IP>/health
 ```
 
-### Update Model Version
+### SSH into Instance
 
-Edit `terraform.tfvars`:
-
-```hcl
-hugging_face_model_id = "Lightricks/LTX-Video-v2"  # New version
-```
-
-Then apply:
+To debug issues directly on the VM:
 
 ```bash
-terraform apply
+# Get the SSH command from Terraform output
+terraform output ssh_command
+# Or manually
+gcloud compute ssh --zone=us-central1-a $(gcloud compute instances list --filter='name~ltx-video-vm' --format='value(name)' --limit=1)
 ```
 
-## Cleanup
+### View Logs
 
-To avoid ongoing charges:
+Logs are streamed to Cloud Logging.
 
 ```bash
-# Destroy all resources
-terraform destroy
+# View startup logs
+gcloud logging read "resource.type=gce_instance AND logName:syslog" --limit 50
 
-# Or manually:
-gcloud ai endpoints delete ENDPOINT_ID --region=us-central1
-gcloud artifacts repositories delete video-gen-repo --location=us-central1
-gsutil -m rm -r gs://PROJECT_ID-ltx-video-output
+# View application logs
+gcloud logging read "resource.type=gce_instance AND labels.application=ltx-video" --limit 50
 ```
 
-## Security Best Practices
+### Manual Scaling
 
-1. **Private Videos**: Remove `blob.make_public()` from `serve.py` for private videos
-2. **VPC**: Deploy endpoint in VPC for network isolation
-3. **Service Account**: Use least-privilege IAM roles
-4. **API Keys**: Implement API key authentication for production
-5. **Signed URLs**: Use signed URLs instead of public URLs
+Although auto-scaling is enabled, you can manually resize the group:
 
-## Performance Tuning
+```bash
+gcloud compute instance-groups managed resize ltx-video-mig \
+    --size=1 \
+    --region=us-central1
+```
 
-### For Faster Generation
+## Cost Optimization
 
-- Use fewer inference steps (25-30)
-- Reduce frame count (60-80 frames)
-- Lower resolution (512x896)
+The deployment is configured for maximum cost efficiency:
 
-### For Higher Quality
+1. **Scale-to-Zero**: Set `autoscaling_min_replicas = 0` in `terraform.tfvars`. The infrastructure will cost ~$25/month (Load Balancer + Storage) when idle.
+2. **Spot Instances**: Set `use_preemptible = true` to save up to 70% on compute costs.
+3. **Auto-Shutdown**: Instances automatically scale down after `autoscaling_cooldown_period` (default 600s) of inactivity.
 
-- Increase inference steps (50-100)
-- Higher guidance scale (9-12)
-- More frames (121-240)
+## Updating the Model
 
-## Support
+To update the model or application code:
 
-- **GCP Issues**: Check [GCP Status](https://status.cloud.google.com/)
-- **Model Issues**: See [LTX-Video on Hugging Face](https://huggingface.co/Lightricks/LTX-Video)
-- **Terraform Issues**: Check provider version compatibility
+1. Edit `models/ltx/startup.sh` (for logic) or `terraform/main.tf` (for infra).
+2. Run `terraform apply`.
+3. To force an update of existing instances:
 
-## License
-
-This deployment configuration is provided as-is. The LTX-Video model has its own license terms - see the [model card](https://huggingface.co/Lightricks/LTX-Video) for details.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
----
-
-**Built with** ❤️ **using Terraform, Vertex AI, and LTX-Video**
+   ```bash
+   gcloud compute instance-groups managed rolling-action replace ltx-video-mig \
+       --region=us-central1 \
+       --max-unavailable=0
+   ```
