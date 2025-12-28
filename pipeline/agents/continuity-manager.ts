@@ -16,9 +16,11 @@ import { ApiError, Modality } from "@google/genai";
 import { FrameCompositionAgent } from "./frame-composition-agent";
 import { buildCharacterImagePrompt } from "../prompts/character-image-instruction";
 import { buildLocationImagePrompt } from "../prompts/location-image-instruction";
-import { composeEnhancedSceneGenerationPrompt } from "../prompts/prompt-composer";
+import { composeEnhancedSceneGenerationPromptMeta } from "../prompts/prompt-composer";
 import { LlmController, LlmProvider } from "../llm/controller";
 import { imageModelName } from "../llm/google/models";
+import { ThinkingLevel } from "@google/genai";
+import { buildllmParams } from "../llm/google/llm-params";
 import { QualityCheckAgent } from "./quality-check-agent";
 import { evolveCharacterState, evolveLocationState } from "./state-evolution";
 import { GraphInterrupt } from "@langchain/langgraph";
@@ -28,6 +30,7 @@ import { GraphInterrupt } from "@langchain/langgraph";
 // ============================================================================
 
 export class ContinuityManagerAgent {
+    private llm: LlmController;
     private imageModel: LlmController;
     private storageManager: GCPStorageManager;
     private frameComposer: FrameCompositionAgent;
@@ -43,7 +46,7 @@ export class ContinuityManagerAgent {
         storageManager: GCPStorageManager,
         options?: { signal?: AbortSignal; }
     ) {
-        // llm parameter kept for backward compatibility but not used
+        this.llm = llm;
         this.imageModel = imageModel;
         this.frameComposer = frameComposer;
         this.qualityAgent = qualityAgent;
@@ -80,13 +83,33 @@ export class ContinuityManagerAgent {
             console.log(`   📝 Using prompt override for Scene ${scene.id}`);
             enhancedPrompt = promptOverride;
         } else {
-            enhancedPrompt = composeEnhancedSceneGenerationPrompt(
+            console.log(`   🧠 Generating enhanced video prompt for Scene ${scene.id} via LLM...`);
+            const metaPrompt = composeEnhancedSceneGenerationPromptMeta(
                 scene,
                 charactersInScene,
                 locationInScene!,
                 previousScene,
                 generationRules
             );
+
+            const response = await this.llm.generateContent(buildllmParams({
+                contents: metaPrompt,
+                config: {
+                    abortSignal: this.options?.signal,
+                    thinkingConfig: {
+                        thinkingLevel: ThinkingLevel.HIGH
+                    }
+                }
+            }));
+
+            if (!response.text) {
+                console.warn("   ⚠️ LLM failed to generate enhanced prompt. Using fallback.");
+                // Fallback to basic description if LLM fails (though it shouldn't)
+                enhancedPrompt = scene.description;
+            } else {
+                // Strip markdown code blocks if present
+                enhancedPrompt = response.text.replace(/```(?:json)?\n?|```/g, "").trim();
+            }
         }
 
         // Refined rules are now incorporated directly in the enhanced prompt

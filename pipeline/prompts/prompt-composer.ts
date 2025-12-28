@@ -228,7 +228,7 @@ INSTRUCTIONS:
  * Compose enhanced scene prompt for video generation
  * Used in Generation Point 3.3
  */
-export const composeEnhancedSceneGenerationPrompt = (
+export const composeEnhancedSceneGenerationPromptMeta = (
   scene: Scene,
   characters: Character[],
   location: Location,
@@ -245,36 +245,51 @@ CONTINUITY FROM SCENE ${previousScene.id}:
     : "First scene - establish baselines.";
 
   return `
-VIDEO GENERATION PROMPT FOR SCENE ${scene.id}:
+You are an expert Prompt Engineer for generative video models.
+Your goal is to write a single, highly detailed, and evocative prompt that will be used to generate a cinematic video clip.
 
-NARRATIVE & ACTION:
-${scene.description}
-Mood: ${scene.mood} (Intensity: ${scene.intensity})
+SOURCE MATERIAL & CONTEXT:
 
-VISUAL STYLE:
+SCENE INFO:
+- Scene ID: ${scene.id}
+- Action/Narrative: ${scene.description}
+- Mood: ${scene.mood} (Intensity: ${scene.intensity})
+- Duration: ${scene.duration}s
+
+CINEMATOGRAPHY:
 ${buildCinematographerNarrative(scene)}
 Lighting: ${JSON.stringify(scene.lighting, null, 2)}
 
-CHARACTERS:
+CHARACTERS (Visuals & State):
 ${characters.map((c) => buildCostumeAndMakeupNarrative(c)).join("\n\n")}
 ${characters.map(c => formatCharacterTemporalState(c)).join("\n")}
 
-SETTING:
+SETTING (Location & Atmosphere):
 ${buildProductionDesignerNarrative(location)}
 ${formatLocationTemporalState(location)}
 
-CONTINUITY & INSTRUCTIONS:
+CONTINUITY REQUIREMENTS:
 ${continuityNotes}
 ${scene.continuityNotes?.map((n) => `- ${n}`).join("\n") || ""}
 
-${generationRules ? generationRules.map(r => `- ${r}`).join("\n") : ""}
+GENERATION RULES (Must Follow):
+${generationRules ? generationRules.map(r => `- ${r}`).join("\n") : "No specific rules provided."}
 
-DURATION: ${scene.duration}s
-KEYFRAMES:
-- Start: ${scene.startFrame?.publicUri || "Missing"}
-- End: ${scene.endFrame?.publicUri || "Missing"}
+KEYFRAME CONTEXT:
+- Start Frame: ${scene.startFrame?.publicUri || "Available"}
+- End Frame: ${scene.endFrame?.publicUri || "Available"}
 
-Generate a coherent video clip transitioning between the provided keyframes, adhering to the narrative and visual details described.
+INSTRUCTIONS FOR WRITING THE PROMPT:
+1. Synthesize all the above information into a SINGLE, cohesive paragraph.
+2. Focus on VISUAL details, MOVEMENT, and ATMOSPHERE.
+3. Explicitly describe the camera movement and lighting as per the cinematography specs.
+4. Ensure character appearance and state (injuries, dirt, costume) are accurately described.
+5. The prompt should be optimized for a high-end video generation model (like LTX-Video or Sora).
+6. Do NOT include phrases like "Here is the prompt" or "Scene Description:". Just output the prompt text itself.
+7. If there are generation rules, ensure the prompt strictly adheres to them.
+
+OUTPUT FORMAT:
+Return only the prompt text.
 `;
 };
 
