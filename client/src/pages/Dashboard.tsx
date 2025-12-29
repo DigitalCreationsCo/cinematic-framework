@@ -140,7 +140,13 @@ export default function Dashboard() {
     }
     try {
       setPipelineStatus("analyzing");
-      await startPipeline({ projectId: selectedProject, audioGcsUri, creativePrompt });
+      await startPipeline({
+        projectId: selectedProject,
+        payload: {
+          audioGcsUri,
+          creativePrompt
+        },
+      });
     } catch (error) {
       console.error("Failed to start pipeline:", error);
       addMessage({ id: Date.now().toString(), type: "error", message: `Failed to start pipeline: ${(error as Error).message}`, timestamp: new Date() });
@@ -180,16 +186,18 @@ export default function Dashboard() {
   }, [ removeMessage ]);
   const handleClearMessages = useCallback(() => clearMessages(), [ clearMessages ]);
 
-  const handleRegenerateScene = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleRegenerateScene = useCallback(async (promptModification?: string) => {
     if (!selectedProject || !selectedScene) return;
     updateScene(selectedScene.id, { status: "generating" });
 
     try {
       await regenerateScene({
         projectId: selectedProject,
-        sceneId: selectedScene.id,
-        forceRegenerate: true
+        payload: {
+          sceneId: selectedScene.id,
+          forceRegenerate: true,
+          promptModification,
+        },
       });
 
       addMessage({
@@ -537,7 +545,6 @@ export default function Dashboard() {
                 status={ currentScenes[ selectedScene.id ].status }
                 characters={ selectedSceneCharacters }
                 location={ selectedSceneLocation }
-                onRegenerate={ handleRegenerateScene }
                 isLoading={ clientIsLoading }
                 isGenerating={ selectedScene.status === "generating" || selectedScene.status === "evaluating" }
               />

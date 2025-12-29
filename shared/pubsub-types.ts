@@ -3,12 +3,14 @@ import { GraphState, InitialGraphState, ObjectData, SceneStatus } from "./pipeli
 export type PubSubMessage<T extends string, P = undefined> = P extends undefined ? {
     type: T;
     projectId: string;
+    commandId?: string;
     timestamp: string;
 } : {
     type: T;
     projectId: string;
-    payload: P;
+    commandId?: string;
     timestamp: string;
+    payload: P;
 };
 
 // ===== COMMANDS (Client -> Server -> Pipeline) =====
@@ -20,7 +22,8 @@ export type PipelineCommand =
     | StopPipelineCommand
     | RegenerateSceneCommand
     | RegenerateFrameCommand
-    | ResolveInterventionCommand;
+    | ResolveInterventionCommand
+    | UpdateSceneAssetCommand;
 
 export type StartPipelineCommand = PubSubMessage<
     "START_PIPELINE",
@@ -33,7 +36,7 @@ export type StartPipelineCommand = PubSubMessage<
 
 export type RequestFullStateCommand = PubSubMessage<
     "REQUEST_FULL_STATE",
-   ( Record<string, never> | undefined)
+    (Record<string, never> | undefined)
 >;
 
 export type ResumePipelineCommand = PubSubMessage<
@@ -52,7 +55,7 @@ export type RegenerateSceneCommand = PubSubMessage<
     {
         sceneId: number;
         forceRegenerate?: boolean;
-        promptModification?: string; 
+        promptModification?: string;
     }
 >;
 
@@ -62,6 +65,15 @@ export type RegenerateFrameCommand = PubSubMessage<
         sceneId: number;
         frameType: "start" | "end";
         promptModification: string;
+    }
+>;
+
+export type UpdateSceneAssetCommand = PubSubMessage<
+    "UPDATE_SCENE_ASSET",
+    {
+        sceneId: number;
+        assetType: "startFrame" | "endFrame" | "video";
+        attempt: number | null; // null means delete/reject
     }
 >;
 
@@ -96,9 +108,9 @@ export type SceneProgressEvent = PubSubMessage<
         sceneId: number;
         progressMessage: string;
         status?: SceneStatus;
-        progress?: number; 
-        startFrame?: ObjectData; 
-        endFrame?: ObjectData; 
+        progress?: number;
+        startFrame?: ObjectData;
+        endFrame?: ObjectData;
         generatedVideo?: ObjectData;
     }
 >;

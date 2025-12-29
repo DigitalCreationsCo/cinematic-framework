@@ -8,10 +8,11 @@ import { handleRequestFullStateCommand } from './handlers/handleRequestFullState
 import { handleResumePipelineCommand } from './handlers/handleResumePipelineCommand';
 import { handleRegenerateSceneCommand } from './handlers/handleRegenerateSceneCommand';
 import { handleRegenerateFrameCommand } from './handlers/handleRegenerateFrameCommand';
+import { handleUpdateSceneAssetCommand } from './handlers/handleUpdateSceneAssetCommand';
 import { handleResolveInterventionCommand } from './handlers/handleResolveInterventionCommand';
 import { handleStopPipelineCommand } from './handlers/handleStopPipelineCommand';
 import { formatLoggers } from "./helpers/format-loggers";
-import { WorkflowService } from "./workflow-service";
+import { WorkflowService } from "./services/workflow-service";
 import { v4 as uuidv4 } from 'uuid';
 
 // const lockManager = new DistributedLockManager(postgresUrl);
@@ -122,6 +123,9 @@ async function main() {
                         break;
                     case "REGENERATE_FRAME":
                         await handleRegenerateFrameCommand(command, workflowService);
+                        break;
+                    case "UPDATE_SCENE_ASSET":
+                        await handleUpdateSceneAssetCommand(command, workflowService);
                         break;
                     case "RESOLVE_INTERVENTION":
                         await handleResolveInterventionCommand(command, workflowService);

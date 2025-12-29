@@ -1,5 +1,5 @@
 import { PipelineCommand } from "../../shared/pubsub-types";
-import { WorkflowService } from "../workflow-service";
+import { WorkflowService } from "../services/workflow-service";
 
 export async function handleResumePipelineCommand(
     command: Extract<PipelineCommand, { type: "RESUME_PIPELINE"; }>,

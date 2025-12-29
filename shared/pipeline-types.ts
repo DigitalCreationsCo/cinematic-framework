@@ -480,6 +480,11 @@ export const SceneGenerationOutputSchema = z.object({
   startFrame: ObjectDataSchema.optional().describe("GCS URL of start keyframe"),
   endFrame: ObjectDataSchema.optional().describe("GCS URL of end keyframe"),
   bestAttempt: z.number().describe("The attempt number that was selected as the best result"),
+  rejectedAttempts: z.object({
+    startFrame: z.array(z.number()).optional(),
+    endFrame: z.array(z.number()).optional(),
+    video: z.array(z.number()).optional(),
+  }).optional().describe("List of attempts that have been rejected/deleted by the user"),
   evaluation: QualityEvaluationResultSchema.optional().describe("Quality evaluation result"),
   status: SceneStatusSchema,
   progressMessage: z.string().optional().describe("Real-time progress message during generation"),

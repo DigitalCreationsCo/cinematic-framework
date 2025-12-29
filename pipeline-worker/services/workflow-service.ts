@@ -1,16 +1,16 @@
-import { PipelineEvent } from "../shared/pubsub-types";
-import { GraphState, InitialGraphState, Storyboard } from "../shared/pipeline-types";
-import { CinematicVideoWorkflow } from "../pipeline/graph";
-import { CheckpointerManager } from "../pipeline/checkpointer-manager";
+import { PipelineCommand, PipelineEvent } from "../../shared/pubsub-types";
+import { GraphState, InitialGraphState, Storyboard } from "../../shared/pipeline-types";
+import { CinematicVideoWorkflow } from "../../pipeline/graph";
+import { CheckpointerManager } from "../../pipeline/checkpointer-manager";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { Command, CompiledStateGraph } from "@langchain/langgraph";
-import { streamWithInterruptHandling } from "./helpers/stream-helper";
-import { mergeParamsIntoState, checkAndPublishInterruptFromSnapshot } from "./helpers/interrupts";
-import { GCPStorageManager } from "../pipeline/storage-manager";
-import { TextModelController } from "../pipeline/llm/text-model-controller";
-import { QualityCheckAgent } from "../pipeline/agents/quality-check-agent";
-import { FrameCompositionAgent } from "../pipeline/agents/frame-composition-agent";
-import { ContinuityManagerAgent } from "../pipeline/agents/continuity-manager";
+import { streamWithInterruptHandling } from "../helpers/stream-helper";
+import { mergeParamsIntoState, checkAndPublishInterruptFromSnapshot } from "../helpers/interrupts";
+import { GCPStorageManager } from "../../pipeline/storage-manager";
+import { TextModelController } from "../../pipeline/llm/text-model-controller";
+import { QualityCheckAgent } from "../../pipeline/agents/quality-check-agent";
+import { FrameCompositionAgent } from "../../pipeline/agents/frame-composition-agent";
+import { ContinuityManagerAgent } from "../../pipeline/agents/continuity-manager";
 
 export class WorkflowService {
     private checkpointerManager: CheckpointerManager;
@@ -79,7 +79,7 @@ export class WorkflowService {
         }
     }
 
-    async startPipeline(projectId: string, payload: any) {
+    async startPipeline(projectId: string, payload: Extract<PipelineCommand, { type: "START_PIPELINE"; }>[ 'payload' ]) {
         const config = this.getRunnableConfig(projectId);
         const controller = this.getController(projectId);
         const compiledGraph = await this.getCompiledGraph(projectId, controller);
@@ -147,8 +147,9 @@ export class WorkflowService {
         await streamWithInterruptHandling(projectId, compiledGraph, null, config, "resumePipeline", this.publishEvent);
     }
 
-    async regenerateScene(projectId: string, sceneId: number, forceRegenerate: boolean, promptModification?: string) {
+    async regenerateScene(projectId: string, { sceneId, promptModification, forceRegenerate }: Extract<PipelineCommand, { type: "REGENERATE_SCENE"; }>[ 'payload' ]) {
         const config = this.getRunnableConfig(projectId);
+
         const existingCheckpoint = await this.checkpointerManager.loadCheckpoint(config);
 
         if (!existingCheckpoint) {
@@ -185,7 +186,7 @@ export class WorkflowService {
         await streamWithInterruptHandling(projectId, compiledGraph, command, config, "regenerateScene", this.publishEvent);
     }
 
-    async resolveIntervention(projectId: string, action: 'retry' | 'skip' | 'abort', revisedParams?: any) {
+    async resolveIntervention(projectId: string, { action, revisedParams }: Extract<PipelineCommand, { type: "RESOLVE_INTERVENTION"; }>[ 'payload' ]) {
         const config = this.getRunnableConfig(projectId);
         const existingCheckpoint = await this.checkpointerManager.loadCheckpoint(config);
 
@@ -250,7 +251,109 @@ export class WorkflowService {
         await streamWithInterruptHandling(projectId, compiledGraph, command, config, "resolveIntervention", this.publishEvent);
     }
 
-    async regenerateFrame(projectId: string, sceneId: number, frameType: 'start' | 'end', promptModification?: string) {
+    async updateSceneAsset(projectId: string, { sceneId, assetType, attempt }: Extract<PipelineCommand, { type: "UPDATE_SCENE_ASSET"; }>[ 'payload' ]) {
+        console.log(`[WorkflowService] Updating ${assetType} for scene ${sceneId} to attempt ${attempt}`);
+        const config = this.getRunnableConfig(projectId);
+        const existingCheckpoint = await this.checkpointerManager.loadCheckpoint(config);
+
+        if (!existingCheckpoint) {
+            console.warn(`[WorkflowService] No checkpoint found to update asset for ${projectId}`);
+            return;
+        }
+
+        const currentState = existingCheckpoint.channel_values as GraphState;
+        const sceneIndex = currentState.storyboardState?.scenes.findIndex(s => s.id === sceneId);
+
+        if (sceneIndex === undefined || sceneIndex === -1) {
+            console.error(`[WorkflowService] Scene ${sceneId} not found`);
+            return;
+        }
+
+        const scene = currentState.storyboardState!.scenes[ sceneIndex ];
+        const storageManager = new GCPStorageManager(this.gcpProjectId, projectId, this.bucketName);
+
+        // Determine the GCS path for the asset
+        let newAssetData: any = undefined;
+        if (attempt !== null) {
+            const typeMap: Record<string, any> = {
+                'startFrame': 'scene_start_frame',
+                'endFrame': 'scene_end_frame',
+                'video': 'scene_video'
+            };
+            const gcsType = typeMap[ assetType ];
+            // We use the specific attempt number
+            // Note: getGcsObjectPath handles attempt resolution, but we want a specific one
+            const path = storageManager.getGcsObjectPath({
+                type: gcsType,
+                sceneId: sceneId,
+                attempt: attempt
+            });
+            // We assume the model is unknown or we keep existing if available, or just generic
+            const model = assetType === 'video' ? (scene.generatedVideo?.model || "") :
+                assetType === 'startFrame' ? (scene.startFrame?.model || "") :
+                    (scene.endFrame?.model || "");
+
+            newAssetData = storageManager.buildObjectData(path, model);
+        }
+
+        // Update rejected attempts if deleting (attempt === null)
+        let rejectedAttempts = { ...scene.rejectedAttempts };
+        if (attempt === null) {
+            const currentAttempt = assetType === 'video' ?
+                (scene.generatedVideo?.storageUri ? storageManager.getLatestAttempt('scene_video', sceneId) : null) : // This logic is imperfect, ideally we parse from URI
+                assetType === 'startFrame' ? (scene.startFrame?.storageUri ? storageManager.getLatestAttempt('scene_start_frame', sceneId) : null) :
+                    (scene.endFrame?.storageUri ? storageManager.getLatestAttempt('scene_end_frame', sceneId) : null);
+
+            // Actually, simply adding the current one if we know it is safer.
+            // But we don't track "current attempt number" explicitly in scene object easily without parsing.
+            // For now, we will just clear the asset.
+        }
+
+        const updatedScenes = currentState.storyboardState!.scenes.map(s => {
+            if (s.id === sceneId) {
+                const updates: any = {};
+                if (assetType === 'startFrame') updates.startFrame = newAssetData;
+                if (assetType === 'endFrame') updates.endFrame = newAssetData;
+                if (assetType === 'video') updates.generatedVideo = newAssetData;
+
+                // When explicitly setting an asset, we should probably update the "bestAttempt" tracking in storage too?
+                if (attempt !== null) {
+                    const typeMap: Record<string, any> = {
+                        'startFrame': 'scene_start_frame',
+                        'endFrame': 'scene_end_frame',
+                        'video': 'scene_video'
+                    };
+                    storageManager.registerBestAttempt(typeMap[ assetType ], sceneId, attempt);
+                }
+
+                return { ...s, ...updates };
+            }
+            return s;
+        });
+
+        const newState: GraphState = {
+            ...currentState,
+            storyboardState: {
+                ...currentState.storyboardState!,
+                scenes: updatedScenes,
+            },
+        };
+
+        const checkpointer = await this.checkpointerManager.getCheckpointer();
+        await checkpointer!.put(config, {
+            ...existingCheckpoint,
+            channel_values: newState
+        }, {} as any, {});
+
+        await this.publishEvent({
+            type: "FULL_STATE",
+            projectId,
+            payload: { state: newState },
+            timestamp: new Date().toISOString(),
+        });
+    }
+
+    async regenerateFrame(projectId: string, { sceneId, frameType, promptModification }: Extract<PipelineCommand, { type: "REGENERATE_FRAME"; }>[ 'payload' ]) {
         console.log(`[WorkflowService] Regenerating ${frameType} frame for scene ${sceneId}`);
         const config = this.getRunnableConfig(projectId);
         const existingCheckpoint = await this.checkpointerManager.loadCheckpoint(config);
@@ -401,7 +504,7 @@ export class WorkflowService {
         }
     }
 
-    private async buildInitialState(projectId: string, payload: any): Promise<InitialGraphState> {
+    private async buildInitialState(projectId: string, payload: Parameters<this['startPipeline']>[1]): Promise<InitialGraphState> {
         const sm = new GCPStorageManager(this.gcpProjectId, projectId, this.bucketName);
         let audioPublicUri;
 

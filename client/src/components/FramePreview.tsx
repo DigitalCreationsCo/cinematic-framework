@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Image as ImageIcon, RefreshCw } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Image as ImageIcon, RefreshCw, Trash2, History } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { memo } from "react";
 
@@ -10,23 +11,59 @@ interface FramePreviewProps {
   alt: string;
   isLoading?: boolean;
   onRegenerate?: () => void;
+  onDelete?: () => void;
+  onHistory?: () => void;
   isGenerating: boolean;
   priority?: boolean;
 }
 
-const FramePreview = memo(function FramePreview({ title, imageUrl, alt, isLoading, onRegenerate, isGenerating, priority = false }: FramePreviewProps) {
+const FramePreview = memo(function FramePreview({ title, imageUrl, alt, isLoading, onRegenerate, onDelete, onHistory, isGenerating, priority = false }: FramePreviewProps) {
   return (
     <Card data-testid={ `frame-preview-${title.toLowerCase().replace(/\s+/g, '-')}` }>
       <CardHeader className="p-3 pb-2 flex-row items-center justify-between">
         <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           { isLoading ? <Skeleton className="h-4 w-24" /> : title }
         </CardTitle>
-        { onRegenerate && !isLoading && (
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={ onRegenerate }>
-            <RefreshCw className="h-3 w-3" />
-            <span className="sr-only">Regenerate</span>
-          </Button>
-        ) }
+        <div className="flex items-center gap-1">
+          { onHistory && !isLoading && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={ onHistory }>
+                  <History className="h-3 w-3" />
+                  <span className="sr-only">History</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>View History</TooltipContent>
+            </Tooltip>
+          ) }
+          { onDelete && !isLoading && imageUrl && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6 hover:text-destructive" onClick={ (e) => {
+                  e.stopPropagation();
+                  if (confirm("Are you sure you want to delete this frame? It will be removed from the scene.")) {
+                    onDelete();
+                  }
+                } }>
+                  <Trash2 className="h-3 w-3" />
+                  <span className="sr-only">Delete</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete Frame</TooltipContent>
+            </Tooltip>
+          ) }
+          { onRegenerate && !isLoading && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={ onRegenerate }>
+                  <RefreshCw className="h-3 w-3" />
+                  <span className="sr-only">Regenerate</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Regenerate Frame</TooltipContent>
+            </Tooltip>
+          ) }
+        </div>
       </CardHeader>
       <CardContent className="p-3 pt-0">
         <div className="aspect-video bg-muted rounded-md overflow-hidden">

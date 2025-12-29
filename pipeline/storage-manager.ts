@@ -474,9 +474,22 @@ export class GCPStorageManager {
    * Returns the HTTPS public URL for a GCS object.
    * Useful for frontend display.
    */
-  getPublicUrl(path: string): string {
-    const normalizedPath = this.normalizePath(path);
-    return `https://storage.googleapis.com/${normalizedPath}`;
+  getPublicUrl(pathOrUri: string): string {
+    let cleanPath = pathOrUri.replace(/^gs:\/\//, '');
+    cleanPath = cleanPath.replace(/^https:\/\/storage\.googleapis\.com\//, '');
+
+    // Ensure no leading slashes
+    while (cleanPath.startsWith('/')) {
+      cleanPath = cleanPath.substring(1);
+    }
+
+    // Heuristic: If the path doesn't start with the bucket name, prepend it.
+    // This is safe because all assets handled by this manager are within 'this.bucketName'.
+    if (!cleanPath.startsWith(this.bucketName + '/')) {
+      cleanPath = `${this.bucketName}/${cleanPath}`;
+    }
+
+    return `https://storage.googleapis.com/${cleanPath}`;
   }
 
   /**
@@ -508,5 +521,81 @@ export class GCPStorageManager {
     const file = bucket.file(path);
     const [ metadata ] = await file.getMetadata();
     return metadata.contentType;
+  }
+
+  /**
+   * Lists all asset history for a specific scene.
+   */
+  async listSceneAssets(sceneId: number): Promise<{
+    startFrames: { attempt: number, url: string, timestamp: string; }[];
+    endFrames: { attempt: number, url: string, timestamp: string; }[];
+    videos: { attempt: number, url: string, timestamp: string; }[];
+  }> {
+    const bucket = this.storage.bucket(this.bucketName);
+    const paddedSceneId = sceneId.toString().padStart(3, '0');
+
+    // Base prefixes for this scene
+    const framesPrefix = path.posix.join(this.videoId, 'images', 'frames', `scene_${paddedSceneId}_`);
+    const videosPrefix = path.posix.join(this.videoId, 'scenes', `scene_${paddedSceneId}_`);
+
+    const result = {
+      startFrames: [] as { attempt: number, url: string, timestamp: string; }[],
+      endFrames: [] as { attempt: number, url: string, timestamp: string; }[],
+      videos: [] as { attempt: number, url: string, timestamp: string; }[]
+    };
+
+    try {
+      // Fetch in parallel
+      const [ [ frameFiles ], [ videoFiles ] ] = await Promise.all([
+        bucket.getFiles({ prefix: framesPrefix }),
+        bucket.getFiles({ prefix: videosPrefix })
+      ]);
+
+      // Process frames
+      for (const file of frameFiles) {
+        const timestamp = file.metadata.timeCreated || new Date().toISOString();
+        // Construct URL manually to avoid any path normalization issues
+        const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${file.name}`;
+
+        // Start frames
+        const startMatch = file.name.match(/_frame_start_(\d{2})\.png$/);
+        if (startMatch) {
+          result.startFrames.push({ attempt: parseInt(startMatch[ 1 ], 10), url: publicUrl, timestamp });
+          continue;
+        }
+
+        // End frames
+        const endMatch = file.name.match(/_frame_end_(\d{2})\.png$/);
+        if (endMatch) {
+          result.endFrames.push({ attempt: parseInt(endMatch[ 1 ], 10), url: publicUrl, timestamp });
+        }
+      }
+
+      // Process videos
+      for (const file of videoFiles) {
+        // Match scene_XXX_YY.mp4 (video attempt)
+        // Avoid matching other things like evaluations if they start with same prefix (scene_XXX_evaluation_YY.json)
+        const videoMatch = file.name.match(/_(\d{2})\.mp4$/);
+        if (videoMatch) {
+          const timestamp = file.metadata.timeCreated || new Date().toISOString();
+          result.videos.push({
+            attempt: parseInt(videoMatch[ 1 ], 10),
+            url: `https://storage.googleapis.com/${this.bucketName}/${file.name}`,
+            timestamp
+          });
+        }
+      }
+
+      // Sort descending by attempt
+      const sortFn = (a: { attempt: number; }, b: { attempt: number; }) => b.attempt - a.attempt;
+      result.startFrames.sort(sortFn);
+      result.endFrames.sort(sortFn);
+      result.videos.sort(sortFn);
+
+    } catch (error) {
+      console.warn(`Failed to list assets for scene ${sceneId}:`, error);
+    }
+
+    return result;
   }
 }

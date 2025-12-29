@@ -5,7 +5,7 @@ import { useStore } from '@/lib/store';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
-import { resumePipeline } from '@/lib/api';
+import { resolveIntervention, resumePipeline } from '@/lib/api';
 
 export function InterventionModal() {
     const { interruptionState, setInterruptionState, setPipelineStatus, selectedProject, setIsLoading } = useStore();
@@ -22,21 +22,12 @@ export function InterventionModal() {
         if (!selectedProject) return;
 
         try {
-            const response = await fetch(`/api/video/${selectedProject}/resolve-intervention`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action, revisedParams }),
+            await resolveIntervention({
+                projectId: selectedProject,
+                payload: { action, revisedParams }
             });
 
-            if (!response.ok) {
-                throw new Error('Failed to resolve intervention');
-            }
-
             setPipelineStatus("analyzing");
-            if (action === "retry" || action === "skip") {
-                await resumePipeline({ projectId: selectedProject });
-            }
-            
             setIsLoading(false);
             setInterruptionState(null);
         } catch (error) {

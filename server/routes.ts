@@ -5,21 +5,13 @@ import { PipelineCommand, PipelineEvent } from "../shared/pubsub-types";
 import { v4 as uuidv4 } from "uuid";
 import { Bucket } from "@google-cloud/storage";
 import multer from "multer";
+import { GCPStorageManager } from "../pipeline/storage-manager";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express,
   bucket: Bucket,
 ): Promise<Server> {
-
-  const pubsub = new PubSub({
-    projectId: process.env.GCP_PROJECT_ID,
-    apiEndpoint: process.env.PUBSUB_EMULATOR_HOST,
-  });
-
-  const VIDEO_COMMANDS_TOPIC_NAME = "video-commands";
-  const VIDEO_EVENTS_TOPIC_NAME = "video-events";
-  const videoCommandsTopicPublisher = pubsub.topic(VIDEO_COMMANDS_TOPIC_NAME);
 
   const upload = multer({
     storage: multer.memoryStorage(),
@@ -28,8 +20,19 @@ export async function registerRoutes(
     },
   });
 
-  let sharedEventsSubscription: Subscription;
   const clientConnections = new Map<string, Set<Response>>();
+
+  const pubsub = new PubSub({
+    projectId: process.env.GCP_PROJECT_ID,
+    apiEndpoint: process.env.PUBSUB_EMULATOR_HOST,
+  });
+
+  const VIDEO_COMMANDS_TOPIC_NAME = "video-commands";
+  const VIDEO_EVENTS_TOPIC_NAME = "video-events";
+
+  const videoCommandsTopicPublisher = pubsub.topic(VIDEO_COMMANDS_TOPIC_NAME);
+
+  let sharedEventsSubscription: Subscription;
 
   async function ensureSharedSubscription() {
     if (!sharedEventsSubscription) {
@@ -84,16 +87,18 @@ export async function registerRoutes(
     return sharedEventsSubscription;
   }
 
-  async function publishCommand<T extends PipelineCommand[ "type" ]>(command: Omit<Extract<PipelineCommand, { type: T; }>, "timestamp"> & {
-    type: T;
-  }) {
+  async function publishCommand<T extends PipelineCommand[ "type" ]>(
+    command: Omit<Extract<PipelineCommand, { type: T; }>, "timestamp"> & { type: T; commandId: string; }
+  ) {
     const fullCommand = {
       ...command,
       ...("payload" in command ? { payload: command.payload } : {}),
       timestamp: new Date().toISOString(),
+      commandId: command.commandId || uuidv4(),
     };
     const dataBuffer = Buffer.from(JSON.stringify(fullCommand));
     await videoCommandsTopicPublisher.publishMessage({ data: dataBuffer });
+    return fullCommand.commandId;
   }
 
 
@@ -102,124 +107,205 @@ export async function registerRoutes(
   // ============================================================================
 
   app.post("/api/video/start", async (
-    req: Request<any, any, Extract<PipelineCommand, { type: "START_PIPELINE"; }>[ 'payload' ] & { projectId: string }>,
-      res: Response
+    req: Request<any, any, Extract<PipelineCommand, { type: "START_PIPELINE"; }>>,
+    res: Response
   ) => {
     try {
-      const { projectId, audioGcsUri, creativePrompt } = req.body;
+      const { projectId, payload, commandId = uuidv4() } = req.body;
       console.log(`Received START_PIPELINE command for projectId: ${projectId}`);
-      if (!creativePrompt) {
-        console.error("Validation error: creativePrompt missing.", { creativePrompt });
+
+      if (!payload.creativePrompt) {
+        console.error("Validation error: creativePrompt missing.", { creativePrompt: payload.creativePrompt });
         return res.status(400).json({ error: "creativePrompt is required." });
       }
 
       const effectiveProjectId = projectId || `project_${Date.now()}_${uuidv4().split('-')[ 0 ]}`;
 
-      await publishCommand({ type: "START_PIPELINE", projectId: effectiveProjectId, payload: { audioGcsUri, creativePrompt } });
-      console.log(`Published START_PIPELINE command for projectId: ${effectiveProjectId} to PubSub.`);
-      res.status(202).json({ message: "Pipeline start command issued.", projectId: effectiveProjectId });
+      const finalCommandId = await publishCommand({ type: "START_PIPELINE", projectId: effectiveProjectId, payload, commandId });
+
+      console.log(`Published START_PIPELINE (id: ${finalCommandId}) for ${effectiveProjectId}`);
+
+      res.status(202).json({
+        message: "Pipeline start command issued.",
+        projectId: effectiveProjectId,
+        commandId: finalCommandId,
+      });
     } catch (error) {
       console.error("Error publishing START_PIPELINE command:", error);
       res.status(500).json({ error: "Failed to issue start command." });
     }
   });
 
-  app.post("/api/video/stop", async (req: Request, res: Response) => {
+  app.post("/api/video/stop", async (
+    req: Request<any, any, Extract<PipelineCommand, { type: "STOP_PIPELINE"; }>>,
+    res: Response) => {
     try {
-      const { projectId } = req.body;
+      const { projectId, commandId = uuidv4() } = req.body;
       if (!projectId) return res.status(400).json({ error: "projectId is required." });
-      await publishCommand({ type: "STOP_PIPELINE", projectId });
-      res.status(202).json({ message: "Pipeline stop command issued.", projectId });
+      const finalCommandId = await publishCommand({ type: "STOP_PIPELINE", projectId, commandId });
+      
+      res.status(202).json({ message: "Pipeline stop command issued.", projectId, commandId: finalCommandId });
     } catch (error) {
       console.error("Error publishing stop command:", error);
       res.status(500).json({ error: "Failed to issue stop command." });
     }
   });
 
-  app.post("/api/video/:projectId/resume", async (req: Request, res: Response) => {
+  app.post("/api/video/:projectId/resume", async (
+    req: Request<any, any, Extract<PipelineCommand, { type: "RESUME_PIPELINE"; }>>,
+    res: Response) => {
     try {
-      const { projectId } = req.params;
-      await publishCommand({ type: "RESUME_PIPELINE", projectId });
-      res.status(202).json({ message: "Pipeline resume command issued.", projectId });
+      const { projectId, commandId = uuidv4() } = req.params;
+      const finalCommandId = await publishCommand({ type: "RESUME_PIPELINE", projectId, commandId });
+      
+      res.status(202).json({ message: "Pipeline resume command issued.", projectId, commandId: finalCommandId });
     } catch (error) {
       console.error("Error publishing resume command:", error);
       res.status(500).json({ error: "Failed to issue resume command." });
     }
   });
 
-  app.post("/api/video/:projectId/regenerate-scene", async (req: Request, res: Response) => {
+  app.post("/api/video/:projectId/regenerate-scene", async (
+    req: Request<any, any, Extract<PipelineCommand, { type: "REGENERATE_SCENE"; }>>,
+    res: Response
+  ) => {
     try {
       const { projectId } = req.params;
-      const { sceneId, forceRegenerate, promptModification } = req.body;
-      if (!sceneId) return res.status(400).json({ error: "sceneId is required." });
-      await publishCommand({ type: "REGENERATE_SCENE", projectId, payload: { sceneId, forceRegenerate, promptModification } });
-      res.status(202).json({ message: "Scene regeneration command issued.", projectId });
+      const { payload, commandId = uuidv4() } = req.body;
+
+      if (!payload.sceneId) return res.status(400).json({ error: "sceneId is required." });
+
+      const finalCommandId = await publishCommand({
+        type: "REGENERATE_SCENE",
+        projectId,
+        payload,
+        commandId,
+      });
+
+      res.status(202).json({ message: "Scene regeneration command issued.", projectId, command: finalCommandId });
     } catch (error) {
       console.error("Error publishing regenerate scene command:", error);
       res.status(500).json({ error: "Failed to issue regenerate scene command." });
     }
   });
 
-  app.post("/api/video/:projectId/regenerate-frame", async (req: Request, res: Response) => {
+  app.post("/api/video/:projectId/regenerate-frame", async (
+    req: Request<any, any, Extract<PipelineCommand, { type: "REGENERATE_FRAME"; }>>,
+    res: Response
+  ) => {
     try {
       const { projectId } = req.params;
-      const { sceneId, frameType, promptModification } = req.body;
+      const { payload, commandId = uuidv4() } = req.body;
 
       const missingParams = [];
-      if (!sceneId) missingParams.push('sceneId');
-      if (!frameType) missingParams.push('frameType');
-      if (!promptModification) missingParams.push('promptModification');
+      if (!payload.sceneId) missingParams.push('sceneId');
+      if (!payload.frameType) missingParams.push('frameType');
+      if (!payload.promptModification) missingParams.push('promptModification');
 
       if (missingParams.length) {
         return res.status(400).json({ error: `Required params are missing: ${missingParams.join(', ')}.` });
       }
 
-      await publishCommand({
+      const finalCommandId = await publishCommand({
         type: "REGENERATE_FRAME",
         projectId,
-        payload: { sceneId, frameType, promptModification },
+        payload,
+        commandId,
       });
-      res.status(202).json({ message: "Frame regeneration command issued.", projectId });
+      res.status(202).json({ message: "Frame regeneration command issued.", projectId, commandId: finalCommandId });
     } catch (error) {
       console.error("Error publishing regenerate frame command:", error);
       res.status(500).json({ error: "Failed to issue regenerate frame command." });
     }
   });
 
-  app.post("/api/video/:projectId/resolve-intervention", async (req: Request, res: Response) => {
+  app.post("/api/video/:projectId/resolve-intervention", async (
+    req: Request<any, any, Extract<PipelineCommand, { type: "RESOLVE_INTERVENTION"; }>>,
+    res: Response
+  ) => {
     try {
       const { projectId } = req.params;
-      const { action, revisedParams } = req.body;
+      const { payload, commandId = uuidv4() } = req.body;
 
       if (!projectId) return res.status(400).json({ error: "projectId is required." });
-      if (!action) return res.status(400).json({ error: "action is required." });
+      if (!payload.action) return res.status(400).json({ error: "action is required." });
 
-      await publishCommand({
+      const finalCommandId = await publishCommand({
         type: "RESOLVE_INTERVENTION",
         projectId,
-        payload: { action, revisedParams }
+        payload,
+        commandId
       });
-      res.status(202).json({ message: "Intervention resolution command issued.", projectId });
+
+      res.status(202).json({ message: "Intervention resolution command issued.", projectId, commandId: finalCommandId });
     } catch (error) {
       console.error("Error publishing resolve intervention command:", error);
       res.status(500).json({ error: "Failed to issue resolve intervention command." });
     }
   });
 
-  app.post("/api/video/:projectId/request-state", async (req: Request, res: Response) => {
+  app.post("/api/video/:projectId/request-state", async (
+    req: Request<any, any, Extract<PipelineCommand, { type: "REQUEST_FULL_STATE"; }>>,
+    res: Response
+  ) => {
     try {
-      const { projectId } = req.params; 
-      await publishCommand({ type: "REQUEST_FULL_STATE", projectId });
-      res.status(202).json({ message: "Full state request command issued.", projectId });
+      const { projectId } = req.params;
+      const { commandId = uuidv4() } = req.body;
+      const finalCommandId = await publishCommand({ type: "REQUEST_FULL_STATE", projectId, commandId });
+
+      res.status(202).json({ message: "Full state request command issued.", projectId, commandId: finalCommandId });
     } catch (error) {
       console.error("Error publishing request state command:", error);
       res.status(500).json({ error: "Failed to issue request state command." });
     }
   });
 
+  app.get("/api/video/:projectId/scene/:sceneId/assets", async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      const { projectId, sceneId } = req.params;
+      const storageManager = new GCPStorageManager(process.env.GCP_PROJECT_ID!, projectId, process.env.GCP_BUCKET_NAME!);
+      const assets = await storageManager.listSceneAssets(parseInt(sceneId, 10));
+      res.json(assets);
+    } catch (error) {
+      console.error("Error listing assets:", error);
+      res.status(500).json({ error: "Failed to list assets." });
+    }
+  });
+
+  app.post("/api/video/:projectId/scene/:sceneId/asset", async (
+    req: Request<any, any, Extract<PipelineCommand, { type: "UPDATE_SCENE_ASSET"; }>>,
+    res: Response
+  ) => {
+    try {
+      const { projectId, sceneId } = req.params;
+      const { payload: { assetType, attempt }, commandId = uuidv4() } = req.body;
+
+      if (!assetType) return res.status(400).json({ error: "asset type is required." });
+
+      const finalCommandId = await publishCommand({
+        type: "UPDATE_SCENE_ASSET",
+        projectId,
+        payload: {
+          sceneId: parseInt(sceneId, 10),
+          assetType: assetType,
+          attempt: attempt
+        },
+        commandId
+      });
+
+      res.status(202).json({ message: "Asset update command issued.", projectId, commandId: finalCommandId });
+    } catch (error) {
+      console.error("Error publishing update scene asset command:", error);
+      res.status(500).json({ error: "Failed to issue update scene asset command." });
+    }
+  });
+
   // SSE endpoint for a specific project
   app.get("/api/events/:projectId", async (req: Request, res: Response) => {
-    const { projectId } = req.params;
+    const { projectId, commandId = uuidv4() } = req.params;
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -237,7 +323,7 @@ export async function registerRoutes(
 
       console.log(`✓ Client connected for ${projectId} (${clientConnections.get(projectId)!.size} total)`);
 
-      await publishCommand({ type: "REQUEST_FULL_STATE", projectId });
+      await publishCommand({ type: "REQUEST_FULL_STATE", projectId, commandId });
 
       req.on("close", async () => {
         const clients = clientConnections.get(projectId);

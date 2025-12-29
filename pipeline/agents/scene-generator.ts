@@ -222,7 +222,7 @@ export class SceneGeneratorAgent {
                 await new Promise(resolve => setTimeout(resolve, 3000));
 
             } catch (error) {
-                if (error instanceof GraphInterrupt) throw Error;
+                if (error instanceof GraphInterrupt) throw error;
 
                 console.error(`   ✗ Attempt ${numAttempts} failed:`, error);
                 if (evaluation && generated) {

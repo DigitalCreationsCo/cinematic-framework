@@ -1,5 +1,5 @@
 import { PipelineCommand } from "../../shared/pubsub-types";
-import { WorkflowService } from "../workflow-service";
+import { WorkflowService } from "../services/workflow-service";
 
 export async function handleRegenerateFrameCommand(
     command: Extract<PipelineCommand, { type: "REGENERATE_FRAME"; }>,

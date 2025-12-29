@@ -11,15 +11,19 @@ import QualityEvaluationPanel from "./QualityEvaluationPanel";
 import FramePreview from "./FramePreview";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RegenerateFrameDialog } from "./RegenerateFrameDialog";
-import { regenerateFrame } from "@/lib/api";
+import { RegenerateSceneDialog } from "./RegenerateSceneDialog";
+import { AssetHistoryPicker } from "./AssetHistoryPicker";
+import { regenerateFrame, updateSceneAsset, regenerateScene } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Trash2, History } from "lucide-react";
+import { useStore } from "@/lib/store";
 
 interface SceneDetailPanelProps {
   scene: Scene;
   status: SceneStatus;
   characters?: Character[];
   location?: Location;
-  onRegenerate?: (e: React.MouseEvent) => void;
   isGenerating: boolean;
   isLoading?: boolean;
   projectId: string;
@@ -30,13 +34,16 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
   status,
   characters = [],
   location,
-  onRegenerate,
   isGenerating,
   isLoading = false,
   projectId,
 }: SceneDetailPanelProps) {
   const { toast } = useToast();
+  const { updateScene } = useStore();
   const [ dialogOpen, setDialogOpen ] = useState(false);
+  const [ regenerateSceneDialogOpen, setRegenerateSceneDialogOpen ] = useState(false);
+  const [ historyPickerOpen, setHistoryPickerOpen ] = useState(false);
+  const [ pickerType, setPickerType ] = useState<"startFrame" | "endFrame" | "video">("startFrame");
   const [ frameToRegenerate, setFrameToRegenerate ] = useState<"start" | "end" | null>(null);
   const [ isGeneratingFrame, setIsGeneratingFrame ] = useState(false);
 
@@ -67,19 +74,75 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
     setDialogOpen(true);
   };
 
+  const handleDeleteAsset = async (type: "startFrame" | "endFrame" | "video") => {
+    try {
+      await updateSceneAsset({
+        projectId,
+        payload: {
+          sceneId: scene.id,
+          assetType: type,
+          attempt: null,
+        },
+      });
+      toast({
+        title: "Asset Deleted",
+        description: `The ${type} has been removed from the scene.`,
+        duration: 500,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `Failed to delete asset: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleHistoryClick = (type: "startFrame" | "endFrame" | "video") => {
+    setPickerType(type);
+    setHistoryPickerOpen(true);
+  };
+
+  const handleSelectAsset = async (asset: { attempt: number; }) => {
+    try {
+      await updateSceneAsset({
+        projectId,
+        payload: {
+          sceneId: scene.id,
+          assetType: pickerType,
+          attempt: asset.attempt,
+        },
+      });
+      toast({
+        title: "Asset Restored",
+        description: `Restored attempt #${asset.attempt} for ${pickerType}.`,
+        duration: 500,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `Failed to restore asset: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleRegenerateSubmit = async (newPrompt: string, originalPrompt: string) => {
     if (!frameToRegenerate) return;
     setIsGeneratingFrame(true);
     try {
       await regenerateFrame({
         projectId: projectId,
-        sceneId: scene.id,
-        frameType: frameToRegenerate,
-        promptModification: newPrompt || originalPrompt,
+        payload: {
+          sceneId: scene.id,
+          frameType: frameToRegenerate,
+          promptModification: newPrompt || originalPrompt,
+        }
       });
       toast({
         title: "Frame Regeneration Started",
         description: `The ${frameToRegenerate} frame for scene ${scene.id} is being regenerated.`,
+        duration: 500,
       });
     } catch (error) {
       toast({
@@ -94,6 +157,34 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
     }
   };
 
+  const handleSceneRegenerateSubmit = async (promptModification: string) => {
+    updateScene(scene.id, { status: "generating" });
+    try {
+      await regenerateScene({
+        projectId: projectId,
+        payload: {
+          sceneId: scene.id,
+          forceRegenerate: true,
+          promptModification,
+        },
+      });
+
+      toast({
+        title: "Scene Regeneration Started",
+        description: `Regenerating scene ${scene.id}...`,
+        duration: 500,
+      });
+    } catch (error) {
+      console.error("Failed to regenerate scene:", error);
+      updateScene(scene.id, { status: "error" });
+      toast({
+        title: "Error",
+        description: `Failed to regenerate scene ${scene.id}: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      });
+    }
+  };
+
   const toggleDialog = () => setDialogOpen(!dialogOpen);
 
   return (
@@ -104,6 +195,25 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
         isOpen={ dialogOpen }
         onOpenChange={ toggleDialog }
         onSubmit={ handleRegenerateSubmit }
+      />
+      <RegenerateSceneDialog
+        scene={ scene }
+        isOpen={ regenerateSceneDialogOpen }
+        onOpenChange={ setRegenerateSceneDialogOpen }
+        onSubmit={ handleSceneRegenerateSubmit }
+      />
+      <AssetHistoryPicker
+        sceneId={ scene.id }
+        assetType={ pickerType }
+        projectId={ projectId }
+        isOpen={ historyPickerOpen }
+        onOpenChange={ setHistoryPickerOpen }
+        onSelect={ handleSelectAsset }
+        currentUrl={
+          pickerType === "startFrame" ? scene.startFrame?.publicUri :
+            pickerType === "endFrame" ? scene.endFrame?.publicUri :
+              scene.generatedVideo?.publicUri
+        }
       />
       <div className="h-full flex flex-col" data-testid={ `panel-scene-detail-${scene.id}` }>
         <div className="p-4 border-b flex items-center justify-between gap-4 shrink-0">
@@ -124,27 +234,39 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
             { isLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : hasVideo && (
-              <Button size="sm" onClick={ handleLocalPlay } data-testid="button-play-video">
-                { isLocalPlaying ? <Pause className="w-4 h-4 mr-1" /> : <Play className="w-4 h-4 mr-1" /> }
-                { isLocalPlaying ? "Pause" : "Play" }
-              </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="sm" onClick={ handleLocalPlay } data-testid="button-play-video">
+                      { isLocalPlaying ? <Pause className="w-4 h-4 mr-1" /> : <Play className="w-4 h-4 mr-1" /> }
+                      { isLocalPlaying ? "Pause" : "Play" }
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    { isLocalPlaying ? "Pause" : "Play Scene" }
+                  </TooltipContent>
+                </Tooltip>
             ) }
             { isLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
-              <Button size="sm" variant="outline" onClick={ (e) => { confirm('Are you sure you want to regenerate this scene? You can\'t undo this.') && onRegenerate?.(e); } } data-testid="button-regenerate" disabled={ isGenerating }>
-                { isGenerating ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-1" />
-                    Regenerate
-                  </>
-                ) }
-              </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="sm" variant="outline" onClick={ () => setRegenerateSceneDialogOpen(true) } data-testid="button-regenerate" disabled={ isGenerating }>
+                      { isGenerating ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-1" />
+                          Regenerate Scene
+                        </>
+                      ) }
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Regenerate Scene</TooltipContent>
+                </Tooltip>
             ) }
           </div>
         </div>
@@ -158,6 +280,8 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
                 alt="Start frame"
                 isLoading={ isLoading }
                 onRegenerate={ () => handleRegenerateClick("start") }
+                onDelete={ () => handleDeleteAsset("startFrame") }
+                onHistory={ () => handleHistoryClick("startFrame") }
                 isGenerating={ isGeneratingFrame }
                 priority={ true }
               />
@@ -167,6 +291,8 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
                 alt="End frame"
                 isLoading={ isLoading }
                 onRegenerate={ () => handleRegenerateClick("end") }
+                onDelete={ () => handleDeleteAsset("endFrame") }
+                onHistory={ () => handleHistoryClick("endFrame") }
                 isGenerating={ isGeneratingFrame }
                 priority={ true }
               />
@@ -213,16 +339,62 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
                       </div>
                     ) }
                   </div>
+                    {/* Video Controls Overlay */ }
+                    <div className="absolute top-3 right-3 flex gap-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 bg-background/50 hover:bg-background/80 backdrop-blur-sm" onClick={ () => handleHistoryClick("video") }>
+                            <History className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>View History</TooltipContent>
+                      </Tooltip>
+                      { hasVideo && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 bg-background/50 hover:bg-background/80 hover:text-destructive backdrop-blur-sm" onClick={ (e) => {
+                              e.stopPropagation();
+                              if (confirm("Are you sure you want to delete this video?")) {
+                                handleDeleteAsset("video");
+                              }
+                            } }>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Delete Video</TooltipContent>
+                        </Tooltip>
+                      ) }
+                    </div>
                 </CardContent>
               </Card>
             ) }
 
             <Tabs defaultValue="details" className="w-full">
               <TabsList className="w-full grid grid-cols-4">
-                <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
-                <TabsTrigger value="quality" data-testid="tab-quality">Quality</TabsTrigger>
-                <TabsTrigger value="prompt" data-testid="tab-prompt">Prompt</TabsTrigger>
-                <TabsTrigger value="continuity" data-testid="tab-continuity">Continuity</TabsTrigger>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>View scene technical details</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger value="quality" data-testid="tab-quality">Quality</TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>View quality evaluation metrics</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger value="prompt" data-testid="tab-prompt">Prompt</TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>View generation prompt</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger value="continuity" data-testid="tab-continuity">Continuity</TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>View continuity analysis</TooltipContent>
+                </Tooltip>
               </TabsList>
 
               <TabsContent value="details" className="mt-4 space-y-4">
@@ -346,7 +518,7 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
                   <CardHeader className="p-3 pb-2">
                     <div className="flex items-center gap-2">
                       <FileText className="w-4 h-4 text-muted-foreground" />
-                      <CardTitle className="text-sm font-medium">Enhanced Prompt</CardTitle>
+                      <CardTitle className="text-sm font-medium">Prompt</CardTitle>
                     </div>
                   </CardHeader>
                   <CardContent className="p-3 pt-0">

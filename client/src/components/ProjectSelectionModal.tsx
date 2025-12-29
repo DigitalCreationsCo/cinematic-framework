@@ -53,9 +53,11 @@ export const ProjectSelectionModal: React.FC<ProjectSelectionModalProps> = ({
       }
 
       const result = await startPipeline({
-        projectId: newProjectId || undefined,
-        creativePrompt: creativePrompt,
-        audioGcsUri,
+        projectId: newProjectId || '',
+        payload: {
+          creativePrompt: creativePrompt,
+          audioGcsUri,
+        },
       });
 
       // Optimistic update to show "Analyzing" state immediately

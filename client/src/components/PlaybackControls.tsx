@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Play,
   Pause,
@@ -145,7 +146,11 @@ const PlaybackControls = memo(function PlaybackControls({
     if (onPlayMainVideo) {
       onPlayMainVideo();
     }
-    setIsPlaying(!isPlaying);
+    const willPlay = !isPlaying;
+    setIsPlaying(willPlay);
+    if (willPlay) {
+      setIsTheatreMode(true);
+    }
   };
 
   const handleSeek = (value: number[]) => {
@@ -252,69 +257,98 @@ const PlaybackControls = memo(function PlaybackControls({
           }) }
         </div>
 
-        <Slider
-          value={ [ currentTime ] }
-          min={ 0 }
-          max={ totalDuration }
-          step={ 0.1 }
-          onValueChange={ handleSeek }
-          className="mt-2"
-          data-testid="seekbar"
-        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Slider
+              value={ [ currentTime ] }
+              min={ 0 }
+              max={ totalDuration }
+              step={ 0.1 }
+              onValueChange={ handleSeek }
+              className="mt-2"
+              data-testid="seekbar"
+            />
+          </TooltipTrigger>
+          <TooltipContent>Seek</TooltipContent>
+        </Tooltip>
       </div>
 
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={ handleSkipBack }
-            data-testid="button-skip-back"
-          >
-            <SkipBack className="w-4 h-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={ handleSkipBack }
+                data-testid="button-skip-back"
+              >
+                <SkipBack className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Previous Scene</TooltipContent>
+          </Tooltip>
 
-          <Button
-            size="icon"
-            onClick={ handlePlayPause }
-            data-testid="button-play-pause"
-            disabled={ !videoSrc || isLoading }
-          >
-            { isPlaying ? (
-              <Pause className="w-4 h-4" />
-            ) : (
-              <Play className="w-4 h-4" />
-            ) }
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                onClick={ handlePlayPause }
+                data-testid="button-play-pause"
+                disabled={ !videoSrc || isLoading }
+              >
+                { isPlaying ? (
+                  <Pause className="w-4 h-4" />
+                ) : (
+                  <Play className="w-4 h-4" />
+                ) }
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{ isPlaying ? "Pause" : "Play" }</TooltipContent>
+          </Tooltip>
 
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={ handleSkipForward }
-            data-testid="button-skip-forward"
-          >
-            <SkipForward className="w-4 h-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={ handleSkipForward }
+                data-testid="button-skip-forward"
+              >
+                <SkipForward className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Next Scene</TooltipContent>
+          </Tooltip>
 
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={ toggleLoop }
-            className={ cn(isLooping && "text-primary") }
-            data-testid="button-loop"
-          >
-            <Repeat className="w-4 h-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={ toggleLoop }
+                className={ cn(isLooping && "text-primary") }
+                data-testid="button-loop"
+              >
+                <Repeat className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Toggle Loop</TooltipContent>
+          </Tooltip>
 
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={ () => setIsTheatreMode(true) }
-            data-testid="button-theatre-mode"
-            title="Theatre Mode"
-          >
-            <Maximize className="w-4 h-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={ () => setIsTheatreMode(true) }
+                data-testid="button-theatre-mode"
+              >
+                <Maximize className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Theatre Mode</TooltipContent>
+          </Tooltip>
         </div>
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono flex-1 justify-center">
@@ -329,32 +363,42 @@ const PlaybackControls = memo(function PlaybackControls({
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={ toggleMute }
-            data-testid="button-mute"
-          >
-            { (isMuted || volume === 0 && <Volume className="w-4 h-4" />) ||
-              (volume < 0.44 && <Volume1 className="w-4 h-4" />) ||
-              (<Volume2 className="w-4 h-4" />)
-            }
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={ toggleMute }
+                data-testid="button-mute"
+              >
+                { (isMuted || volume === 0 && <Volume className="w-4 h-4" />) ||
+                  (volume < 0.44 && <Volume1 className="w-4 h-4" />) ||
+                  (<Volume2 className="w-4 h-4" />)
+                }
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{ isMuted ? "Unmute" : "Mute" }</TooltipContent>
+          </Tooltip>
 
-          <Slider
-            value={ [ isMuted ? 0 : volume ] }
-            min={ 0 }
-            max={ 1 }
-            step={ 0.01 }
-            onValueChange={ handleVolumeChange }
-            className="w-20 cursor-pointer"
-            data-testid="volume-slider"
-          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Slider
+                value={ [ isMuted ? 0 : volume ] }
+                min={ 0 }
+                max={ 1 }
+                step={ 0.01 }
+                onValueChange={ handleVolumeChange }
+                className="w-20 cursor-pointer"
+                data-testid="volume-slider"
+              />
+            </TooltipTrigger>
+            <TooltipContent>Volume</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
       { isTheatreMode && (
-        <div className="absolute top-0 left-0 h-screen w-screen z-50 bg-black flex items-center justify-center">
+        <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center overflow-hidden">
           <Button
             size="icon"
             variant="ghost"

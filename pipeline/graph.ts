@@ -957,7 +957,7 @@ export class CinematicVideoWorkflow {
       } catch (error) {
         console.error(`[${nodeName}] Error on attempt ${currentAttempt}:`, error);
 
-        const sceneId = state.storyboardState?.scenes[ state.currentSceneIndex ]?.id;
+        const scene = state.storyboardState?.scenes[ state.currentSceneIndex ];
 
         const errorMessage = extractErrorMessage(error);
         const errorDetails = extractErrorDetails(error);
@@ -969,9 +969,8 @@ export class CinematicVideoWorkflow {
           functionName: 'process_scene',
           nodeName: nodeName,
           params: {
-            sceneId: sceneId,
-            sceneIndex: state.currentSceneIndex,
-            promptModification: sceneId ? state.scenePromptOverrides?.[ sceneId ] : undefined
+            scene: scene,
+            promptModification: scene ? state.scenePromptOverrides?.[ scene.id ] : undefined
           },
           attemptCount: currentAttempt,
           lastAttemptTimestamp: new Date().toISOString(),

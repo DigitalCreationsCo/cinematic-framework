@@ -1,8 +1,8 @@
 import { WorkflowService } from './workflow-service';
-import { CheckpointerManager } from '../pipeline/checkpointer-manager';
-import { CinematicVideoWorkflow } from '../pipeline/graph';
-import { streamWithInterruptHandling } from './helpers/stream-helper';
-import { GCPStorageManager } from '../pipeline/storage-manager';
+import { CheckpointerManager } from '../../pipeline/checkpointer-manager';
+import { CinematicVideoWorkflow } from '../../pipeline/graph';
+import { streamWithInterruptHandling } from '../helpers/stream-helper';
+import { GCPStorageManager } from '../../pipeline/storage-manager';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // Mock dependencies

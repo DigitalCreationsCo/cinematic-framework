@@ -43,7 +43,7 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
       setConnectionStatus("connected");
       setError(null);
       console.log(`SSE Connected for projectId: ${projectId}`);
-      // Request state immediately to sync
+
       requestFullState({ projectId: projectId }).catch(err => console.error("Failed to request full state on connect:", err));
     };
 

@@ -50,9 +50,12 @@ export function RegenerateFrameDialog({
                 <DialogHeader>
                     <DialogTitle className="capitalize">{ `Regenerate ${frameToRegenerate} Frame (Scene ${scene.id})` }</DialogTitle>
                 </DialogHeader>
+                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Prompt
+                </label>
                 <Textarea
                     value={ prompt }
-                    rows={ 8 }
+                    rows={ 10 }
                     onChange={ (e) => setPrompt(e.target.value) }
                     placeholder="Enter a new prompt for the frame..."
                 />
