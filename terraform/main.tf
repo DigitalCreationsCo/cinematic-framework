@@ -41,7 +41,7 @@ resource "google_project_service" "required_apis" {
 resource "google_compute_network" "ltx_network" {
   name                    = "ltx-video-network"
   auto_create_subnetworks = false
-  
+
   depends_on = [google_project_service.required_apis]
 }
 
@@ -50,11 +50,11 @@ resource "google_compute_subnetwork" "ltx_subnet" {
   ip_cidr_range = "10.0.1.0/24"
   region        = var.region
   network       = google_compute_network.ltx_network.id
-  
+
   log_config {
     aggregation_interval = "INTERVAL_5_SEC"
     flow_sampling        = 0.5
-    metadata            = "INCLUDE_ALL_METADATA"
+    metadata             = "INCLUDE_ALL_METADATA"
   }
 }
 
@@ -88,7 +88,7 @@ resource "google_compute_firewall" "allow_http" {
     # Your Developer IP (Optional, for direct testing bypassing LB)
     var.http_source_ranges
   )
-  target_tags   = ["ltx-video-vm"]
+  target_tags = ["ltx-video-vm"]
 }
 
 resource "google_compute_firewall" "allow_health_check" {
@@ -141,9 +141,9 @@ resource "google_project_iam_member" "ltx_vm_permissions" {
 resource "google_storage_bucket" "model_cache" {
   name     = "${var.project_id}-ltx-model-cache-2"
   location = var.region
-  
+
   uniform_bucket_level_access = true
-  
+
   lifecycle_rule {
     action {
       type = "Delete"
@@ -159,16 +159,16 @@ resource "google_storage_bucket" "model_cache" {
 resource "google_storage_bucket" "video_output" {
   name     = "${var.project_id}-ltx-video-output-2"
   location = var.region
-  
+
   uniform_bucket_level_access = true
-  
+
   cors {
     origin          = ["*"]
     method          = ["GET", "HEAD"]
     response_header = ["*"]
     max_age_seconds = 3600
   }
-  
+
   lifecycle_rule {
     action {
       type          = "SetStorageClass"
@@ -193,7 +193,7 @@ resource "google_storage_bucket_iam_member" "public_read" {
 # API Keys Secret for Authentication
 resource "google_secret_manager_secret" "api_keys" {
   secret_id = "ltx-video-api-keys"
-  
+
   replication {
     auto {}
   }
@@ -203,7 +203,7 @@ resource "google_secret_manager_secret" "api_keys" {
 
 resource "google_secret_manager_secret_version" "api_keys_version" {
   secret = google_secret_manager_secret.api_keys.id
-  
+
   # Generate initial API keys (replace with your own in production)
   secret_data = jsonencode({
     keys = [
@@ -237,23 +237,23 @@ resource "google_compute_global_address" "ltx_lb_ip" {
 }
 
 resource "google_compute_backend_service" "ltx_backend" {
-  name                  = "ltx-video-backend"
-  protocol              = "HTTP"
-  port_name             = "http"
-  timeout_sec           = 300
-  enable_cdn            = false
-  
+  name        = "ltx-video-backend"
+  protocol    = "HTTP"
+  port_name   = "http"
+  timeout_sec = 300
+  enable_cdn  = false
+
   backend {
     group           = google_compute_region_instance_group_manager.ltx_mig.instance_group
     balancing_mode  = "UTILIZATION"
     capacity_scaler = 1.0
   }
-  
+
   health_checks = [google_compute_health_check.ltx_autohealing.id]
-  
+
   # Attach Cloud Armor security policy
   # security_policy = google_compute_security_policy.ltx_armor_policy.id
-  
+
   log_config {
     enable      = true
     sample_rate = 1.0
@@ -319,107 +319,107 @@ resource "google_compute_global_forwarding_rule" "ltx_forwarding_rule" {
 #       conform_action = "allow"
 #       exceed_action  = "deny(429)"
 #       enforce_on_key = "IP"
-      
+
 #       rate_limit_threshold {
 #         count        = var.rate_limit_requests_per_minute
 #         interval_sec = 60
 #       }
-      
+
 #       ban_duration_sec = 600  # Ban for 10 minutes
 #     }
 #     description = "Rate limit to prevent abuse"
 #   }
 
-  # Block known bad IPs (SQL injection patterns)
-  # rule {
-  #   action   = "deny(403)"
-  #   priority = 2000
-  #   match {
-  #     expr {
-  #       expression = "origin.region_code == 'T1'"  # Tor exit nodes
-  #     }
-  #   }
-  #   description = "Block Tor exit nodes"
-  # }
+# Block known bad IPs (SQL injection patterns)
+# rule {
+#   action   = "deny(403)"
+#   priority = 2000
+#   match {
+#     expr {
+#       expression = "origin.region_code == 'T1'"  # Tor exit nodes
+#     }
+#   }
+#   description = "Block Tor exit nodes"
+# }
 
-  # XSS protection
-  # # rule {
-  # #   action   = "deny(403)"
-  # #   priority = 3000
-  # #   match {
-  # #     expr {
-  # #       expression = "evaluatePreconfiguredExpr('xss-stable')"
-  # #     }
-  # #   }
-  # #   description = "XSS attack protection"
-  # # }
+# XSS protection
+# # rule {
+# #   action   = "deny(403)"
+# #   priority = 3000
+# #   match {
+# #     expr {
+# #       expression = "evaluatePreconfiguredExpr('xss-stable')"
+# #     }
+# #   }
+# #   description = "XSS attack protection"
+# # }
 
-  # # SQL injection protection
-  # rule {
-  #   action   = "deny(403)"
-  #   priority = 3001
-  #   match {
-  #     expr {
-  #       expression = "evaluatePreconfiguredExpr('sqli-stable')"
-  #     }
-  #   }
-  #   description = "SQL injection protection"
-  # }
+# # SQL injection protection
+# rule {
+#   action   = "deny(403)"
+#   priority = 3001
+#   match {
+#     expr {
+#       expression = "evaluatePreconfiguredExpr('sqli-stable')"
+#     }
+#   }
+#   description = "SQL injection protection"
+# }
 
-  # # Local file inclusion protection
-  # rule {
-  #   action   = "deny(403)"
-  #   priority = 3002
-  #   match {
-  #     expr {
-  #       expression = "evaluatePreconfiguredExpr('lfi-stable')"
-  #     }
-  #   }
-  #   description = "Local file inclusion protection"
-  # }
+# # Local file inclusion protection
+# rule {
+#   action   = "deny(403)"
+#   priority = 3002
+#   match {
+#     expr {
+#       expression = "evaluatePreconfiguredExpr('lfi-stable')"
+#     }
+#   }
+#   description = "Local file inclusion protection"
+# }
 
-  # # Remote code execution protection
-  # rule {
-  #   action   = "deny(403)"
-  #   priority = 3003
-  #   match {
-  #     expr {
-  #       expression = "evaluatePreconfiguredExpr('rce-stable')"
-  #     }
-  #   }
-  #   description = "Remote code execution protection"
-  # }
+# # Remote code execution protection
+# rule {
+#   action   = "deny(403)"
+#   priority = 3003
+#   match {
+#     expr {
+#       expression = "evaluatePreconfiguredExpr('rce-stable')"
+#     }
+#   }
+#   description = "Remote code execution protection"
+# }
 
-  # # Block specific countries (optional - customize)
-  # dynamic "rule" {
-  #   for_each = var.blocked_countries
-  #   content {
-  #     action   = "deny(403)"
-  #     priority = 4000 + rule.key
-  #     match {
-  #       expr {
-  #         expression = "origin.region_code == '${rule.value}'"
-  #       }
-  #     }
-  #     description = "Block traffic from ${rule.value}"
-  #   }
-  # }
+# # Block specific countries (optional - customize)
+# dynamic "rule" {
+#   for_each = var.blocked_countries
+#   content {
+#     action   = "deny(403)"
+#     priority = 4000 + rule.key
+#     match {
+#       expr {
+#         expression = "origin.region_code == '${rule.value}'"
+#       }
+#     }
+#     description = "Block traffic from ${rule.value}"
+#   }
+# }
 
-  # # Allow specific IP ranges (whitelist)
-  # dynamic "rule" {
-  #   for_each = var.whitelisted_ip_ranges
-  #   content {
-  #     action   = "allow"
-  #     priority = 100 + rule.key
-  #     match {
-  #       versioned_expr = "SRC_IPS_V1"
-  #       config {
-  #         src_ip_ranges = [rule.value]
-  #       }
-  #     }
-  #     description = "Whitelist: ${rule.value}"
-  #   }
-  # }
+# # Allow specific IP ranges (whitelist)
+# dynamic "rule" {
+#   for_each = var.whitelisted_ip_ranges
+#   content {
+#     action   = "allow"
+#     priority = 100 + rule.key
+#     match {
+#       versioned_expr = "SRC_IPS_V1"
+#       config {
+#         src_ip_ranges = [rule.value]
+#       }
+#     }
+#     description = "Whitelist: ${rule.value}"
+#   }
+# }
 
 #   adaptive_protection_config {
 #     layer_7_ddos_defense_config {
@@ -451,14 +451,14 @@ resource "google_compute_instance_template" "ltx_template" {
 
   network_interface {
     subnetwork = google_compute_subnetwork.ltx_subnet.id
-    
+
     access_config {
       # Ephemeral IP for each instance
     }
   }
 
   metadata = {
-    startup-script = templatefile("${path.module}/../models/ltx/startup.sh", {
+    startup-script = templatefile("${path.module}/${var.startup_script}", {
       project_id         = var.project_id
       region             = var.region
       model_cache_bucket = google_storage_bucket.model_cache.name
@@ -469,8 +469,8 @@ resource "google_compute_instance_template" "ltx_template" {
       api_keys_secret    = google_secret_manager_secret.api_keys.secret_id
       enable_auth        = var.enable_authentication
     })
-    
-    enable-oslogin = "TRUE"
+
+    enable-oslogin        = "TRUE"
     install-nvidia-driver = "True"
   }
 
@@ -482,7 +482,7 @@ resource "google_compute_instance_template" "ltx_template" {
   scheduling {
     on_host_maintenance = "TERMINATE"
     automatic_restart   = var.enable_auto_restart
-    preemptible        = var.use_preemptible
+    preemptible         = var.use_preemptible
   }
 
   labels = {
@@ -526,7 +526,7 @@ resource "google_compute_region_instance_group_manager" "ltx_mig" {
   region = var.region
 
   base_instance_name = "ltx-video-vm"
-  
+
   version {
     instance_template = google_compute_instance_template.ltx_template.id
   }
@@ -542,15 +542,14 @@ resource "google_compute_region_instance_group_manager" "ltx_mig" {
   }
 
   update_policy {
-    type                         = "PROACTIVE"
-    minimal_action              = "REPLACE"
-    max_surge_fixed             = 3
-    
-    max_unavailable_fixed       = 0
+    type            = "PROACTIVE"
+    minimal_action  = "REPLACE"
+    max_surge_fixed = 3
+
+    max_unavailable_fixed        = 0
     instance_redistribution_type = "PROACTIVE"
   }
 
-  # Start with 0 instances for zero cost when idle
   target_size = var.autoscaling_min_replicas
 
   depends_on = [
@@ -601,10 +600,10 @@ resource "google_monitoring_uptime_check_config" "ltx_uptime" {
   period       = "300s"
 
   http_check {
-    path           = "/health"
-    port           = "80"
-    use_ssl        = false
-    validate_ssl   = false
+    path         = "/health"
+    port         = "80"
+    use_ssl      = false
+    validate_ssl = false
   }
 
   monitored_resource {
@@ -625,7 +624,7 @@ resource "google_monitoring_uptime_check_config" "ltx_uptime" {
 resource "google_logging_project_sink" "ltx_logs" {
   name        = "ltx-video-logs"
   destination = "storage.googleapis.com/${google_storage_bucket.video_output.name}"
-  
+
   filter = "resource.type=gce_instance AND labels.application=ltx-video"
 
   unique_writer_identity = true
@@ -656,7 +655,7 @@ output "autoscaling_config" {
     cpu_target      = "${var.autoscaling_cpu_target}%"
     lb_target       = "${var.autoscaling_lb_target}%"
     cooldown_period = "${var.autoscaling_cooldown_period}s"
-    mode           = var.autoscaling_mode
+    mode            = var.autoscaling_mode
   }
 }
 
@@ -701,6 +700,11 @@ output "model_cache_bucket" {
   value       = "gs://${google_storage_bucket.model_cache.name}"
 }
 
+output "project_id" {
+  description = "GCP Project ID"
+  value       = var.project_id
+}
+
 output "service_account" {
   description = "Service account email"
   value       = google_service_account.ltx_vm_sa.email
@@ -715,13 +719,13 @@ output "security_features" {
   description = "Enabled security features"
   value = {
     cloud_armor_ddos_protection = false
-    rate_limiting              = "${var.rate_limit_requests_per_minute} requests/minute"
-    api_authentication         = var.enable_authentication
-    xss_protection            = true
-    sql_injection_protection  = true
-    rce_protection            = true
-    adaptive_protection       = true
-    autoscaling               = true
+    rate_limiting               = "${var.rate_limit_requests_per_minute} requests/minute"
+    api_authentication          = var.enable_authentication
+    xss_protection              = true
+    sql_injection_protection    = true
+    rce_protection              = true
+    adaptive_protection         = true
+    autoscaling                 = true
   }
 }
 
@@ -729,9 +733,9 @@ output "cost_optimization" {
   description = "Cost optimization features"
   value = {
     autoscaling_enabled    = true
-    scale_to_zero         = var.autoscaling_min_replicas == 0
-    preemptible_vms       = var.use_preemptible
-    cost_when_idle        = var.autoscaling_min_replicas == 0 ? "~$25/month (storage + LB only)" : "See cost analysis"
+    scale_to_zero          = var.autoscaling_min_replicas == 0
+    preemptible_vms        = var.use_preemptible
+    cost_when_idle         = var.autoscaling_min_replicas == 0 ? "~$25/month (storage + LB only)" : "See cost analysis"
     estimated_startup_time = "${var.autoscaling_initial_delay_sec}s"
   }
 }

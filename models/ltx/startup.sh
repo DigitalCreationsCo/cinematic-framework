@@ -502,9 +502,35 @@ WantedBy=multi-user.target
 EOF
 check_success "Systemd service creation"
 
-# Pre-download model weights to cache
-log "Pre-downloading model weights..."
-python3 << 'DLEOF'
+# Model Caching Logic
+CACHE_DIR="/opt/ltx-video/.cache"
+ARCHIVE_NAME="ltx-video-model-cache.tar.gz"
+# Escape shell variables with $${} so Terraform ignores them
+GCS_ARCHIVE_PATH="gs://$${MODEL_CACHE_BUCKET}/$${ARCHIVE_NAME}"
+export HF_HOME="$${CACHE_DIR}"
+export TRANSFORMERS_CACHE="$${CACHE_DIR}"
+
+log "Checking for model cache in GCS: $${GCS_ARCHIVE_PATH}..."
+
+if gsutil -q stat "$${GCS_ARCHIVE_PATH}"; then
+    log "✓ Found cache in GCS. Downloading and extracting..."
+    mkdir -p "$${CACHE_DIR}"
+    
+    # Download archive
+    gsutil cp "$${GCS_ARCHIVE_PATH}" "/tmp/$${ARCHIVE_NAME}"
+    check_success "Cache download"
+    
+    # Extract archive (it contains full path opt/ltx-video/.cache)
+    tar -xzf "/tmp/$${ARCHIVE_NAME}" -C /
+    check_success "Cache extraction"
+    
+    rm "/tmp/$${ARCHIVE_NAME}"
+    log "✓ Model cache restored from GCS"
+else
+    log "⚠ Cache not found in GCS. Downloading from Hugging Face..."
+    
+    # Run download script
+    python3 << 'DLEOF'
 import torch
 from diffusers import DiffusionPipeline
 import os
@@ -522,8 +548,22 @@ try:
     print("Model downloaded successfully")
 except Exception as e:
     print(f"Model download failed (will retry at runtime): {e}")
+    exit(1)
 DLEOF
-check_success "Model pre-download attempt"
+    check_success "Model download from Hugging Face"
+
+    # Upload to GCS for next time
+    log "Creating cache archive and uploading to GCS..."
+    # Archive the directory. -C / changes to root, so we archive opt/ltx-video/.cache
+    tar -czf "/tmp/$${ARCHIVE_NAME}" -C / opt/ltx-video/.cache
+    check_success "Cache compression"
+    
+    gsutil cp "/tmp/$${ARCHIVE_NAME}" "$${GCS_ARCHIVE_PATH}"
+    check_success "Cache upload to GCS"
+    
+    rm "/tmp/$${ARCHIVE_NAME}"
+    log "✓ Model cache uploaded to GCS"
+fi
 
 # Enable and start service
 log "Enabling and starting LTX Video service..."

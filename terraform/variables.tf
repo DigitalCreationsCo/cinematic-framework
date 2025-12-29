@@ -34,7 +34,7 @@ variable "machine_type" {
   description = "Machine type for the VM"
   type        = string
   default     = "n1-standard-8"
-  
+
   validation {
     condition     = can(regex("^(n1-standard|n1-highmem|a2-highgpu)", var.machine_type))
     error_message = "Machine type must be compatible with GPU attachments."
@@ -45,7 +45,7 @@ variable "gpu_type" {
   description = "GPU type to attach"
   type        = string
   default     = "nvidia-tesla-t4"
-  
+
   validation {
     condition = contains([
       "nvidia-tesla-t4",
@@ -64,7 +64,7 @@ variable "gpu_count" {
   description = "Number of GPUs to attach"
   type        = number
   default     = 1
-  
+
   validation {
     condition     = var.gpu_count >= 1 && var.gpu_count <= 8
     error_message = "GPU count must be between 1 and 8."
@@ -81,7 +81,7 @@ variable "boot_disk_size_gb" {
   description = "Boot disk size in GB"
   type        = number
   default     = 200
-  
+
   validation {
     condition     = var.boot_disk_size_gb >= 100 && var.boot_disk_size_gb <= 1000
     error_message = "Boot disk size must be between 100 and 1000 GB."
@@ -92,7 +92,7 @@ variable "boot_disk_type" {
   description = "Boot disk type"
   type        = string
   default     = "pd-ssd"
-  
+
   validation {
     condition     = contains(["pd-standard", "pd-ssd", "pd-balanced"], var.boot_disk_type)
     error_message = "Boot disk type must be pd-standard, pd-ssd, or pd-balanced."
@@ -116,7 +116,7 @@ variable "enable_auto_restart" {
 variable "ssh_source_ranges" {
   description = "CIDR ranges allowed for SSH access"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # Change to your IP for better security
+  default     = ["0.0.0.0/0"] # Change to your IP for better security
 }
 
 variable "http_source_ranges" {
@@ -157,7 +157,7 @@ variable "rate_limit_requests_per_minute" {
   description = "Rate limit for Cloud Armor (requests per minute per IP)"
   type        = number
   default     = 100
-  
+
   validation {
     condition     = var.rate_limit_requests_per_minute >= 10 && var.rate_limit_requests_per_minute <= 10000
     error_message = "Rate limit must be between 10 and 10000 requests per minute."
@@ -167,13 +167,13 @@ variable "rate_limit_requests_per_minute" {
 variable "blocked_countries" {
   description = "List of country codes to block (ISO 3166-1 alpha-2)"
   type        = list(string)
-  default     = []  # Example: ["CN", "RU", "KP"]
+  default     = [] # Example: ["CN", "RU", "KP"]
 }
 
 variable "whitelisted_ip_ranges" {
   description = "IP ranges to whitelist (bypass all Cloud Armor rules)"
   type        = list(string)
-  default     = []  # Example: ["YOUR_OFFICE_IP/32"]
+  default     = [] # Example: ["YOUR_OFFICE_IP/32"]
 }
 
 variable "github_owner" {
@@ -196,7 +196,7 @@ variable "autoscaling_min_replicas" {
   description = "Minimum number of endpoint replicas"
   type        = number
   default     = 0
-  
+
   validation {
     condition     = var.autoscaling_min_replicas >= 0
     error_message = "Minimum replicas must be 0 or greater."
@@ -207,7 +207,7 @@ variable "autoscaling_max_replicas" {
   description = "Maximum number of endpoint replicas"
   type        = number
   default     = 1
-  
+
   validation {
     condition     = var.autoscaling_max_replicas >= 1 && var.autoscaling_max_replicas <= 10
     error_message = "Maximum replicas must be between 1 and 10."
@@ -235,7 +235,7 @@ variable "autoscaling_cooldown_period" {
 variable "autoscaling_initial_delay_sec" {
   description = "Wait period before health checks"
   type        = number
-  default     = 600
+  default     = 1800
 }
 
 variable "autoscaling_mode" {
@@ -248,4 +248,10 @@ variable "image_tag" {
   description = "Docker image tag to deploy"
   type        = string
   default     = "latest"
+}
+
+variable "startup_script" {
+  description = "Path to the startup script (relative to module)"
+  type        = string
+  default     = "../models/ltx/startup.sh"
 }

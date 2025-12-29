@@ -3,7 +3,7 @@
 LB_IP=$(terraform output -raw load_balancer_ip)
 API_KEY=$(terraform output -raw api_key)
 
-curl -X POST "$LB_IP" \
+curl -X POST "$LB_IP/predict" \
   -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
