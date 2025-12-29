@@ -9,9 +9,10 @@ interface LocationCardProps {
   location: Location;
   onSelect?: (id: string) => void;
   isLoading?: boolean; // Added isLoading prop
+  priority?: boolean;
 }
 
-const LocationCard = memo(function LocationCard({ location, onSelect, isLoading = false }: LocationCardProps) {
+const LocationCard = memo(function LocationCard({ location, onSelect, isLoading = false, priority = false }: LocationCardProps) {
   const referenceImage = location.referenceImages?.[ 0 ];
 
   return (
@@ -28,8 +29,9 @@ const LocationCard = memo(function LocationCard({ location, onSelect, isLoading 
             src={ referenceImage.publicUri }
             alt={ location.name }
             className="w-full h-full object-cover"
-            loading="lazy"
+            loading={ priority ? "eager" : "lazy" }
             decoding="async"
+            fetchPriority={ priority ? "high" : "auto" }
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

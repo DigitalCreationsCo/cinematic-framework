@@ -9,7 +9,7 @@ import { retryLlmCall } from "../lib/llm-retry";
 import { RAIError } from "../lib/errors";
 import { GraphInterrupt } from "@langchain/langgraph";
 import { composeFrameGenerationPromptMeta } from "pipeline/prompts/prompt-composer";
-import { cleanJsonOutput } from "pipeline/utils";
+import { cleanJsonOutput } from "pipeline/utils/utils";
 
 type FrameImageObjectParams = Extract<GcsObjectPathParams, ({ type: "scene_start_frame"; } | { type: "scene_end_frame"; })>;
 

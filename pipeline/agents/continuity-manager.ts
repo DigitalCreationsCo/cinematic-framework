@@ -24,7 +24,7 @@ import { buildllmParams } from "../llm/google/google-llm-params";
 import { QualityCheckAgent } from "./quality-check-agent";
 import { evolveCharacterState, evolveLocationState } from "./state-evolution";
 import { GraphInterrupt } from "@langchain/langgraph";
-import { cleanJsonOutput } from "pipeline/utils";
+import { cleanJsonOutput } from "pipeline/utils/utils";
 
 // ============================================================================
 // CONTINUITY MANAGER AGENT

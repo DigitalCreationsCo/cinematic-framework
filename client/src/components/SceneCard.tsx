@@ -16,9 +16,10 @@ interface SceneCardProps {
   status: StatusType;
   onSelect?: (sceneId: number) => void;
   onPlay?: (sceneId: number) => void;
+  priority?: boolean;
 }
 
-const SceneCard = memo(function SceneCard({ scene, isSelected, isLoading, status, onSelect, onPlay }: SceneCardProps) {
+const SceneCard = memo(function SceneCard({ scene, isSelected, isLoading, status, onSelect, onPlay, priority = false }: SceneCardProps) {
   const hasVideo = !!scene.generatedVideo?.publicUri;
   const hasStartFrame = !!scene.startFrame?.publicUri;
   status = status || (hasVideo ? "complete" : "pending");
@@ -31,6 +32,12 @@ const SceneCard = memo(function SceneCard({ scene, isSelected, isLoading, status
         isLoading && "animate-pulse"
       ) }
       onClick={ () => onSelect?.(scene.id) }
+      onMouseEnter={ () => {
+        if (scene.endFrame?.publicUri) {
+          const img = new Image();
+          img.src = scene.endFrame.publicUri;
+        }
+      } }
       data-testid={ `card-scene-${scene.id}` }
     >
       <CardHeader className="p-3 pb-2 flex flex-row items-center justify-between gap-2 space-y-0">
@@ -55,8 +62,9 @@ const SceneCard = memo(function SceneCard({ scene, isSelected, isLoading, status
               src={ scene.startFrame?.publicUri }
               alt={ `Scene ${scene.id} start frame` }
               className="w-full h-full object-cover"
-              loading="lazy"
+              loading={ priority ? "eager" : "lazy" }
               decoding="async"
+              fetchPriority={ priority ? "high" : "auto" }
             />
           ) }
           { hasVideo && !isLoading && (
@@ -76,7 +84,7 @@ const SceneCard = memo(function SceneCard({ scene, isSelected, isLoading, status
           { status === 'generating' && scene.progressMessage && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-10 p-4 text-center">
               <span className="text-xs font-medium text-muted-foreground animate-pulse leading-tight">
-                {scene.progressMessage}
+                { scene.progressMessage }
               </span>
             </div>
           ) }

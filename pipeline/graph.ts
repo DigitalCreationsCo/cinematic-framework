@@ -78,8 +78,8 @@ export class CinematicVideoWorkflow {
     this.controller = controller;
     this.storageManager = new GCPStorageManager(projectId, videoId, bucketName);
 
-    const textandImageModel = new TextModelController();
-    const videoModel = new VideoModelController('ltx');
+    const textandImageModel = new TextModelController('google');
+    const videoModel = new VideoModelController('google');
 
     const agentOptions = { signal: this.controller?.signal };
 

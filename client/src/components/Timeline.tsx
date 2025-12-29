@@ -109,11 +109,18 @@ const Timeline = memo(function Timeline({ scenes, selectedSceneId, totalDuration
                     ) }
                     style={ { left: `${left}%`, width: `${Math.max(width, 2)}%` } }
                     onClick={ () => onSceneSelect?.(scene.id) }
+                    onMouseEnter={ () => {
+                      if (scene.endFrame?.publicUri) {
+                        const img = new Image();
+                        img.src = scene.endFrame.publicUri;
+                      }
+                    } }
                     data-testid={ `timeline-segment-${scene.id}` }
                   >
                     <video
                       ref={ el => videoRefs.current[ index ] = el }
                       src={ scene.generatedVideo?.publicUri }
+                      poster={ scene.startFrame?.publicUri }
                       className="h-full w-full object-cover"
                       controls={ false }
                       muted

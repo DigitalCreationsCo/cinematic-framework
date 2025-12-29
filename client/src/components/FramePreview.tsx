@@ -11,9 +11,10 @@ interface FramePreviewProps {
   isLoading?: boolean;
   onRegenerate?: () => void;
   isGenerating: boolean;
+  priority?: boolean;
 }
 
-const FramePreview = memo(function FramePreview({ title, imageUrl, alt, isLoading, onRegenerate, isGenerating }: FramePreviewProps) {
+const FramePreview = memo(function FramePreview({ title, imageUrl, alt, isLoading, onRegenerate, isGenerating, priority = false }: FramePreviewProps) {
   return (
     <Card data-testid={ `frame-preview-${title.toLowerCase().replace(/\s+/g, '-')}` }>
       <CardHeader className="p-3 pb-2 flex-row items-center justify-between">
@@ -36,8 +37,9 @@ const FramePreview = memo(function FramePreview({ title, imageUrl, alt, isLoadin
               src={ imageUrl }
               alt={ alt }
               className="w-full h-full object-cover"
-              loading="lazy"
+              loading={ priority ? "eager" : "lazy" }
               decoding="async"
+              fetchPriority={ priority ? "high" : "auto" }
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">

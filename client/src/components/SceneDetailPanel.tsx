@@ -132,7 +132,7 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
             { isLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
-                <Button size="sm" variant="outline" onClick={ (e) => { confirm('Are you sure you want to regenerate this scene? You can\'t undo this.') && onRegenerate?.(e); } } data-testid="button-regenerate" disabled={ isGenerating }>
+              <Button size="sm" variant="outline" onClick={ (e) => { confirm('Are you sure you want to regenerate this scene? You can\'t undo this.') && onRegenerate?.(e); } } data-testid="button-regenerate" disabled={ isGenerating }>
                 { isGenerating ? (
                   <>
                     <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
@@ -159,6 +159,7 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
                 isLoading={ isLoading }
                 onRegenerate={ () => handleRegenerateClick("start") }
                 isGenerating={ isGeneratingFrame }
+                priority={ true }
               />
               <FramePreview
                 title="End Frame"
@@ -167,6 +168,7 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
                 isLoading={ isLoading }
                 onRegenerate={ () => handleRegenerateClick("end") }
                 isGenerating={ isGeneratingFrame }
+                priority={ true }
               />
             </div>
 
@@ -181,7 +183,7 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
                     <div className="absolute inset-3 flex items-center justify-center bg-background/80 backdrop-blur-sm z-10 rounded-md">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>{scene.progressMessage || "Generating scene..."}</span>
+                        <span>{ scene.progressMessage || "Generating scene..." }</span>
                       </div>
                     </div>
                   ) }

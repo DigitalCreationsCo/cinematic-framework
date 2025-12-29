@@ -9,9 +9,10 @@ interface CharacterCardProps {
   character: Character;
   onSelect: (id: string) => void;
   isLoading?: boolean;
+  priority?: boolean;
 }
 
-const CharacterCard = memo(function CharacterCard({ character, onSelect, isLoading = false }: CharacterCardProps) {
+const CharacterCard = memo(function CharacterCard({ character, onSelect, isLoading = false, priority = false }: CharacterCardProps) {
   const characterId = character.id;
 
   return (
@@ -31,8 +32,9 @@ const CharacterCard = memo(function CharacterCard({ character, onSelect, isLoadi
                 src={ character.referenceImages[ 0 ].publicUri }
                 alt={ character.name }
                 className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-                loading="lazy"
+                loading={ priority ? "eager" : "lazy" }
                 decoding="async"
+                fetchPriority={ priority ? "high" : "auto" }
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-muted/50">

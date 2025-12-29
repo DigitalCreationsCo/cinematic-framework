@@ -77,7 +77,7 @@ export default function Dashboard() {
   //     setPipelineStatus(pipelineState.currentSceneIndex < (pipelineState.storyboardState?.scenes.length || 0) ? pipelineStatus : "complete");
   //   }
   // }, [ pipelineState, setPipelineStatus ]);
-  
+
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add("dark");
@@ -262,7 +262,7 @@ export default function Dashboard() {
       <ScrollArea className="h-full">
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 p-1 pb-4">
           { clientIsLoading && sceneSkeletons }
-          { !clientIsLoading && (currentScenes.length ? (currentScenes.map((scene) => (
+          { !clientIsLoading && (currentScenes.length ? (currentScenes.map((scene, index) => (
             <SceneCard
               key={ scene.id }
               scene={ scene }
@@ -271,6 +271,7 @@ export default function Dashboard() {
               onSelect={ handleSceneSelect }
               onPlay={ handlePlayScene }
               isLoading={ clientIsLoading }
+              priority={ index < 6 }
             />
           ))) :
             <div className="text-xs text-muted-foreground px-4">
@@ -287,12 +288,13 @@ export default function Dashboard() {
       <ScrollArea className="h-full">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-4">
           { clientIsLoading && characterSkeletons }
-          { !clientIsLoading && (currentCharacters.length ? currentCharacters.map((char) => (
+          { !clientIsLoading && (currentCharacters.length ? currentCharacters.map((char, index) => (
             <CharacterCard
               key={ char.id }
               character={ char }
               onSelect={ handleCharacterSelect }
               isLoading={ clientIsLoading }
+              priority={ index < 8 }
             />
           )) :
             <div className="text-xs text-muted-foreground px-4">
@@ -309,12 +311,13 @@ export default function Dashboard() {
       <ScrollArea className="h-full">
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 pb-4">
           { clientIsLoading && locationSkeletons }
-          { !clientIsLoading && (currentLocations.length ? currentLocations.map((loc) => (
+          { !clientIsLoading && (currentLocations.length ? currentLocations.map((loc, index) => (
             <LocationCard
               key={ loc.id }
               location={ loc }
               onSelect={ handleLocationSelect }
               isLoading={ clientIsLoading }
+              priority={ index < 6 }
             />
           )) : (
             <div className="text-xs text-muted-foreground px-4">
@@ -501,12 +504,12 @@ export default function Dashboard() {
                         </span>
                       ) }
                     </TabsTrigger>
-                    {import.meta.env.DEV && (
+                    { import.meta.env.DEV && (
                       <TabsTrigger value="debug" data-testid="tab-debug">
                         <Bug className="w-4 h-4 mr-1.5" />
                         Debug
                       </TabsTrigger>
-                    )}
+                    ) }
                   </TabsList>
                 </div>
 
@@ -515,11 +518,11 @@ export default function Dashboard() {
                 { locationTabContent }
                 { metricsTabContent }
                 { logsTabContent }
-                {import.meta.env.DEV && (
+                { import.meta.env.DEV && (
                   <TabsContent value="debug" className="flex-1 overflow-hidden mt-0 p-4">
                     <DebugStatePanel />
                   </TabsContent>
-                )}
+                ) }
               </Tabs>
             </div>
           </ResizablePanel>
