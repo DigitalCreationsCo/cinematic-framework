@@ -94,16 +94,22 @@ export class WorkerService {
     async processJob(jobId: string) {
         console.log(`[Worker ${this.workerId}] Attempting to claim job ${jobId}`);
 
-        try {
-            const claimed = await this.jobControlPlane.claimJob(jobId, this.workerId);
-            if (!claimed) {
-                console.log(`[Worker ${this.workerId}] Failed to claim job ${jobId} (already taken or not in CREATED state).`);
-                return;
-            }
+        // Phase 1: Claim Job
+        // If this throws, it bubbles up to be Nacked (transient DB error)
+        // If it returns false, we return immediately (duplicate message, Ack)
+        const claimed = await this.jobControlPlane.claimJob(jobId, this.workerId);
+        if (!claimed) {
+            console.log(`[Worker ${this.workerId}] Failed to claim job ${jobId} (already taken or not in CREATED state).`);
+            return;
+        }
 
+        // Phase 2: Processing
+        // Errors here are "Job Failed", catch them, update DB state, and return (Ack)
+        try {
             const job = await this.jobControlPlane.getJob(jobId);
             if (!job) {
                 console.error(`[Worker ${this.workerId}] Job ${jobId} not found after claim`);
+                // This is weird state, but we claimed it. Treating as failed processing.
                 return;
             }
 
@@ -179,7 +185,6 @@ export class WorkerService {
                     result = { characters };
                     break;
                 }
-
                 case "GENERATE_LOCATION_ASSETS": {
                     const locations = await this.projectRepository.getProjectLocations(job.projectId);
                     const project = await this.projectRepository.getProject(job.projectId);

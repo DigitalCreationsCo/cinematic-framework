@@ -1,13 +1,35 @@
 import { WorkerService } from '../worker-service';
-import { JobControlPlane } from '../../pipeline/services/job-control-plane';
+import { CompositionalAgent } from '../../workflow/agents/compositional-agent';
 import { GCPStorageManager } from '../../workflow/storage-manager';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Mock dependencies
+// Mock dependencies with explicit factories
 vi.mock('../pipeline/services/job-control-plane');
-vi.mock('../workflow/storage-manager');
+
+// Mock StorageManager factory
+const mockUploadJSON = vi.fn();
+vi.mock('../../workflow/storage-manager', () => {
+    return {
+        GCPStorageManager: vi.fn().mockImplementation(() => ({
+            uploadJSON: mockUploadJSON
+        }))
+    };
+});
+
 vi.mock('../workflow/agents/audio-processing-agent');
-vi.mock('../workflow/agents/compositional-agent');
+
+// Mock CompositionalAgent factory with default spies we can access or override if needed
+const mockExpandCreativePrompt = vi.fn();
+vi.mock('../../workflow/agents/compositional-agent', () => {
+    return {
+        CompositionalAgent: vi.fn().mockImplementation(() => ({
+            expandCreativePrompt: mockExpandCreativePrompt,
+            generateStoryboardFromPrompt: vi.fn(),
+            generateFullStoryboard: vi.fn()
+        }))
+    };
+});
+
 vi.mock('../workflow/agents/quality-check-agent');
 vi.mock('../workflow/agents/semantic-expert-agent');
 vi.mock('../workflow/agents/frame-composition-agent');
@@ -29,8 +51,12 @@ describe('WorkerService', () => {
             updateJobState: vi.fn(),
         };
 
-        // Setup mock implementations for agents if needed, 
-        // but simple class mocks provided by vi.mock should suffice for verification of calls.
+        // Reset our manual spies
+        mockExpandCreativePrompt.mockReset();
+        mockUploadJSON.mockReset();
+
+        // Default behavior
+        mockExpandCreativePrompt.mockResolvedValue('expanded foo');
 
         workerService = new WorkerService(
             workerId,
@@ -39,9 +65,6 @@ describe('WorkerService', () => {
             mockPublishJobEvent,
             vi.fn()
         );
-
-        // Mock getAgents return values by mocking the classes they return
-        // Since we mock the modules, the constructors will return mocks.
     });
 
     afterEach(() => {
@@ -72,27 +95,9 @@ describe('WorkerService', () => {
             payload: { enhancedPrompt: 'foo' }
         });
 
-        // We need to access the mock instance of CompositionalAgent
-        const { CompositionalAgent } = await import('../../workflow/agents/compositional-agent');
-        const mockExpandCreativePrompt = vi.fn().mockResolvedValue('expanded foo');
-        (CompositionalAgent as any).mockImplementation(function () {
-            return {
-                expandCreativePrompt: mockExpandCreativePrompt
-            };
-        });
-
-        // Also need to mock GCPStorageManager uploadJSON
-        const mockUploadJSON = vi.fn();
-        (GCPStorageManager as any).mockImplementation(function () {
-            return {
-                uploadJSON: mockUploadJSON
-            };
-        });
-
         await workerService.processJob('job-1');
 
         expect(mockExpandCreativePrompt).toHaveBeenCalledWith('foo');
-        // Worker service no longer uploads to GCS for this job type, it saves result to DB
         expect(mockJobControlPlane.updateJobState).toHaveBeenCalledWith('job-1', 'COMPLETED', { expandedPrompt: 'expanded foo' });
         expect(mockPublishJobEvent).toHaveBeenCalledWith({ type: 'JOB_COMPLETED', jobId: 'job-1' });
     });
@@ -106,24 +111,22 @@ describe('WorkerService', () => {
             payload: { enhancedPrompt: 'foo' }
         });
 
-        const { CompositionalAgent } = await import('../../workflow/agents/compositional-agent');
-        (CompositionalAgent as any).mockImplementation(function () {
-            return {
-                expandCreativePrompt: vi.fn().mockRejectedValue(new Error('Processing failed'))
-            };
-        });
-
-        // Need to ensure GCPStorageManager is also mocked correctly for this test case
-        // as getAgents instantiates it.
-        (GCPStorageManager as any).mockImplementation(function () {
-            return {
-                uploadJSON: vi.fn()
-            };
-        });
+        mockExpandCreativePrompt.mockRejectedValue(new Error('Processing failed'));
 
         await workerService.processJob('job-1');
 
         expect(mockJobControlPlane.updateJobState).toHaveBeenCalledWith('job-1', 'FAILED', undefined, 'Processing failed');
         expect(mockPublishJobEvent).toHaveBeenCalledWith({ type: 'JOB_FAILED', jobId: 'job-1', error: 'Processing failed' });
+    });
+
+    it('should propagate claimJob errors (DB failure)', async () => {
+        const error = new Error('DB Connection Failed');
+        mockJobControlPlane.claimJob.mockRejectedValue(error);
+
+        await expect(workerService.processJob('job-1')).rejects.toThrow('DB Connection Failed');
+
+        expect(mockJobControlPlane.claimJob).toHaveBeenCalledWith('job-1', workerId);
+        expect(mockJobControlPlane.getJob).not.toHaveBeenCalled();
+        expect(mockJobControlPlane.updateJobState).not.toHaveBeenCalled();
     });
 });

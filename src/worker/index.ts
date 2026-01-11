@@ -78,13 +78,20 @@ async function main() {
             try {
                 const event = JSON.parse(message.data.toString()) as JobEvent;
 
-                message.ack();
                 if (event.type === "JOB_DISPATCHED") {
                     console.log(`[Worker ${workerId}] Received JOB_DISPATCHED for ${event.jobId}`);
-                    workerService.processJob(event.jobId);
+                    // Await processing. 
+                    // If processing throws (DB connection error in claim), we catch and nack.
+                    // If processing logic fails, inside processJob it catches and updates DB, so it returns safely here -> ack.
+                    // If claim returns false (already taken), it returns safely here -> ack.
+                    await workerService.processJob(event.jobId);
+                    message.ack();
+                } else {
+                    // Ack unknown events so they don't clog
+                    message.ack();
                 }
             } catch (error) {
-                console.error(`[Worker ${workerId}] Error parsing message:`, error);
+                console.error(`[Worker ${workerId}] Error processing message:`, error);
                 message.nack();
             }
         });

@@ -147,7 +147,7 @@ export class JobControlPlane {
             return false;
         } catch (error) {
             console.error(`[JobControlPlane] Error claiming job ${jobId}:`, error);
-            return false;
+            throw error;
         }
     }
 
