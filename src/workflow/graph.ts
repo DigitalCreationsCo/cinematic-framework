@@ -455,7 +455,7 @@ export class CinematicVideoWorkflow {
           nodeName,
           "ENHANCE_STORYBOARD",
           {
-            storyboard: project.storyboard,
+            storyboard: project.storyboard as any, // Safe: enhancedPrompt validated above
             enhancedPrompt: project.metadata.enhancedPrompt
           },
           version
@@ -1215,27 +1215,39 @@ async function main() {
 
 
   // initialize services (pubsub, poolManager, etc)
-  const pubsub = new PubSub({
-    projectId: gcpProjectId,
-    apiEndpoint: process.env.PUBSUB_EMULATOR_HOST,
-  });
-  const jobEventsTopicPublisher = pubsub.topic(JOB_EVENTS_TOPIC_NAME);
-  console.debug(`Initialized topic ${JOB_EVENTS_TOPIC_NAME}`);
+  let pubsub: PubSub;
+  let jobEventsTopicPublisher: ReturnType<PubSub[ 'topic' ]>;
+  let poolManager: PoolManager;
+  let jobControlPlane: JobControlPlane;
 
-  async function publishJobEvent(event: JobEvent) {
-    console.log(`[Cinematic-Canvas] Publishing job event ${event.type} to ${JOB_EVENTS_TOPIC_NAME}`);
-    const dataBuffer = Buffer.from(JSON.stringify(event));
-    await jobEventsTopicPublisher.publishMessage({ data: dataBuffer });
+  try {
+    pubsub = new PubSub({
+      projectId: gcpProjectId,
+      apiEndpoint: process.env.PUBSUB_EMULATOR_HOST,
+    });
+    jobEventsTopicPublisher = pubsub.topic(JOB_EVENTS_TOPIC_NAME);
+    console.debug(`Initialized topic ${JOB_EVENTS_TOPIC_NAME}`);
+
+    async function publishJobEvent(event: JobEvent) {
+      console.log(`[Cinematic-Canvas] Publishing job event ${event.type} to ${JOB_EVENTS_TOPIC_NAME}`);
+      const dataBuffer = Buffer.from(JSON.stringify(event));
+      await jobEventsTopicPublisher.publishMessage({ data: dataBuffer });
+    }
+
+    poolManager = new PoolManager({
+      connectionString: postgresUrl,
+      max: 10,
+      min: 2,
+      idleTimeoutMillis: 30000,
+    });
+    jobControlPlane = new JobControlPlane(poolManager, publishJobEvent);
+    await jobControlPlane.init();
+  } catch (error) {
+    console.error(`[Workflow] FATAL: PubSub initialization failed:`, error);
+    console.error(`[Workflow] Service cannot start without PubSub. Shutting down...`);
+    process.exit(1);
   }
 
-  const poolManager = new PoolManager({
-    connectionString: postgresUrl,
-    max: 10,
-    min: 2,
-    idleTimeoutMillis: 30000,
-  });
-  const jobControlPlane = new JobControlPlane(poolManager, publishJobEvent);
-  await jobControlPlane.init();
 
 
   // parse command line args

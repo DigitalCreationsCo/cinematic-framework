@@ -44,7 +44,7 @@ export type RegressionState = z.infer<typeof RegressionStateSchema>;
 
 
 export const WorkflowMetricsSchema = z.object({
-  sceneMetrics: z.array(SceneGenerationMetricSchema),
+  sceneMetrics: z.array(SceneGenerationMetricSchema).default([]),
   attemptMetrics: z.array(AttemptMetricSchema).default([]),
   trendHistory: z.array(TrendSchema).default([]),
   regression: RegressionStateSchema.default({

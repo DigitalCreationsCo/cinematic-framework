@@ -28,7 +28,7 @@ function App() {
   const { data, isLoading, isError } = useProjects();
 
   useEffect(() => {
-    if (!isLoading && !isError && data?.projects && data.projects.length > 0 && !selectedProject) {
+    if (!isLoading && !isError && data?.projects && !selectedProject) {
       setModalOpen(true);
     }
   }, [ data, isLoading, isError, selectedProject ]);

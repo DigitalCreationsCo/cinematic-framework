@@ -32,12 +32,22 @@ export async function registerRoutes(
 
   const clientConnections = new Map<string, Set<Response>>();
 
-  const pubsub = new PubSub({
-    projectId: process.env.GCP_PROJECT_ID,
-    apiEndpoint: process.env.PUBSUB_EMULATOR_HOST,
-  });
+  let pubsub: PubSub;
+  let pipelineCommandsTopicPublisher: ReturnType<PubSub[ 'topic' ]>;
 
-  const pipelineCommandsTopicPublisher = pubsub.topic(PIPELINE_COMMANDS_TOPIC_NAME);
+  try {
+    pubsub = new PubSub({
+      projectId: process.env.GCP_PROJECT_ID,
+      apiEndpoint: process.env.PUBSUB_EMULATOR_HOST,
+    });
+
+    pipelineCommandsTopicPublisher = pubsub.topic(PIPELINE_COMMANDS_TOPIC_NAME);
+  } catch (error) {
+    console.error(`[Server] FATAL: PubSub initialization failed:`, error);
+    console.error(`[Server] Service cannot start without PubSub. Shutting down...`);
+    throw error; // Re-throw to prevent server from starting
+  }
+
 
   let sharedEventsSubscription: Subscription;
 
@@ -136,20 +146,17 @@ export async function registerRoutes(
     try {
       const {
         projectId = uuidv4(),
-        payload, commandId = uuidv4()
+        commandId = uuidv4(),
+        payload,
       } = req.body;
       console.log(`Received START_PIPELINE command for projectId: ${projectId}`);
-
       if (!payload.initialPrompt) {
-        console.error("Validation error: enhancedPrompt missing.", { initialPrompt: payload.initialPrompt });
-        return res.status(400).json({ error: "enhancedPrompt is required." });
+        console.error("Validation error: prompt missing.", { initialPrompt: payload.initialPrompt });
+        return res.status(400).json({ error: "prompt is required." });
       }
 
-
       const finalCommandId = await publishCommand({ type: "START_PIPELINE", projectId, payload, commandId });
-
       console.log(`Published START_PIPELINE (id: ${finalCommandId}) for ${projectId}`);
-
       res.status(202).json({
         message: "Pipeline start command issued.",
         projectId: projectId,

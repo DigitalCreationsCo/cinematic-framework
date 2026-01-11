@@ -3,10 +3,10 @@ import {
   jsonb, boolean, real, pgEnum
 } from "drizzle-orm/pg-core";
 import {
-  ProjectMetadata, AssetRegistry, Lighting, Cinematography,
+  ProjectMetadata, InitialProjectMetadata, AssetRegistry, Lighting, Cinematography,
   CharacterState, LocationState, PhysicalTraits, WorkflowMetrics,
   AudioAnalysis,
-  Storyboard
+  Storyboard, InitialStoryboard
 } from "./types/pipeline.types";
 import { z } from "zod";
 import { createTableFromZod } from "zod-to-drizzle";
@@ -39,9 +39,9 @@ export const projects = pgTable("projects", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 
-  // Core Data
-  storyboard: jsonb("storyboard").$type<Storyboard>().notNull(),
-  metadata: jsonb("metadata").$type<ProjectMetadata>().notNull(),
+  // Core Data - uses loose types for insertion flexibility
+  storyboard: jsonb("storyboard").$type<InitialStoryboard>().notNull(),
+  metadata: jsonb("metadata").$type<InitialProjectMetadata>().notNull(),
 
   // Workflow Control
   status: assetStatusEnum("status").default("pending").notNull(),

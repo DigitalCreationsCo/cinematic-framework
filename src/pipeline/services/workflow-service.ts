@@ -1,5 +1,5 @@
 import { PipelineCommand, PipelineEvent } from "../../shared/types/pubsub.types";
-import { InitialProject, Project, WorkflowState } from "../../shared/types/pipeline.types";
+import { InitialProject, Project, WorkflowState, InitialProjectMetadata, InitialStoryboard } from "../../shared/types/pipeline.types";
 import { CinematicVideoWorkflow } from "../../workflow/graph";
 import { CheckpointerManager } from "../../workflow/checkpointer-manager";
 import { RunnableConfig } from "@langchain/core/runnables";
@@ -386,101 +386,85 @@ export class WorkflowOperator {
 
     private async buildInitialProject(projectId: string, payload: Extract<PipelineCommand, { type: "START_PIPELINE"; }>[ 'payload' ]): Promise<InitialProject> {
 
+        // 1. Try to load existing project from DB
         try {
             console.log(`[WorkflowOperator] Building initial state from DB for ${projectId}`);
-            const project = await this.projectRepository.getProject(projectId) as any;
-            if (project.metadata) {
+            const project = await this.projectRepository.getProject(projectId);
+
+            if (project) {
+                const metadata = project.metadata as InitialProjectMetadata;
+                const storyboard = project.storyboard as InitialStoryboard;
+
                 return {
+                    id: project.id,
+                    projectId: project.id,
+                    createdAt: project.createdAt,
+                    updatedAt: project.updatedAt,
                     status: project.status,
-                    currentSceneIndex: project.currentSceneIndex || 0,
-                    storyboard: {
-                        metadata: project.metadata,
-                        characters: project.characters || [],
-                        locations: project.locations || [],
-                        scenes: project.scenes || [],
-                    },
-                    metadata: project.metadata,
-                    characters: project.characters || [],
-                    locations: project.locations || [],
-                    scenes: project.scenes || [],
-                    generationRules: [],
-                } as unknown as InitialProject;
-            };
+                    currentSceneIndex: project.currentSceneIndex,
+                    forceRegenerateSceneIds: project.forceRegenerateSceneIds,
+                    assets: project.assets,
+                    generationRules: project.generationRules,
+                    generationRulesHistory: project.generationRulesHistory,
+                    metadata: metadata,
+                    storyboard: storyboard,
+                    metrics: project.metrics || undefined,
+                    characters: [],
+                    locations: [],
+                    scenes: [],
+                };
+            }
         } catch (error) {
-            console.warn("No existing project found. Starting fresh workflow.");
+            console.warn("No existing project found in DB. Starting fresh workflow.");
         }
 
-        // 2. Fallback to GCS
-        // try {
-        //     const statePath = await sm.getObjectPath({ type: "state" });
-        //     const savedState = await sm.downloadJSON<Project>(statePath);
-        //     console.log("   Found persistent state backup in GCS. Using as initial state.");
-        //     return {
-        //         ...savedState,
-        //         localAudioPath: payload.audioGcsUri || savedState.localAudioPath || "",
-        //         initialPrompt: payload.initialPrompt || savedState.enhancedPrompt,
-        //         audioGcsUri: payload.audioGcsUri || savedState.audioGcsUri,
-        //         audioPublicUri: audioPublicUri || savedState.audioPublicUri,
-        //         hasAudio: !!(payload.audioGcsUri || savedState.audioGcsUri),
-        //     };
-        // } catch (e) {
-        //     try {
-        //         console.log("   Checking for existing storyboard in GCS...");
-        //         const storyboardPath = `${projectId}/scenes/storyboard.json`;
-        //         const storyboard = await sm.downloadJSON<Storyboard>(storyboardPath);
-
-        //         console.log("   Found existing storyboard in GCS.");
-        //         return {
-        //             enhancedPrompt: payload.enhancedPrompt,
-        //             audioGcsUri: payload.audioGcsUri,
-        //             audioPublicUri: audioPublicUri,
-        //             hasAudio: !!payload.audioGcsUri,
-        //             storyboard: storyboard,
-        //             storyboardState: storyboard,
-        //             currentSceneIndex: 0,
-        //             errors: [],
-        //             generationRules: [],
-        //             refinedRules: [],
-        //             versions: {},
-        //         };
-        //     } catch (error) {
-        //         console.log("   No existing storyboard found or error loading it. Starting fresh workflow.");
-        //     }
-        // }
-
+        // 2. Create fresh InitialProject for new workflow
         const sm = new GCPStorageManager(this.gcpProjectId, projectId, this.bucketName);
         let audioPublicUri;
         if (payload.audioGcsUri) {
             audioPublicUri = sm.getPublicUrl(payload.audioGcsUri);
         }
-        const newProjectMetadata = {
+
+        const newProjectMetadata: InitialProjectMetadata = {
+            projectId: projectId,
             title: payload.title || "",
+            duration: 0,
+            totalScenes: 0,
+            style: "",
+            mood: "",
+            colorPalette: [],
+            tags: [],
             initialPrompt: payload.initialPrompt,
             audioGcsUri: payload.audioGcsUri,
             audioPublicUri: audioPublicUri,
             hasAudio: !!payload.audioGcsUri,
-
             models: {
                 videoModel: videoModelName,
                 imageModel: imageModelName,
                 textModel: textModelName,
                 qaModel: qualityCheckModelName,
             }
-        } as InitialProject[ 'metadata' ];
+        };
 
         return {
+            projectId: projectId,
             status: "pending",
             currentSceneIndex: 0,
-            storyboard: Object.freeze({
+            forceRegenerateSceneIds: [],
+            assets: {},
+            generationRules: [],
+            generationRulesHistory: [],
+            metadata: newProjectMetadata,
+            storyboard: {
                 metadata: newProjectMetadata,
                 characters: [],
                 locations: [],
                 scenes: []
-            }),
-            metadata: newProjectMetadata,
+            },
             characters: [],
             locations: [],
             scenes: [],
-        } as unknown as InitialProject;
+        };
     }
+
 }

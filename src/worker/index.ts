@@ -60,41 +60,47 @@ const workerService = new WorkerService(workerId, bucketName, jobControlPlane, p
 async function main() {
     console.log(`Starting generative worker service ${workerId}...`);
 
-    await jobControlPlane.init();
+    try {
+        await jobControlPlane.init();
 
-    const [ topic ] = await pubsub.topic(JOB_EVENTS_TOPIC_NAME).get({ autoCreate: true });
+        const [ topic ] = await pubsub.topic(JOB_EVENTS_TOPIC_NAME).get({ autoCreate: true });
 
-    console.log(`[Worker ${workerId}] Ensuring subscription ${WORKER_JOB_EVENTS_SUBSCRIPTION} exists on ${JOB_EVENTS_TOPIC_NAME}...`);
-    await topic.subscription(WORKER_JOB_EVENTS_SUBSCRIPTION).get({ autoCreate: true });
+        console.log(`[Worker ${workerId}] Ensuring subscription ${WORKER_JOB_EVENTS_SUBSCRIPTION} exists on ${JOB_EVENTS_TOPIC_NAME}...`);
+        await topic.subscription(WORKER_JOB_EVENTS_SUBSCRIPTION).get({ autoCreate: true });
 
-    console.log(`[Worker ${workerId}] Ensuring subscription ${PIPELINE_JOB_EVENTS_SUBSCRIPTION} exists on ${JOB_EVENTS_TOPIC_NAME}...`);
-    await topic.subscription(PIPELINE_JOB_EVENTS_SUBSCRIPTION).get({ autoCreate: true });
+        console.log(`[Worker ${workerId}] Ensuring subscription ${PIPELINE_JOB_EVENTS_SUBSCRIPTION} exists on ${JOB_EVENTS_TOPIC_NAME}...`);
+        await topic.subscription(PIPELINE_JOB_EVENTS_SUBSCRIPTION).get({ autoCreate: true });
 
-    const subscription = pubsub.subscription(WORKER_JOB_EVENTS_SUBSCRIPTION);
-    console.log(`[Worker ${workerId}] Listening on ${WORKER_JOB_EVENTS_SUBSCRIPTION}`);
+        const subscription = pubsub.subscription(WORKER_JOB_EVENTS_SUBSCRIPTION);
+        console.log(`[Worker ${workerId}] Listening on ${WORKER_JOB_EVENTS_SUBSCRIPTION}`);
 
-    subscription.on("message", async (message) => {
-        try {
-            const event = JSON.parse(message.data.toString()) as JobEvent;
+        subscription.on("message", async (message) => {
+            try {
+                const event = JSON.parse(message.data.toString()) as JobEvent;
 
-            message.ack();
-            if (event.type === "JOB_DISPATCHED") {
-                console.log(`[Worker ${workerId}] Received JOB_DISPATCHED for ${event.jobId}`);
-                workerService.processJob(event.jobId);
+                message.ack();
+                if (event.type === "JOB_DISPATCHED") {
+                    console.log(`[Worker ${workerId}] Received JOB_DISPATCHED for ${event.jobId}`);
+                    workerService.processJob(event.jobId);
+                }
+            } catch (error) {
+                console.error(`[Worker ${workerId}] Error parsing message:`, error);
+                message.nack();
             }
-        } catch (error) {
-            console.error(`[Worker ${workerId}] Error parsing message:`, error);
-            message.nack();
-        }
-    });
+        });
 
-    // Handle shutdown
-    process.on("SIGINT", async () => {
-        console.log("Shutting down worker...");
-        subscription.close();
-        await poolManager.close();
-        process.exit(0);
-    });
+        // Handle shutdown
+        process.on("SIGINT", async () => {
+            console.log("Shutting down worker...");
+            subscription.close();
+            await poolManager.close();
+            process.exit(0);
+        });
+    } catch (error) {
+        console.error(`[Worker ${workerId}] FATAL: PubSub initialization failed:`, error);
+        console.error(`[Worker ${workerId}] Service cannot start without PubSub. Shutting down...`);
+        process.exit(1);
+    }
 }
 
 main().catch(console.error);

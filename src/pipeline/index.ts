@@ -82,44 +82,45 @@ export async function publishPipelineEvent(event: PipelineEvent) {
 async function main() {
     console.log(`Starting pipeline service ${workerId}...`);
 
-    formatLoggers(projectIdStore, publishPipelineEvent);
-    checkpointerManager.getCheckpointer();
+    try {
+        formatLoggers(projectIdStore, publishPipelineEvent);
+        checkpointerManager.getCheckpointer();
 
-    const jobControlPlane = new JobControlPlane(poolManager, publishJobEvent);
-    await jobControlPlane.init();
+        const jobControlPlane = new JobControlPlane(poolManager, publishJobEvent);
+        await jobControlPlane.init();
 
-    const projectRepository = new ProjectRepository();
-    const workflowOperator = new WorkflowOperator(checkpointerManager, jobControlPlane, publishPipelineEvent, projectRepository);
+        const projectRepository = new ProjectRepository();
+        const workflowOperator = new WorkflowOperator(checkpointerManager, jobControlPlane, publishPipelineEvent, projectRepository);
 
 
-    // create job events topic, ensure pipeline event subscription exists
-    console.log(`[Pipeline ${workerId}] Ensuring topic ${JOB_EVENTS_TOPIC_NAME} exists...`);
-    const [ jobEventsTopic ] = await pubsub.topic(JOB_EVENTS_TOPIC_NAME).get({ autoCreate: true });
+        // create job events topic, ensure pipeline event subscription exists
+        console.log(`[Pipeline ${workerId}] Ensuring topic ${JOB_EVENTS_TOPIC_NAME} exists...`);
+        const [ jobEventsTopic ] = await pubsub.topic(JOB_EVENTS_TOPIC_NAME).get({ autoCreate: true });
 
-    console.log(`[Pipeline ${workerId}] Ensuring subscription ${PIPELINE_JOB_EVENTS_SUBSCRIPTION} exists on ${JOB_EVENTS_TOPIC_NAME}...`);
-    await jobEventsTopic.subscription(PIPELINE_JOB_EVENTS_SUBSCRIPTION).get({ autoCreate: true });
+        console.log(`[Pipeline ${workerId}] Ensuring subscription ${PIPELINE_JOB_EVENTS_SUBSCRIPTION} exists on ${JOB_EVENTS_TOPIC_NAME}...`);
+        await jobEventsTopic.subscription(PIPELINE_JOB_EVENTS_SUBSCRIPTION).get({ autoCreate: true });
 
-    console.log(`[Pipeline ${workerId}] Ensuring subscription ${WORKER_JOB_EVENTS_SUBSCRIPTION} exists on ${JOB_EVENTS_TOPIC_NAME}...`);
-    await jobEventsTopic.subscription(WORKER_JOB_EVENTS_SUBSCRIPTION).get({ autoCreate: true });
+        console.log(`[Pipeline ${workerId}] Ensuring subscription ${WORKER_JOB_EVENTS_SUBSCRIPTION} exists on ${JOB_EVENTS_TOPIC_NAME}...`);
+        await jobEventsTopic.subscription(WORKER_JOB_EVENTS_SUBSCRIPTION).get({ autoCreate: true });
 
-    // subscribe to worker job events
-    const workerEventsSubscription = pubsub.subscription(PIPELINE_JOB_EVENTS_SUBSCRIPTION);
-    console.log(`[Pipeline ${workerId}] Listening for job events on ${PIPELINE_JOB_EVENTS_SUBSCRIPTION}`);
+        // subscribe to worker job events
+        const workerEventsSubscription = pubsub.subscription(PIPELINE_JOB_EVENTS_SUBSCRIPTION);
+        console.log(`[Pipeline ${workerId}] Listening for job events on ${PIPELINE_JOB_EVENTS_SUBSCRIPTION}`);
 
-    // subscribe to server forwarded commands;
-    const [ videoCommandsTopic ] = await pubsub.topic(PIPELINE_COMMANDS_TOPIC_NAME).get({ autoCreate: true });
-    await pubsub.topic(PIPELINE_EVENTS_TOPIC_NAME).get({ autoCreate: true });
-    await videoCommandsTopic.subscription(PIPELINE_COMMANDS_SUBSCRIPTION).get({ autoCreate: true });
-    console.log(`[Pipeline ${workerId} Listening for pipeline commands on ${PIPELINE_COMMANDS_SUBSCRIPTION}`);
+        // subscribe to server forwarded commands;
+        const [ videoCommandsTopic ] = await pubsub.topic(PIPELINE_COMMANDS_TOPIC_NAME).get({ autoCreate: true });
+        await pubsub.topic(PIPELINE_EVENTS_TOPIC_NAME).get({ autoCreate: true });
+        await videoCommandsTopic.subscription(PIPELINE_COMMANDS_SUBSCRIPTION).get({ autoCreate: true });
+        console.log(`[Pipeline ${workerId} Listening for pipeline commands on ${PIPELINE_COMMANDS_SUBSCRIPTION}`);
 
-    // distributed signal for pipeline cancellations
-    const [ videoCancellationsTopic ] = await pubsub.topic(PIPELINE_CANCELLATIONS_TOPIC_NAME).get({ autoCreate: true });
-    await videoCancellationsTopic.createSubscription(PIPELINE_CANCELLATIONS_SUBSCRIPTION_NAME);
-    const cancellationSubscription = pubsub.subscription(PIPELINE_CANCELLATIONS_SUBSCRIPTION_NAME);
-    console.log(`[Pipeline ${workerId}] Listening for cancellations on ${PIPELINE_CANCELLATIONS_SUBSCRIPTION_NAME}`);
+        // distributed signal for pipeline cancellations
+        const [ videoCancellationsTopic ] = await pubsub.topic(PIPELINE_CANCELLATIONS_TOPIC_NAME).get({ autoCreate: true });
+        await videoCancellationsTopic.createSubscription(PIPELINE_CANCELLATIONS_SUBSCRIPTION_NAME);
+        const cancellationSubscription = pubsub.subscription(PIPELINE_CANCELLATIONS_SUBSCRIPTION_NAME);
+        console.log(`[Pipeline ${workerId}] Listening for cancellations on ${PIPELINE_CANCELLATIONS_SUBSCRIPTION_NAME}`);
 
-    const pipelineCommandsSubscription = pubsub.subscription(PIPELINE_COMMANDS_SUBSCRIPTION);
-    console.log(`Listening for commands on ${PIPELINE_COMMANDS_SUBSCRIPTION}...`);
+        const pipelineCommandsSubscription = pubsub.subscription(PIPELINE_COMMANDS_SUBSCRIPTION);
+        console.log(`Listening for commands on ${PIPELINE_COMMANDS_SUBSCRIPTION}...`);
 
 
     workerEventsSubscription.on("message", async (message) => {
@@ -259,6 +260,11 @@ async function main() {
             cancellationSubscription.close();
             pipelineCommandsSubscription.close();
         });
+    }
+    } catch (error) {
+        console.error(`[Pipeline ${workerId}] FATAL: PubSub initialization failed:`, error);
+        console.error(`[Pipeline ${workerId}] Service cannot start without PubSub. Shutting down...`);
+        process.exit(1);
     }
 }
 

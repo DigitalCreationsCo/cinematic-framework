@@ -1,25 +1,30 @@
 import {
-    Scene, Character, Location, Project,
+    Scene, Character, Location, Project, ProjectSchema, createDefaultMetrics,
 } from "../../../shared/types/pipeline.types";
 import {
     ProjectEntity
 } from "../../../shared/zod-db";
 
+/**
+ * Maps a DB ProjectEntity + hydrated relations to a strict Project domain object.
+ * Enforces ProjectSchema validation - throws if project is not fully hydrated.
+ * Should only be called after storyboard generation completes.
+ */
 export function mapDbProjectToDomain(entity: ProjectEntity, scenes: Scene[] = [], chars: Character[] = [], locs: Location[] = []): Project {
-    return {
+    const rawProject = {
         id: entity.id,
         projectId: entity.id, // For TagSchema compatibility
-        createdAt: entity.createdAt?.toISOString() || new Date().toISOString(),
-        updatedAt: entity.updatedAt?.toISOString() || new Date().toISOString(),
+        createdAt: entity.createdAt,
+        updatedAt: entity.updatedAt,
         metadata: entity.metadata,
-        metrics: entity.metrics || undefined,
-        status: entity.status as any,
+        metrics: entity.metrics ?? createDefaultMetrics(),
+        status: entity.status,
         currentSceneIndex: entity.currentSceneIndex,
-        forceRegenerateSceneIds: entity.forceRegenerateSceneIds || [],
-        generationRules: entity.generationRules || [],
-        generationRulesHistory: [], // Not persisted in new schema? Defaulting.
-        assets: entity.assets || {},
-        // Relations
+        forceRegenerateSceneIds: entity.forceRegenerateSceneIds ?? [],
+        generationRules: entity.generationRules ?? [],
+        generationRulesHistory: entity.generationRulesHistory ?? [],
+        assets: entity.assets ?? {},
+        // Relations - hydrated from separate DB tables
         storyboard: {
             metadata: entity.metadata,
             scenes: scenes,
@@ -29,5 +34,8 @@ export function mapDbProjectToDomain(entity: ProjectEntity, scenes: Scene[] = []
         scenes,
         characters: chars,
         locations: locs
-    } as unknown as Project; // Casting because Project type might vary slightly from DB entity
+    };
+
+    // Validate and return strict Project type
+    return ProjectSchema.parse(rawProject);
 }

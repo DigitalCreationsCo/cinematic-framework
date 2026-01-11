@@ -149,7 +149,7 @@ export class WorkerService {
                     payload = job.payload;
                     const { segments, totalDuration } = await agents.audioProcessingAgent.processAudioToScenes(
                         job.payload.audioPublicUri,
-                        payload.enhancedPrompt
+                        payload.enhancedPrompt,
                     );
                     result = { segments, totalDuration };
                     break;

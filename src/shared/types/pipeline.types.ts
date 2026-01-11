@@ -225,6 +225,42 @@ export interface VideoGenerationConfig {
 // METADATA SCHEMAS
 // ============================================================================
 
+/**
+ * InitialProjectMetadataSchema: Loose schema for project creation/insertion.
+ * Only `projectId` and `initialPrompt` are strictly required.
+ * Other fields have defaults or are optional - populated during workflow.
+ */
+export const InitialProjectMetadataSchema = z.object({
+  projectId: z.uuid().nonempty().nonoptional().describe("Pipeline project id"),
+  title: z.string().default("").describe("title of the video"),
+  duration: z.number().default(0).describe("total duration in seconds"),
+  totalScenes: z.number().default(0).describe("total number of scenes"),
+  style: z.string().default("").describe("inferred cinematic style"),
+  mood: z.string().default("").describe("overall emotional arc"),
+  colorPalette: z.array(z.string()).default([]).describe("dominant colors"),
+  tags: z.array(z.string()).default([]).describe("descriptive tags"),
+
+  models: z.object({
+    videoModel: z.string().optional().describe("AI model used for video generation"),
+    imageModel: z.string().optional().describe("AI model used for image generation"),
+    textModel: z.string().optional().describe("AI model used for text generation"),
+    qaModel: z.string().optional().describe("AI model used for quality evaluation"),
+  }).default({}),
+
+  initialPrompt: z.string().describe("original creative prompt"),
+  enhancedPrompt: z.string().optional().describe("enhanced user prompt with narrative, characters, settings"),
+  audioGcsUri: z.string().optional().describe("GCS URI of uploaded audio file"),
+  audioPublicUri: z.string().optional().describe("audio file public url"),
+  hasAudio: z.boolean().default(false).describe("whether this workflow has user-provided audio"),
+});
+export type InitialProjectMetadata = z.infer<typeof InitialProjectMetadataSchema>;
+
+
+/**
+ * ProjectMetadataSchema: Strict schema for runtime application logic.
+ * All fields are required (no optionals except audio-related fields).
+ * Used after storyboard generation when metadata is fully populated.
+ */
 export const ProjectMetadataSchema = z.object({
   projectId: z.uuid().nonempty().nonoptional().describe("Pipeline project id"),
   title: z.string().describe("title of the video"),
@@ -232,21 +268,21 @@ export const ProjectMetadataSchema = z.object({
   totalScenes: z.number().describe("total number of scenes"),
   style: z.string().describe("inferred cinematic style"),
   mood: z.string().describe("overall emotional arc"),
-  colorPalette: z.array(z.string()).describe("dominant colors").default([]),
-  tags: z.array(z.string()).describe("descriptive tags").default([]),
+  colorPalette: z.array(z.string()).describe("dominant colors"),
+  tags: z.array(z.string()).describe("descriptive tags"),
 
   models: z.object({
     videoModel: z.string().optional().describe("AI model used for video generation"),
     imageModel: z.string().optional().describe("AI model used for image generation"),
     textModel: z.string().optional().describe("AI model used for text generation"),
-    qaModel: z.string().optional().describe("AI model used for quality evaluaton"),
+    qaModel: z.string().optional().describe("AI model used for quality evaluation"),
   }),
 
   initialPrompt: z.string().describe("original creative prompt"),
-  enhancedPrompt: z.string().optional().describe("enhanced user prompt with narrative, characters, settings"),
+  enhancedPrompt: z.string().describe("enhanced user prompt with narrative, characters, settings"),
   audioGcsUri: z.string().optional().describe("GCS URI of uploaded audio file"),
   audioPublicUri: z.string().optional().describe("audio file public url"),
-  hasAudio: z.boolean().default(false).describe("whether this workflow has user-provided audio"),
+  hasAudio: z.boolean().describe("whether this workflow has user-provided audio"),
 });
 export type ProjectMetadata = z.infer<typeof ProjectMetadataSchema>;
 
@@ -431,6 +467,23 @@ export type Location = z.infer<typeof LocationSchema>;
 // STORYBOARD ENRICHMENT SCHEMA
 // ============================================================================
 
+/**
+ * InitialStoryboardSchema: Loose schema for project creation.
+ * Uses InitialProjectMetadataSchema and allows empty arrays.
+ */
+export const InitialStoryboardSchema = z.object({
+  metadata: InitialProjectMetadataSchema,
+  characters: z.array(CharacterSchema).default([]),
+  locations: z.array(LocationSchema).default([]),
+  scenes: z.array(SceneSchema).default([]),
+});
+export type InitialStoryboard = z.infer<typeof InitialStoryboardSchema>;
+
+
+/**
+ * StoryboardSchema: Strict schema for immutable storyboard snapshot.
+ * Uses ProjectMetadataSchema and requires populated arrays.
+ */
 export const StoryboardSchema = z.object({
   metadata: ProjectMetadataSchema,
   characters: z.array(CharacterSchema),
@@ -441,7 +494,7 @@ export type Storyboard = z.infer<typeof StoryboardSchema>;
 
 
 export const InitialContextSchema = z.object({
-  metadata: ProjectMetadataSchema,
+  metadata: InitialProjectMetadataSchema,
   characters: z.array(CharacterSchema),
   locations: z.array(LocationSchema),
 });
@@ -452,22 +505,53 @@ export const SceneBatchSchema = z.object({
 });
 
 
+/**
+ * Default WorkflowMetrics factory for project creation.
+ */
+export const createDefaultMetrics = (): z.infer<typeof WorkflowMetricsSchema> => ({
+  sceneMetrics: [],
+  attemptMetrics: [],
+  trendHistory: [],
+  regression: {
+    count: 0,
+    sumX: 0,
+    sumY_a: 0,
+    sumY_q: 0,
+    sumXY_a: 0,
+    sumXY_q: 0,
+    sumX2: 0,
+  },
+});
+
+
+/**
+ * InitialProjectSchema: Minimal schema for DB insertion.
+ * Uses loose metadata and storyboard schemas with defaults.
+ * This is the type used before storyboard generation completes.
+ */
 export const InitialProjectSchema = z.object({
-  ...TagSchema.shape,
+  // TagSchema fields - id generated by DB or client
+  id: z.uuid().optional(),
+  projectId: z.uuid().nonempty().nonoptional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
 
-  storyboard: StoryboardSchema.describe("The initial, immutable storyboard plan"),
-  metadata: ProjectMetadataSchema.describe("Production state (mutable, iteratively updates)"),
+  // Loose storyboard and metadata
+  storyboard: InitialStoryboardSchema.describe("The initial storyboard plan (empty at creation)"),
+  metadata: InitialProjectMetadataSchema.describe("Production metadata (partial at creation)"),
 
-  status: AssetStatusSchema,
-  currentSceneIndex: z.number().describe("Index of scene currently being processed").default(0),
-  forceRegenerateSceneIds: z.array(z.string()).describe("List of scene IDs to force video regenerate").default([]),
+  // Workflow control with defaults
+  status: AssetStatusSchema.default("pending"),
+  currentSceneIndex: z.number().default(0).describe("Index of scene currently being processed"),
+  forceRegenerateSceneIds: z.array(z.string()).default([]).describe("List of scene IDs to force video regenerate"),
 
-  assets: AssetRegistrySchema,
-  generationRules: z.array(z.string()).describe("generation rule guidelines").default([]),
+  assets: AssetRegistrySchema.default({}),
+  generationRules: z.array(z.string()).default([]).describe("generation rule guidelines"),
   generationRulesHistory: z.array(
-    z.array(z.string()).describe("generation rule guidelines").default([])
-  ).describe("history of generation rule guidelines"),
+    z.array(z.string()).default([])
+  ).default([]).describe("history of generation rule guidelines"),
 
+  // Optional at creation - populated during workflow
   characters: z.array(CharacterSchema).optional(),
   locations: z.array(LocationSchema).optional(),
   scenes: z.array(SceneSchema).optional(),
@@ -476,14 +560,39 @@ export const InitialProjectSchema = z.object({
 export type InitialProject = z.infer<typeof InitialProjectSchema>;
 
 
-export const ProjectSchema = InitialProjectSchema.extend(z.object({
-  storyboard: StoryboardSchema,
-  metadata: ProjectMetadataSchema.required(),
-  metrics: WorkflowMetricsSchema,
+/**
+ * ProjectSchema: Strict schema for runtime application logic.
+ * All fields required. Used after storyboard generation completes.
+ * NOT an extension of InitialProjectSchema - standalone strict definition.
+ */
+export const ProjectSchema = z.object({
+  // TagSchema fields - all required at runtime
+  id: z.uuid().nonempty().nonoptional(),
+  projectId: z.uuid().nonempty().nonoptional(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+
+  // Strict storyboard and metadata
+  storyboard: StoryboardSchema.describe("The immutable storyboard snapshot"),
+  metadata: ProjectMetadataSchema.describe("Fully populated production metadata"),
+
+  // Workflow control
+  status: AssetStatusSchema,
+  currentSceneIndex: z.number().describe("Index of scene currently being processed"),
+  forceRegenerateSceneIds: z.array(z.string()).describe("List of scene IDs to force video regenerate"),
+
+  assets: AssetRegistrySchema,
+  generationRules: z.array(z.string()).describe("generation rule guidelines"),
+  generationRulesHistory: z.array(
+    z.array(z.string())
+  ).describe("history of generation rule guidelines"),
+
+// Required at runtime - hydrated from DB
   characters: z.array(CharacterSchema),
   locations: z.array(LocationSchema),
   scenes: z.array(SceneSchema),
-}).shape);
+  metrics: WorkflowMetricsSchema,
+});
 export type Project = z.infer<typeof ProjectSchema>;
 
 
