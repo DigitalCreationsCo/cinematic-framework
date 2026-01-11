@@ -10,13 +10,13 @@ import {
 import { JobEvent } from "../shared/types/job-types";
 import { PoolManager } from "../pipeline/services/pool-manager";
 import { JobControlPlane } from "../pipeline/services/job-control-plane";
-import { v4 as uuidv4 } from 'uuid';
+import { v7 as uuidv7 } from 'uuid';
 import * as dotenv from "dotenv";
 import { WorkerService } from "./worker-service";
 
 dotenv.config();
 
-const workerId = uuidv4();
+const workerId = uuidv7();
 
 const gcpProjectId = process.env.GCP_PROJECT_ID;
 if (!gcpProjectId) throw Error("A GCP projectId was not provided");

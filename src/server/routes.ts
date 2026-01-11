@@ -8,7 +8,7 @@ import {
   SERVER_PIPELINE_EVENTS_SUBSCRIPTION
 } from "../shared/constants";
 import { PipelineCommand, PipelineEvent } from "../shared/types/pubsub.types";
-import { v4 as uuidv4 } from "uuid";
+import { v7 as uuidv7 } from "uuid";
 import { Bucket } from "@google-cloud/storage";
 import multer from "multer";
 import { GCPStorageManager } from "../workflow/storage-manager";
@@ -127,7 +127,7 @@ export async function registerRoutes(
       ...command,
       ...("payload" in command ? { payload: command.payload } : {}),
       timestamp: new Date().toISOString(),
-      commandId: command.commandId || uuidv4(),
+      commandId: command.commandId || uuidv7(),
     };
     const dataBuffer = Buffer.from(JSON.stringify(fullCommand));
     await pipelineCommandsTopicPublisher.publishMessage({ data: dataBuffer });
@@ -145,8 +145,8 @@ export async function registerRoutes(
   ) => {
     try {
       const {
-        projectId = uuidv4(),
-        commandId = uuidv4(),
+        projectId = uuidv7(),
+        commandId = uuidv7(),
         payload,
       } = req.body;
       console.log(`Received START_PIPELINE command for projectId: ${projectId}`);
@@ -172,7 +172,7 @@ export async function registerRoutes(
     req: Request<any, any, Extract<PipelineCommand, { type: "STOP_PIPELINE"; }>>,
     res: Response) => {
     try {
-      const { projectId, commandId = uuidv4() } = req.body;
+      const { projectId, commandId = uuidv7() } = req.body;
       if (!projectId) return res.status(400).json({ error: "projectId is required." });
       const finalCommandId = await publishCommand({ type: "STOP_PIPELINE", projectId, commandId });
 
@@ -188,7 +188,7 @@ export async function registerRoutes(
     res: Response) => {
     try {
       const { projectId } = req.params;
-      const { commandId = uuidv4() } = req.body;
+      const { commandId = uuidv7() } = req.body;
       const finalCommandId = await publishCommand({ type: "RESUME_PIPELINE", projectId, commandId });
 
       res.status(202).json({ message: "Pipeline resume command issued.", projectId, commandId: finalCommandId });
@@ -204,7 +204,7 @@ export async function registerRoutes(
   ) => {
     try {
       const { projectId } = req.params;
-      const { payload, commandId = uuidv4() } = req.body;
+      const { payload, commandId = uuidv7() } = req.body;
 
       if (!payload.sceneId) return res.status(400).json({ error: "sceneId is required." });
 
@@ -228,7 +228,7 @@ export async function registerRoutes(
   ) => {
     try {
       const { projectId } = req.params;
-      const { payload, commandId = uuidv4() } = req.body;
+      const { payload, commandId = uuidv7() } = req.body;
 
       const missingParams = [];
       if (!payload.sceneId) missingParams.push('sceneId');
@@ -258,7 +258,7 @@ export async function registerRoutes(
   ) => {
     try {
       const { projectId } = req.params;
-      const { payload, commandId = uuidv4() } = req.body;
+      const { payload, commandId = uuidv7() } = req.body;
 
       if (!projectId) return res.status(400).json({ error: "projectId is required." });
       if (!payload.action) return res.status(400).json({ error: "action is required." });
@@ -283,7 +283,7 @@ export async function registerRoutes(
   ) => {
     try {
       const { projectId } = req.params;
-      const { commandId = uuidv4() } = req.body;
+      const { commandId = uuidv7() } = req.body;
       const finalCommandId = await publishCommand({ type: "REQUEST_FULL_STATE", projectId, commandId });
 
       res.status(202).json({ message: "Full state request command issued.", projectId, commandId: finalCommandId });
@@ -313,7 +313,7 @@ export async function registerRoutes(
   ) => {
     try {
       const { projectId } = req.params;
-      const { payload: { scene, assetKey, version }, commandId = uuidv4() } = req.body;
+      const { payload: { scene, assetKey, version }, commandId = uuidv7() } = req.body;
 
       if (!assetKey) return res.status(400).json({ error: "asset type is required." });
 
@@ -337,7 +337,7 @@ export async function registerRoutes(
 
   // SSE endpoint for a specific project
   app.get("/api/events/:projectId", async (req: Request, res: Response) => {
-    const { projectId, commandId = uuidv4() } = req.params;
+    const { projectId, commandId = uuidv7() } = req.params;
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -383,7 +383,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "No audio file provided." });
       }
 
-      const blob = bucket.file(`audio/${uuidv4()}-${req.file.originalname}`);
+      const blob = bucket.file(`audio/${uuidv7()}-${req.file.originalname}`);
       const blobStream = blob.createWriteStream();
 
       blobStream.on("error", (err) => {

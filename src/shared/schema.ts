@@ -6,23 +6,17 @@ import {
   ProjectMetadata, InitialProjectMetadata, AssetRegistry, Lighting, Cinematography,
   CharacterState, LocationState, PhysicalTraits, WorkflowMetrics,
   AudioAnalysis,
-  Storyboard, InitialStoryboard
+  Storyboard,
+  InitialStoryboard,
+  UserSchema
 } from "./types/pipeline.types";
 import { z } from "zod";
 import { createTableFromZod } from "zod-to-drizzle";
+import { v7 as uuidv7 } from "uuid"; 
 
 // --- ENUMS ---
 export const assetStatusEnum = pgEnum("asset_status", [ "pending", "generating", "evaluating", "complete", "error" ]);
 export const jobStateEnum = pgEnum("job_state", [ "CREATED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED" ]);
-
-// --- USERS (Preserved from original) ---
-const UserSchema = z.object({
-  id: z.uuid(),
-  name: z.string(),
-  email: z.email().optional(),
-  createdAt: z.string().default(new Date().toISOString()),
-  updatedAt: z.string().default(new Date().toISOString()),
-});
 
 export const users = createTableFromZod("users", UserSchema, {
   dialect: "pg",
@@ -35,7 +29,7 @@ export type User = typeof users.$inferSelect;
 // --- TABLES ---
 
 export const projects = pgTable("projects", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 
@@ -57,7 +51,7 @@ export const projects = pgTable("projects", {
 });
 
 export const characters = pgTable("characters", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
@@ -73,7 +67,7 @@ export const characters = pgTable("characters", {
 });
 
 export const locations = pgTable("locations", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
@@ -97,7 +91,7 @@ export const locations = pgTable("locations", {
 });
 
 export const scenes = pgTable("scenes", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
@@ -124,7 +118,7 @@ export const scenes = pgTable("scenes", {
 });
 
 export const jobs = pgTable("jobs", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
   projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
   type: text("type").notNull(), // JobType
   state: jobStateEnum("state").default("CREATED").notNull(),

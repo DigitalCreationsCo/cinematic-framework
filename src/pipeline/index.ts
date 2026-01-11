@@ -25,7 +25,7 @@ import { handleStopPipelineCommand } from './handlers/handleStopPipelineCommand'
 import { formatLoggers } from "./helpers/format-loggers";
 import { WorkflowOperator } from "./services/workflow-service";
 import { DistributedLockManager } from "./services/lock-manager";
-import { v4 as uuidv4 } from 'uuid';
+import { v7 as uuidv7 } from 'uuid';
 import { PoolManager } from "./services/pool-manager";
 import { JobControlPlane } from "./services/job-control-plane";
 import { ProjectRepository } from "./project-repository";
@@ -39,7 +39,7 @@ if (!gcpProjectId) throw Error("A GCP projectId was not provided");
 const postgresUrl = process.env.POSTGRES_URL;
 if (!postgresUrl) throw Error("Postgres URL is required for CheckpointerManager initialization");
 
-const workerId = uuidv4();
+const workerId = uuidv7();
 
 const checkpointerManager = new CheckpointerManager(postgresUrl);
 await checkpointerManager.init();

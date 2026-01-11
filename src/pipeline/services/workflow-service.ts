@@ -7,7 +7,7 @@ import { Command, CompiledStateGraph } from "@langchain/langgraph";
 import { streamWithInterruptHandling } from "../helpers/stream-helper";
 import { GCPStorageManager } from "../../workflow/storage-manager";
 import { JobControlPlane } from "./job-control-plane";
-import { v4 as uuidv4 } from 'uuid';
+import { v7 as uuidv7 } from 'uuid';
 import { ProjectRepository } from "../project-repository";
 import { mergeParamsIntoState, getAllBestFromAssets } from "../../shared/utils/utils";
 import { imageModelName, qualityCheckModelName, textModelName, videoModelName } from "../../workflow/llm/google/models";
@@ -311,7 +311,7 @@ export class WorkflowOperator {
             promptModification
         };
         const job = await this.controlPlane.createJob({
-            id: uuidv4(),
+            id: uuidv7(),
             type: "FRAME_RENDER",
             projectId: projectId,
             payload: jobPayload,

@@ -4,7 +4,7 @@ dotenv.config();
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { RunnableConfig, } from "@langchain/core/runnables";
 import { CheckpointerManager } from "../src/workflow/checkpointer-manager";
-import { v4 as uuidv4 } from 'uuid';
+import { v7 as uuidv7 } from 'uuid';
 
 type SourceType = "fork" | "input" | "loop" | "update";
 
@@ -22,8 +22,8 @@ async function testSourceParameterPut(
 
   const modified = {
     ...checkpoint,
-    id: checkpoint?.id || uuidv4(),
-    ts: checkpoint?.ts || uuidv4(),
+    id: checkpoint?.id || uuidv7(),
+    ts: checkpoint?.ts || uuidv7(),
     v: checkpoint?.v || checkpointer.getNextVersion(checkpoint?.v),
     versions_seen: checkpoint?.versions_seen || {},
     channel_versions: checkpoint?.channel_versions || {},
@@ -105,7 +105,7 @@ async function testSourceParameterPutWrite(
         }
       },
       Object.entries(modified),
-      uuidv4(),
+      uuidv7(),
     );
     console.log(`✓ Put with source="${source}" succeeded`);
   } catch (error: any) {
