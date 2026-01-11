@@ -8,7 +8,8 @@ import {
   AudioAnalysis,
   Storyboard,
   InitialStoryboard,
-  UserSchema
+  UserSchema,
+  createDefaultMetrics
 } from "./types/pipeline.types";
 import { z } from "zod";
 import { createTableFromZod } from "zod-to-drizzle";
@@ -46,7 +47,7 @@ export const projects = pgTable("projects", {
   generationRules: text("generation_rules").array().default([]).notNull(),
   generationRulesHistory: text("generation_rules_history").array().array().default([]).notNull(),
 
-  metrics: jsonb("metrics").$type<WorkflowMetrics>(),
+  metrics: jsonb("metrics").$type<WorkflowMetrics>().notNull().$defaultFn(() => createDefaultMetrics()),
   audioAnalysis: jsonb("audio_analysis").$type<AudioAnalysis>(),
 });
 

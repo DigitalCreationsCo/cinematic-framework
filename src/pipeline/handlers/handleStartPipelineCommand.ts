@@ -10,7 +10,7 @@ export async function handleStartPipelineCommand(
     const { projectId, payload } = command;
     try {
 
-        await workflowOperator.startPipeline(projectId, payload);
+        await workflowOperator.startPipeline(projectId!, payload);
     } catch (error) {
         console.error(`[handleStartPipelineCommand] Error starting pipeline for ${projectId}:`, error);
         // Error handling is mostly done inside WorkflowOperator/stream-helper, but we catch top-level failures here

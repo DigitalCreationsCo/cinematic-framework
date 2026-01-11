@@ -333,7 +333,6 @@ export class WorkflowOperator {
             payload: {
                 project: {
                     ...project,
-                    projectId,
                     characters,
                     locations,
                     scenes,
@@ -397,7 +396,6 @@ export class WorkflowOperator {
 
                 return {
                     id: project.id,
-                    projectId: project.id,
                     createdAt: project.createdAt,
                     updatedAt: project.updatedAt,
                     status: project.status,
@@ -447,7 +445,7 @@ export class WorkflowOperator {
         };
 
         return {
-            projectId: projectId,
+            id: projectId,
             status: "pending",
             currentSceneIndex: 0,
             forceRegenerateSceneIds: [],
@@ -464,6 +462,8 @@ export class WorkflowOperator {
             characters: [],
             locations: [],
             scenes: [],
+            createdAt: new Date(),
+            updatedAt: new Date(),
         };
     }
 

@@ -17,12 +17,7 @@ import {
 } from "./types/pipeline.types";
 
 // --- PROJECT HELPERS ---
-export const DbProjectSchema = createSelectSchema(dbSchema.projects, {
-  metadata: ProjectMetadataSchema,
-  audioAnalysis: AudioAnalysisSchema,
-  metrics: WorkflowMetricsSchema,
-  assets: AssetRegistrySchema,
-});
+export const DbProjectSchema = createSelectSchema(dbSchema.projects);
 
 export const DbInsertProjectSchema = createInsertSchema(dbSchema.projects, {
   metadata: InitialProjectMetadataSchema,

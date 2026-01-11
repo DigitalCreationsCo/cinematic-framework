@@ -329,7 +329,7 @@ export class ContinuityManagerAgent {
             const currentAssets = getAllBestFromAssets(currentScene.assets);
             const startFrame = currentAssets[ 'scene_start_frame' ]?.data;
             if (!startFrame) {
-                const [ attempt ] = await this.assetManager.getNextVersionNumber({ projectId: project.projectId, sceneId: scene.id }, 'scene_start_frame');
+                const [ attempt ] = await this.assetManager.getNextVersionNumber({ projectId: project.id, sceneId: scene.id }, 'scene_start_frame');
                 const startFramePath = this.storageManager.getObjectPath({ type: "scene_start_frame", sceneId: scene.id, attempt });
                 const startFrameExists = await this.storageManager.fileExists(startFramePath);
 
@@ -347,7 +347,7 @@ export class ContinuityManagerAgent {
                     console.log(`  → Found existing START frame for Scene ${scene.id} in storage`);
                     const url = this.storageManager.getGcsUrl(startFramePath);
                     await this.assetManager.createVersionedAssets(
-                        { projectId: project.projectId, sceneId: scene.id },
+                        { projectId: project.id, sceneId: scene.id },
                         'scene_start_frame',
                         'image',
                         [ url ],
@@ -355,7 +355,7 @@ export class ContinuityManagerAgent {
                         true
                     );
                     await this.assetManager.createVersionedAssets(
-                        { projectId: project.projectId, sceneId: scene.id },
+                        { projectId: project.id, sceneId: scene.id },
                         'start_frame_prompt',
                         'text',
                         [ currentScene.assets[ 'start_frame_prompt' ]?.versions[ currentScene.assets[ 'start_frame_prompt' ]!.best ]?.data || startFramePrompt ],
@@ -389,7 +389,7 @@ export class ContinuityManagerAgent {
                     );
                     
                     await this.assetManager.createVersionedAssets(
-                        { projectId: project.projectId, sceneId: scene.id },
+                        { projectId: project.id, sceneId: scene.id },
                         'scene_start_frame',
                         'image',
                         [ url ],
@@ -397,7 +397,7 @@ export class ContinuityManagerAgent {
                         true
                     );
                     await this.assetManager.createVersionedAssets(
-                        { projectId: project.projectId, sceneId: scene.id },
+                        { projectId: project.id, sceneId: scene.id },
                         'start_frame_prompt',
                         'text',
                         [ startFramePrompt ],
@@ -412,7 +412,7 @@ export class ContinuityManagerAgent {
             // --- Generate End Frame ---
             const endFrame = getAllBestFromAssets(currentScene.assets)[ 'scene_end_frame' ]?.data;
             if (!endFrame) {
-                const [ attempt ] = await this.assetManager.getNextVersionNumber({ projectId: project.projectId, sceneId: scene.id }, 'scene_end_frame');
+                const [ attempt ] = await this.assetManager.getNextVersionNumber({ projectId: project.id, sceneId: scene.id }, 'scene_end_frame');
                 const endFramePath = this.storageManager.getObjectPath({ type: "scene_end_frame", sceneId: scene.id, attempt });
                 const endFrameExists = await this.storageManager.fileExists(endFramePath);
 
@@ -430,7 +430,7 @@ export class ContinuityManagerAgent {
                     console.log(`  → Found existing END frame for Scene ${scene.id} in storage`);
                     const url = this.storageManager.getGcsUrl(endFramePath);
                     await this.assetManager.createVersionedAssets(
-                        { projectId: project.projectId, sceneId: scene.id },
+                        { projectId: project.id, sceneId: scene.id },
                         'scene_end_frame',
                         'image',
                         [ url ],
@@ -438,7 +438,7 @@ export class ContinuityManagerAgent {
                         true
                     );
                     await this.assetManager.createVersionedAssets(
-                        { projectId: project.projectId, sceneId: scene.id },
+                        { projectId: project.id, sceneId: scene.id },
                         'end_frame_prompt',
                         'text',
                         [ currentScene.assets[ 'end_frame_prompt' ]?.versions[ currentScene.assets[ 'end_frame_prompt' ]!.best ]?.data || endFramePrompt ],
@@ -471,7 +471,7 @@ export class ContinuityManagerAgent {
                     );
                     
                     await this.assetManager.createVersionedAssets(
-                        { projectId: project.projectId, sceneId: scene.id },
+                        { projectId: project.id, sceneId: scene.id },
                         'scene_end_frame',
                         'image',
                         [ url ],
@@ -479,7 +479,7 @@ export class ContinuityManagerAgent {
                         true
                     );
                     await this.assetManager.createVersionedAssets(
-                        { projectId: project.projectId, sceneId: scene.id },
+                        { projectId: project.id, sceneId: scene.id },
                         'end_frame_prompt',
                         'text',
                         [ endFramePrompt ],

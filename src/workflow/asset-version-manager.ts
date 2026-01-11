@@ -215,9 +215,11 @@ export class AssetVersionManager {
             const updates: Partial<Project> = { assets };
 
             await this.projectRepo.updateProject(scope.projectId, mapDbProjectToDomain({
-                ...project,
+                project: {
+                    ...project,
                 ...updates, 
-                assets
+                    assets
+                }
             }));
         }
     }

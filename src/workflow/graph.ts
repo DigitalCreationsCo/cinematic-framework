@@ -1006,7 +1006,7 @@ export class CinematicVideoWorkflow {
       const [ attempt ] = await this.assetManager.createVersionedAssets({ projectId: this.projectId }, 'final_output', 'text', [ JSON.stringify(project) ], {
         model: textModelName
       });
-      const objectPath = this.storageManager.getObjectPath({ type: "final_output", projectId: project.projectId, attempt: attempt.version });
+      const objectPath = this.storageManager.getObjectPath({ type: "final_output", projectId: project.id, attempt: attempt.version });
       await this.storageManager.uploadJSON(
         project,
         objectPath
@@ -1166,7 +1166,6 @@ export class CinematicVideoWorkflow {
           },
           generationRules: [],
           generationRulesHistory: [],
-          projectId: this.projectId,
           });
       } catch (error) {
         console.error(" ! Error creating project in database.", error);

@@ -26,15 +26,18 @@ export type PipelineCommand =
     | ResolveInterventionCommand
     | UpdateSceneAssetCommand;
 
-export type StartPipelineCommand = PubSubMessage<
-    "START_PIPELINE",
-    {
+export type StartPipelineCommand = {
+    type: "START_PIPELINE";
+    projectId?: string;
+    commandId?: string;
+    timestamp: string;
+    payload: {
         audioGcsUri?: string;
         audioPublicUri?: string;
         initialPrompt: string;
         title?: string;
-    }
->;
+    };
+};
 
 export type RequestFullStateCommand = PubSubMessage<
     "REQUEST_FULL_STATE",

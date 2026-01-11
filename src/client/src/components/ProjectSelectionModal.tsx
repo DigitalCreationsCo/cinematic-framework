@@ -30,7 +30,6 @@ export const ProjectSelectionModal: React.FC<ProjectSelectionModalProps> = ({
   const { setProjectStatus, setProject } = useStore();
 
   const [ mode, setMode ] = useState<"resume" | "create">("resume");
-  const [ newProjectId, setNewProjectId ] = useState("");
   const [ title, setTitle ] = useState("");
   const [ enhancedPrompt, setCreativePrompt ] = useState("");
   const [ audioFile, setAudioFile ] = useState<File | null>(null);
@@ -55,7 +54,6 @@ export const ProjectSelectionModal: React.FC<ProjectSelectionModalProps> = ({
       }
 
       const result = await startPipeline({
-        projectId: newProjectId || '',
         payload: {
           title: title,
           initialPrompt: enhancedPrompt,

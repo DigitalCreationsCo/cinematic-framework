@@ -23,6 +23,7 @@ export class ProjectRepository {
     async getProject(projectId: string): Promise<ProjectEntity> {
         const [ record ] = await db.select().from(projects).where(eq(projects.id, projectId));
         if (!record) throw new Error(`Project ${projectId} not found`);
+
         return DbProjectSchema.parse(record);
     }
 
@@ -40,15 +41,16 @@ export class ProjectRepository {
         const domainCharacters = dbChars.map(c => mapDbCharacterToDomain(DbCharacterSchema.parse(c)));
         const domainLocations = dbLocs.map(l => mapDbLocationToDomain(DbLocationSchema.parse(l)));
 
-        return mapDbProjectToDomain(
-            projectEntity,
-            domainScenes,
-            domainCharacters,
-            domainLocations,
-        );
+        return mapDbProjectToDomain({
+            project: projectEntity,
+            scenes: domainScenes,
+            characters: domainCharacters,
+            locations: domainLocations,
+        });
     }
 
-    async createProject(insertProject: InitialProject): Promise<Project> {
+    async createProject(insertProject: InitialProject): Promise<InitialProject> {
+
         // Map InitialProject to DB insert
         const [ project ] = await db.insert(projects).values({
             storyboard: insertProject.storyboard,
@@ -59,7 +61,6 @@ export class ProjectRepository {
             generationRules: insertProject.generationRules
         }).returning();
 
-        // If InitialProject has nested items, create them
         if (insertProject.scenes && insertProject.scenes.length > 0) {
             await this.createScenes(project.id, insertProject.scenes);
         }
@@ -70,7 +71,7 @@ export class ProjectRepository {
             await this.createLocations(project.id, insertProject.locations);
         }
 
-        return this.getProjectFullState(project.id);
+        return mapDbProjectToDomain({ project, validate: false });
     }
 
     async updateProject(projectId: string, data: Partial<InitialProject>): Promise<Project> {
