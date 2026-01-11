@@ -1,226 +1,227 @@
 import { db } from "../shared/db";
-import * as schema from "../shared/schema";
-import { scenes, projects, characters, locations } from "../shared/schema";
-import { eq, asc, inArray } from "drizzle-orm";
-import { SceneSchema, Scene, ProjectSchema, ProjectMetadataSchema, CharacterSchema, Character, LocationSchema, Location, Project, InitialProject } from "../shared/types/pipeline.types";
-import { GCPStorageManager } from "src/workflow/storage-manager";
-
-
+import { scenes, projects, characters, locations, jobs } from "../shared/schema";
+import { eq, asc, inArray, } from "drizzle-orm";
+import {
+    Scene, Location, Project, InitialProject,
+    Character,
+} from "../shared/types/pipeline.types";
+import {
+    DbProjectSchema, DbSceneSchema, DbCharacterSchema, DbLocationSchema, ProjectEntity,
+} from "../shared/zod-db";
+import { mapDbProjectToDomain } from "./helpers/domain/project-mappers";
+import { mapDbSceneToDomain, mapDomainSceneToDb } from "./helpers/domain/scene-mappers";
+import { mapDbCharacterToDomain, mapDomainCharacterToDb } from "./helpers/domain/character-mappers";
+import { mapDbLocationToDomain, mapDomainLocationToDb } from "./helpers/domain/location-mappers";
 
 export class ProjectRepository {
 
     async getProjects() {
-        const allProjects = await db.select().from(projects);
-        return allProjects;
+        const records = await db.select().from(projects);
+        return records;
     }
 
-    async getProject(projectId: string) {
-        const [ project ] = await db.select().from(projects).where(eq(projects.id, projectId));
-        if (!project) throw new Error(`Project ${projectId} not found`);
-        return project as Omit<Project, "characters" | "locations" | "scenes">;
+    async getProject(projectId: string): Promise<ProjectEntity> {
+        const [ record ] = await db.select().from(projects).where(eq(projects.id, projectId));
+        if (!record) throw new Error(`Project ${projectId} not found`);
+        return DbProjectSchema.parse(record);
     }
 
     async getProjectFullState(projectId: string): Promise<Project> {
-        const project = await db.query.projects.findFirst({
-            where: eq(projects.id, projectId),
-            with: {
-                scenes: {
-                    orderBy: asc(scenes.sceneIndex),
-                },
-                characters: true,
-                locations: true,
-            },
-        });
+        const projectEntity = await this.getProject(projectId);
 
-        if (!project) throw new Error(`Project ${projectId} not found`);
+        const dbScenes = await db.select().from(scenes)
+            .where(eq(scenes.projectId, projectId))
+            .orderBy(asc(scenes.sceneIndex));
 
-        const parsedScenes = project.scenes.map(record => {
-            const parsedData = SceneSchema.parse(record.data);
-            return {
-                ...parsedData,
-                id: record.id,
-                sceneIndex: record.sceneIndex,
-                status: record.status,
-            };
-        });
+        const dbChars = await db.select().from(characters).where(eq(characters.projectId, projectId));
+        const dbLocs = await db.select().from(locations).where(eq(locations.projectId, projectId));
 
-        return {
-            ...project,
-            scenes: parsedScenes,
-            characters: project.characters.map(c => CharacterSchema.parse(c.data)),
-            locations: project.locations.map(l => LocationSchema.parse(l.data)),
-        } as unknown as Project;
+        const domainScenes = dbScenes.map(s => mapDbSceneToDomain(DbSceneSchema.parse(s)));
+        const domainCharacters = dbChars.map(c => mapDbCharacterToDomain(DbCharacterSchema.parse(c)));
+        const domainLocations = dbLocs.map(l => mapDbLocationToDomain(DbLocationSchema.parse(l)));
+
+        return mapDbProjectToDomain(
+            projectEntity,
+            domainScenes,
+            domainCharacters,
+            domainLocations,
+        );
     }
 
+    async createProject(insertProject: InitialProject): Promise<Project> {
+        // Map InitialProject to DB insert
+        const [ project ] = await db.insert(projects).values({
+            storyboard: insertProject.storyboard,
+            metadata: insertProject.metadata,
+            status: insertProject.status,
+            currentSceneIndex: insertProject.currentSceneIndex,
+            assets: insertProject.assets,
+            generationRules: insertProject.generationRules
+        }).returning();
 
-    async createProject(insertProject: typeof projects.$inferInsert): Promise<Project> {
-        const [ project ] = await db.insert(projects).values(insertProject).returning();
-        return project as Project;
+        // If InitialProject has nested items, create them
+        if (insertProject.scenes && insertProject.scenes.length > 0) {
+            await this.createScenes(project.id, insertProject.scenes);
+        }
+        if (insertProject.characters && insertProject.characters.length > 0) {
+            await this.createCharacters(project.id, insertProject.characters);
+        }
+        if (insertProject.locations && insertProject.locations.length > 0) {
+            await this.createLocations(project.id, insertProject.locations);
+        }
+
+        return this.getProjectFullState(project.id);
     }
 
     async updateProject(projectId: string, data: Partial<InitialProject>): Promise<Project> {
-        const update = await db.update(projects)
-            .set({ ...data, updatedAt: new Date() })
+        // Only updates project table fields
+        await db.update(projects)
+            .set({
+                metadata: data.metadata,
+                metrics: data.metrics,
+                currentSceneIndex: data.currentSceneIndex,
+                updatedAt: new Date()
+            })
             .where(eq(projects.id, projectId));
-        return update.rows[ 0 ];
+        return this.getProjectFullState(projectId);
     }
+
+    async updateCharacters(updates: Character[]) {
+        return Promise.all(updates.map(async char => {
+            const [ row ] = await db.update(characters)
+                .set({ ...char, updatedAt: new Date() } as any)
+                .where(eq(characters.id, char.id))
+                .returning();
+            return row;
+        }));
+    };
+
+    async updateLocations(updates: Location[]) {
+        return Promise.all(updates.map(async loc => {
+            const [ row ] = await db.update(locations)
+                .set({ ...loc, updatedAt: new Date() } as any)
+                .where(eq(locations.id, loc.id))
+                .returning();
+            return row;
+        }));
+    };
 
     async getScene(sceneId: string): Promise<Scene> {
         const [ record ] = await db.select().from(scenes).where(eq(scenes.id, sceneId));
         if (!record) throw new Error(`Scene ${sceneId} not found`);
-
-        const parsedData = SceneSchema.parse(record.data);
-        return {
-            ...parsedData,
-            id: record.id,
-            sceneIndex: record.sceneIndex,
-            status: record.status as any,
-        };
+        return mapDbSceneToDomain(DbSceneSchema.parse(record));
     }
 
-    async getProjectScenes(projectId: string, validate = true): Promise<Scene[]> {
-        const records = await db.select()
-            .from(scenes)
+    async getProjectScenes(projectId: string): Promise<Scene[]> {
+        const records = await db.select().from(scenes)
             .where(eq(scenes.projectId, projectId))
             .orderBy(asc(scenes.sceneIndex));
-
-        return records.map(record => {
-            let parsedData: Scene;
-            parsedData = validate ? SceneSchema.parse(record.data) : record.data as Scene;
-            return {
-                ...parsedData,
-                id: record.id as any,
-                sceneIndex: record.sceneIndex,
-                status: record.status as any,
-            };
-        });
+        return records.map(r => mapDbSceneToDomain(DbSceneSchema.parse(r)));
     }
 
-    async createScenes(projectId: string, scenesData: schema.InsertScene[]): Promise<Scene[]> {
-        const rows = scenesData.map((scene, index) => ({
-            projectId,
-            sceneIndex: index, // preserving the order
-            status: 'pending',
-            data: { ...scene, sceneIndex: index } // we store the full scene object in data, including its logic ID and index
+    async createScenes(projectId: string, scenesData: Scene[]): Promise<Scene[]> {
+        const rows = scenesData.map(s => ({
+            ...mapDomainSceneToDb(s),
+            projectId // Ensure project ID override
         }));
+        if (rows.length === 0) return [];
 
-        let created: Scene[] = [];
-        if (rows.length > 0) {
-            created = await db.insert(scenes).values(rows).returning() as Scene[];
-        }
-        return created;
-    }
-
-    // FIX (HOW?)
-    async updateSceneData(sceneId: string, data: Scene): Promise<Scene> {
-        const validData = SceneSchema.parse(data);
-
-        const [ scene ]: any = await db.update(scenes)
-            .set({
-                data: validData,
-                updatedAt: new Date()
+        const upserted = await db
+            .insert(scenes)
+            .values(rows)
+            .onConflictDoUpdate({
+                target: scenes.id,
+                set: { ...rows[0] }
             })
-            .where(eq(scenes.id, sceneId))
             .returning();
-        return scene;
+        return upserted.map(c => mapDbSceneToDomain(DbSceneSchema.parse(c)));
     }
+
+    async createCharacters(projectId: string, charactersData: Character[]): Promise<Character[]> {
+        const rows = charactersData.map(s => ({
+            ...mapDomainCharacterToDb(s),
+            projectId // Ensure project ID override
+        }));
+        if (rows.length === 0) return [];
+
+        const upserted = await db
+            .insert(characters)
+            .values(rows)
+            .onConflictDoUpdate({
+                target: characters.id,
+                set: { ...rows[ 0 ] }
+            })
+            .returning();
+        return upserted.map(c => mapDbCharacterToDomain(DbCharacterSchema.parse(c)));
+    }
+    async createLocations(projectId: string, locationsData: Location[]): Promise<Location[]> {
+        const rows = locationsData.map(s => ({
+            ...mapDomainLocationToDb(s),
+            projectId // Ensure project ID override
+        }));
+        if (rows.length === 0) return [];
+
+        const upserted = await db
+            .insert(locations)
+            .values(rows)
+            .onConflictDoUpdate({
+                target: locations.id,
+                set: { ...rows[ 0 ] }
+            })
+            .returning();
+        return upserted.map(c => mapDbLocationToDomain(DbLocationSchema.parse(c)));
+    }
+
+    async updateScenes(updates: Scene[]) {
+        return Promise.all(updates.map(async scene => {
+            const [ row ] = await db.update(scenes)
+                .set({ ...scene, updatedAt: new Date() } as any)
+                .where(eq(scenes.id, scene.id))
+                .returning();
+            return row;
+        }));
+    };
 
     async updateSceneStatus(sceneId: string, status: string): Promise<Scene> {
-        const [ scene ]: any = await db.update(scenes)
-            .set({
-                status,
-                updatedAt: new Date()
-            })
+        const [ updated ] = await db.update(scenes)
+            .set({ status: status as any })
             .where(eq(scenes.id, sceneId))
             .returning();
-        return scene;
+        return mapDbSceneToDomain(DbSceneSchema.parse(updated));
     }
 
-    async updateScenes(updates: Scene[]): Promise<Scene[]> {
-        return await Promise.all(
-            updates.map(async (scene) => {
-                const [ row ]: any = await db.update(scenes)
-                    .set(scene)
-                    .where(eq(scenes.id, scene.id))
-                    .returning();
-                return row;
-            })
-        );
-    }
-
+    // Characters
     async getProjectCharacters(projectId: string): Promise<Character[]> {
         const records = await db.select().from(characters).where(eq(characters.projectId, projectId));
-        return records.map(r => CharacterSchema.parse(r.data));
+        return records.map(c => DbCharacterSchema.parse(c) as unknown as Character);
     }
 
-    async getCharacters(ids: string[]): Promise<Character[]> {
-        if (ids.length === 0) return [];
-        const records = await db.select().from(characters).where(inArray(characters.id, ids));
-        const map = new Map(records.map(r => [ r.id, r ]));
-        return ids.map(id => map.get(id)).filter(r => !!r).map(r => CharacterSchema.parse(r!.data));
-    }
-
-    async createCharacters(projectId: string, charactersData: schema.InsertCharacter[]): Promise<Character[]> {
-        const rows = charactersData.map(char => ({
-            projectId,
-            name: char.name,
-            data: char
-        }));
-
-        let created: Character[] = [];
-        if (rows.length > 0) {
-            created = await db.insert(characters).values(rows).returning() as Character[];
+    async getCharactersByIds(ids: string[]): Promise<Character[]> {
+        if (ids.length === 0) {
+            return [];
         }
-        return created;
+
+        const records = await db
+            .select()
+            .from(characters)
+            .where(inArray(characters.id, ids));
+        return records.map(c => DbCharacterSchema.parse(c) as unknown as Character);
     }
 
-    async updateCharacters(updates: Character[]) {
-        return await Promise.all(
-            updates.map(async (char) => {
-                const [ row ]: any = await db.update(characters)
-                    .set(char)
-                    .where(eq(characters.id, char.id))
-                    .returning();
-                return row;
-            })
-        );
-    }
-
+    // Locations
     async getProjectLocations(projectId: string): Promise<Location[]> {
         const records = await db.select().from(locations).where(eq(locations.projectId, projectId));
-        return records.map(r => LocationSchema.parse(r.data));
+        return records.map(l => DbLocationSchema.parse(l) as unknown as Location);
     }
 
-    async getLocations(ids: string[]): Promise<Location[]> {
-        if (ids.length === 0) return [];
-        const records = await db.select().from(locations).where(inArray(locations.id, ids));
-        const map = new Map(records.map(r => [ r.id, r ]));
-        return ids.map(id => map.get(id)).filter(r => !!r).map(r => LocationSchema.parse(r!.data));
-    }
-
-    async createLocations(projectId: string, locationsData: schema.InsertLocation[]): Promise<Location[]> {
-        const rows = locationsData.map(loc => ({
-            projectId,
-            name: loc.name,
-            data: loc
-        }));
-
-        let created: Location[] = [];
-        if (rows.length > 0) {
-            created = await db.insert(locations).values(rows).returning() as Location[];
+    async getLocationsByIds(ids: string[]): Promise<Location[]> {
+        if (ids.length === 0) {
+            return [];
         }
-        return created;
-    }
-
-    async updateLocations(updates: Location[]) {
-        return await Promise.all(
-            updates.map(async (loc) => {
-                const [ row ]: any = await db.update(locations)
-                    .set(loc)
-                    .where(eq(locations.id, loc.id))
-                    .returning();
-                return row;
-            })
-        );
+        const records = await db
+            .select()
+            .from(locations)
+            .where(inArray(locations.id, ids));
+        return records.map(l => DbLocationSchema.parse(l) as unknown as Location);
     }
 }

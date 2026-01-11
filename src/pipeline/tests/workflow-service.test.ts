@@ -6,6 +6,8 @@ import { GCPStorageManager } from '../../workflow/storage-manager';
 import { JobControlPlane } from '../services/job-control-plane';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Command } from "@langchain/langgraph";
+import { Scene } from '../../shared/types/pipeline.types';
+import { handleJobCompletion } from "../handlers/handleJobCompletion.ts";
 
 // Mock dependencies
 vi.mock('../../workflow/checkpointer-manager');
@@ -52,7 +54,7 @@ describe('WorkflowOperator', () => {
             getProjectCharacters: vi.fn(),
             getProjectLocations: vi.fn(),
             getProject: vi.fn(),
-            updateSceneData: vi.fn(),
+            updateScenes: vi.fn(),
             updateSceneStatus: vi.fn()
         };
 
@@ -84,7 +86,7 @@ describe('WorkflowOperator', () => {
 
     describe('startPipeline', () => {
         it('should start a new pipeline when no checkpoint exists', async () => {
-            const payload = { enhancedPrompt: 'test prompt' };
+            const payload = { initialPrompt: 'test prompt' };
             mockCheckpointerManager.loadCheckpoint.mockResolvedValue(null);
 
             await workflowOperator.startPipeline(projectId, payload);
@@ -102,7 +104,7 @@ describe('WorkflowOperator', () => {
         });
 
         it('should resume pipeline and update state when checkpoint exists', async () => {
-            const payload = { enhancedPrompt: 'test prompt' };
+            const payload = { initialPrompt: 'test prompt' };
             mockCheckpointerManager.loadCheckpoint.mockResolvedValue({ channel_values: {} });
 
             await workflowOperator.startPipeline(projectId, payload);
@@ -118,7 +120,7 @@ describe('WorkflowOperator', () => {
         });
 
         it('should update audio details when resuming with new audio', async () => {
-            const payload = { audioGcsUri: 'gs://bucket/test.mp3', enhancedPrompt: 'test prompt' };
+            const payload = { audioGcsUri: 'gs://bucket/test.mp3', initialPrompt: 'test prompt' };
             mockCheckpointerManager.loadCheckpoint.mockResolvedValue({ channel_values: {} });
 
             const mockGetPublicUrl = vi.fn().mockReturnValue('https://storage.googleapis.com/bucket/test.mp3');
@@ -180,6 +182,7 @@ describe('WorkflowOperator', () => {
         it('should trigger regenerate scene via Command', async () => {
             const sceneId = 'scene-1';
             const promptModification = 'make it darker';
+            const forceRegenerate = true;
 
             mockCheckpointerManager.loadCheckpoint.mockResolvedValue({
                 channel_values: {
@@ -190,7 +193,7 @@ describe('WorkflowOperator', () => {
                 }
             });
 
-            await workflowOperator.regenerateScene(projectId, { sceneId, promptModification });
+            await workflowOperator.regenerateScene(projectId, { sceneId, forceRegenerate, promptModification });
 
             expect(streamWithInterruptHandling).toHaveBeenCalledWith(
                 projectId,
@@ -204,7 +207,9 @@ describe('WorkflowOperator', () => {
 
         it('should warn if checkpoint or scene not found', async () => {
             mockCheckpointerManager.loadCheckpoint.mockResolvedValue(null);
-            await workflowOperator.regenerateScene(projectId, { sceneId: 'missing' });
+            const promptModification = 'make it darker';
+            const forceRegenerate = true;
+            await workflowOperator.regenerateScene(projectId, { sceneId: 'missing', forceRegenerate, promptModification });
             expect(streamWithInterruptHandling).not.toHaveBeenCalled();
         });
     });
@@ -251,7 +256,7 @@ describe('WorkflowOperator', () => {
     describe('updateSceneAsset', () => {
         it('should update scene asset and save checkpoint', async () => {
             const sceneId = 'scene-1';
-            const mockScene = { id: sceneId, rejectedAttempts: {} };
+            const mockScene = { id: sceneId, rejectedAttempts: {} } as unknown as Scene;
 
             mockCheckpointerManager.loadCheckpoint.mockResolvedValue({
                 channel_values: {
@@ -269,7 +274,7 @@ describe('WorkflowOperator', () => {
 
             mockProjectRepository.getScene.mockResolvedValue(mockScene);
 
-            await workflowOperator.updateSceneAsset(projectId, { sceneId, assetType: 'video', attempt: 2 });
+            await workflowOperator.updateSceneAsset(projectId, { scene: mockScene, assetKey: 'scene_video', version: 2 });
 
             const checkpointer = await mockCheckpointerManager.getCheckpointer();
             expect(checkpointer.put).toHaveBeenCalledWith(
@@ -305,7 +310,7 @@ describe('WorkflowOperator', () => {
             });
             mockCheckpointerManager.loadCheckpoint.mockResolvedValue({});
 
-            await workflowOperator.handleJobCompletion('job-1');
+            await handleJobCompletion('job-1', workflowOperator, mockControlPlane);
 
             expect(streamWithInterruptHandling).toHaveBeenCalledWith(
                 projectId,

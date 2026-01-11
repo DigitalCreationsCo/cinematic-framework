@@ -218,7 +218,7 @@ export function mergeParamsIntoState(
  */
 const bestAssetsCache = new WeakMap();
 
-export function getAllBestFromAssets(assets: AssetRegistry | undefined, assetKey?: AssetKey): Partial<Record<AssetKey, AssetVersion>> {
+export function getAllBestFromAssets(assets: AssetRegistry | undefined | null, assetKey?: AssetKey): Partial<Record<AssetKey, AssetVersion>> {
   if (!assets) return {} as Partial<Record<AssetKey, AssetVersion>>;
 
   if (bestAssetsCache.has(assets)) {

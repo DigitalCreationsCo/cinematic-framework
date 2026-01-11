@@ -9,7 +9,7 @@ import { GCPStorageManager } from "../../workflow/storage-manager";
 import { JobControlPlane } from "./job-control-plane";
 import { v4 as uuidv4 } from 'uuid';
 import { ProjectRepository } from "../project-repository";
-import { mergeParamsIntoState, getAllBestFromAssets } from "../../workflow/utils/utils";
+import { mergeParamsIntoState, getAllBestFromAssets } from "../../shared/utils/utils";
 import { imageModelName, qualityCheckModelName, textModelName, videoModelName } from "../../workflow/llm/google/models";
 import { AssetVersionManager } from "../../workflow/asset-version-manager";
 import { StatusError } from "@google-cloud/pubsub";
@@ -251,7 +251,7 @@ export class WorkflowOperator {
 
         // 5. Persist Flat Field Updates if necessary
         if (needsUpdate) {
-            await this.projectRepository.updateSceneData(updatedScene.id, updatedScene);
+            await this.projectRepository.updateScenes([ updatedScene ]);
         }
 
         // 6. Broadcast new state
@@ -333,6 +333,7 @@ export class WorkflowOperator {
             payload: {
                 project: {
                     ...project,
+                    projectId,
                     characters,
                     locations,
                     scenes,

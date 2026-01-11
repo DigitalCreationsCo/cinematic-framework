@@ -193,7 +193,7 @@ export type JobRecordFrameRender = JobRecordBase<
         sceneCharacters: Character[];
         sceneLocations: Location[];
         previousFrame?: string;
-        referenceImages: (string | undefined)[];
+        referenceImages: string[];
     }
 >;
 

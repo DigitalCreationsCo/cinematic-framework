@@ -6,6 +6,7 @@ import { JobControlPlane } from "../pipeline/services/job-control-plane";
 import { PoolManager } from "../pipeline/services/pool-manager";
 import { JobEvent, JobRecord, JobType } from "../shared/types/job-types";
 import {
+  InitialProject,
   InitialProjectSchema,
   LlmRetryInterruptValue,
   Project,
@@ -349,7 +350,7 @@ export class CinematicVideoWorkflow {
           "GENERATE_STORYBOARD",
           {
             title: project.metadata.title,
-            enhancedPrompt: project.metadata.enhancedPrompt
+            enhancedPrompt: project.metadata.enhancedPrompt!
           },
           version,
         );
@@ -366,7 +367,7 @@ export class CinematicVideoWorkflow {
           [ JSON.stringify(storyboard) ],
           { model: textModelName }
         );
-        const updated = await this.projectRepository.getProject(this.projectId) as Project;
+        const updated = await this.projectRepository.getProjectFullState(this.projectId);
         await this.publishStateUpdate(updated, nodeName);
         return {
           ...state,
@@ -845,7 +846,7 @@ export class CinematicVideoWorkflow {
           true
         );
 
-        await this.projectRepository.updateSceneData(scene.id, generatedScene);
+        await this.projectRepository.updateScenes([ generatedScene ]);
         project = this.continuityAgent.updateNarrativeState(generatedScene, project);
         if (evaluation) { project.generationRules = Array.from(new Set(...project.generationRules, ...extractGenerationRules([ evaluation ]))); }
         project.forceRegenerateSceneIds = project.forceRegenerateSceneIds.slice(0, forceRegenerateIndex).concat(project.forceRegenerateSceneIds.slice(forceRegenerateIndex + 1));
@@ -916,7 +917,7 @@ export class CinematicVideoWorkflow {
                 },
                 true
               );
-              await this.projectRepository.updateSceneData(generatedScene.id, generatedScene);
+              await this.projectRepository.updateScenes([ generatedScene ]);
               generatedSceneIds.push(generatedScene.id);
             }
 
@@ -1126,23 +1127,46 @@ export class CinematicVideoWorkflow {
           currentSceneIndex: 0,
           errors: [],
         };
-        await this.projectRepository.createProject(
-          {
-            projectId: this.projectId,
-            status: "pending",
-            metadata: {
-              title, projectId: this.projectId,
-              audioPublicUri,
-              audioGcsUri,
-              initialPrompt,
-              hasAudio,
-              models: {
-                videoModel: videoModelName,
-                imageModel: imageModelName,
-                textModel: textModelName,
-                qaModel: qualityCheckModelName,
-              }
-            }
+
+        const metadata: InitialProject[ 'metadata' ] = {
+          projectId: this.projectId,
+          title,
+          duration: 0,
+          totalScenes: 0,
+          style: "",
+          mood: "",
+          colorPalette: [],
+          tags: [],
+          audioPublicUri,
+          audioGcsUri,
+          initialPrompt,
+          hasAudio,
+          models: {
+            videoModel: videoModelName,
+            imageModel: imageModelName,
+            textModel: textModelName,
+            qaModel: qualityCheckModelName,
+          },
+        };
+
+        await this.projectRepository.createProject({
+          id: this.projectId,
+          status: "pending",
+          metadata: metadata,
+          currentSceneIndex: 0,
+          forceRegenerateSceneIds: [],
+          assets: {},
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          storyboard: {
+            metadata: metadata,
+            characters: [],
+            scenes: [],
+            locations: [],
+          },
+          generationRules: [],
+          generationRulesHistory: [],
+          projectId: this.projectId,
           });
       } catch (error) {
         console.error(" ! Error creating project in database.", error);

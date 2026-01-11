@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { checkAndPublishInterruptFromSnapshot } from '../helpers/interrupts';
 import { LlmRetryInterruptValue } from '../../shared/types/pipeline.types';
-import { mergeParamsIntoState } from "../../workflow/utils/utils";
+import { mergeParamsIntoState } from "../../shared/utils/utils";
 
 describe('Interrupt Handling System', () => {
 

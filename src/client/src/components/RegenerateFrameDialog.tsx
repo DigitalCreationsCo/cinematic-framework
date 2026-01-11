@@ -8,7 +8,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useEffect, useState } from "react";
-import { Scene } from "@shared/types/pipeline.types";
+import { AssetKey, AssetVersion, Scene } from "@shared/types/pipeline.types";
+import { getAllBestFromAssets } from "@shared/utils/utils";
 
 interface RegenerateFrameDialogProps {
     scene: Scene;
@@ -27,16 +28,22 @@ export function RegenerateFrameDialog({
     onSubmit,
 }: RegenerateFrameDialogProps) {
 
+    const [ assets, setAssets ] = useState<Partial<Record<AssetKey, AssetVersion | undefined>>>({});
+
+    useEffect(() => {
+        setAssets(getAllBestFromAssets(scene.assets));
+    }, [ scene ]);
+
     const originalPrompt = (frameToRegenerate === "start"
-        ? scene.startFramePrompt
-        : scene.endFramePrompt) || "";
+        ? assets?.[ 'scene_start_frame' ]?.data
+        : assets?.[ 'scene_end_frame' ]?.data) || "";
 
     const [ prompt, setPrompt ] = useState(originalPrompt);
 
     useEffect(() => {
         setPrompt((frameToRegenerate === "start"
-            ? scene.startFramePrompt
-            : scene.endFramePrompt) || "");
+            ? assets?.[ 'scene_start_frame' ]?.data
+            : assets?.[ 'scene_end_frame' ]?.data) || "");
     }, [ scene, frameToRegenerate, isOpen, onOpenChange, onSubmit ]);
 
     const handleSubmit = () => {

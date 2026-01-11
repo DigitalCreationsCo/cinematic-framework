@@ -504,7 +504,7 @@ export class ContinuityManagerAgent {
 
     async generateLocationAssets(
         locations: Location[],
-        generationRules?: string[],
+        generationRules: string[],
         onProgress?: (id: string, msg: string, status: AssetStatus, artifacts?: any) => Promise<void>,
         onRetry?: (attempt: number) => Promise<number>,
     ): Promise<Location[]> {

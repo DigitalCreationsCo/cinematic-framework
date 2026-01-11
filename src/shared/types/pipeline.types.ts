@@ -71,8 +71,8 @@ export type AudioAnalysis = z.infer<typeof AudioAnalysisSchema> & {
 export const TagSchema = z.object({
   id: z.uuid().nonempty().nonoptional().describe("unique identifier (uuid)"),
   projectId: z.uuid().nonempty().nonoptional().describe("Pipeline project id"),
-  createdAt: z.string().default(new Date().toISOString()),
-  updatedAt: z.string().default(new Date().toISOString()),
+  createdAt: z.date().default(new Date()),
+  updatedAt: z.date().default(new Date()),
 });
 export type Tag = z.infer<typeof TagSchema>;
 
@@ -226,13 +226,14 @@ export interface VideoGenerationConfig {
 // ============================================================================
 
 export const ProjectMetadataSchema = z.object({
+  projectId: z.uuid().nonempty().nonoptional().describe("Pipeline project id"),
   title: z.string().describe("title of the video"),
   duration: z.number().describe("total duration in seconds"),
   totalScenes: z.number().describe("total number of scenes"),
-  style: z.string().optional().describe("inferred cinematic style"),
-  mood: z.string().optional().describe("overall emotional arc"),
-  colorPalette: z.array(z.string()).optional().describe("dominant colors").default([]),
-  tags: z.array(z.string()).optional().describe("descriptive tags").default([]),
+  style: z.string().describe("inferred cinematic style"),
+  mood: z.string().describe("overall emotional arc"),
+  colorPalette: z.array(z.string()).describe("dominant colors").default([]),
+  tags: z.array(z.string()).describe("descriptive tags").default([]),
 
   models: z.object({
     videoModel: z.string().optional().describe("AI model used for video generation"),
@@ -241,7 +242,7 @@ export const ProjectMetadataSchema = z.object({
     qaModel: z.string().optional().describe("AI model used for quality evaluaton"),
   }),
 
-  initialPrompt: z.string().optional().describe("original creative prompt"),
+  initialPrompt: z.string().describe("original creative prompt"),
   enhancedPrompt: z.string().optional().describe("enhanced user prompt with narrative, characters, settings"),
   audioGcsUri: z.string().optional().describe("GCS URI of uploaded audio file"),
   audioPublicUri: z.string().optional().describe("audio file public url"),
@@ -321,7 +322,7 @@ export const CharacterSchema = z.object({
   referenceId: z.string().describe("unique identifier for the character (e.g. char_1)"),
   name: z.string().describe("character name"),
   aliases: z.array(z.string()).describe("list of aliases for the character").default([]),
-  age: z.union([ z.number(), z.string() ]).optional().describe("age or age range"),
+  age: z.string().describe("age or age range"),
 
   // Costume & Makeup specifications
   physicalTraits: PhysicalTraitsSchema,
@@ -407,16 +408,16 @@ export const LocationSchema = z.object({
   // Production Designer specifications (baseline/initial state)
   lightingConditions: LightingSchema,
   timeOfDay: z.string().describe("initial time of day"),
-  weather: z.string().optional().describe("initial weather conditions").default("Clear"),
-  colorPalette: z.array(z.string()).optional().describe("dominant colors").default([]),
-  mood: z.string().optional().describe("atmospheric mood"),
+  weather: z.string().describe("initial weather conditions").default("Clear"),
+  colorPalette: z.array(z.string()).describe("dominant colors").default([]),
+  mood: z.string().describe("atmospheric mood"),
 
   // Environmental elements (baseline)
-  architecture: z.string().optional().describe("architectural features"),
-  naturalElements: z.array(z.string()).optional().describe("natural elements in scene").default([]),
-  manMadeObjects: z.array(z.string()).optional().describe("man-made objects in scene").default([]),
-  groundSurface: z.string().optional().describe("ground surface description"),
-  skyOrCeiling: z.string().optional().describe("sky or ceiling description"),
+  architecture: z.string().describe("architectural features"),
+  naturalElements: z.array(z.string()).describe("natural elements in scene").default([]),
+  manMadeObjects: z.array(z.string()).describe("man-made objects in scene").default([]),
+  groundSurface: z.string().describe("ground surface description"),
+  skyOrCeiling: z.string().describe("sky or ceiling description"),
 
   assets: AssetRegistrySchema,
 
@@ -459,7 +460,7 @@ export const InitialProjectSchema = z.object({
 
   status: AssetStatusSchema,
   currentSceneIndex: z.number().describe("Index of scene currently being processed").default(0),
-  forceRegenerateSceneIds: z.array(z.string()).describe("List of scene IDs to force video regenerate"),
+  forceRegenerateSceneIds: z.array(z.string()).describe("List of scene IDs to force video regenerate").default([]),
 
   assets: AssetRegistrySchema,
   generationRules: z.array(z.string()).describe("generation rule guidelines").default([]),
@@ -476,6 +477,7 @@ export type InitialProject = z.infer<typeof InitialProjectSchema>;
 
 
 export const ProjectSchema = InitialProjectSchema.extend(z.object({
+  storyboard: StoryboardSchema,
   metadata: ProjectMetadataSchema.required(),
   metrics: WorkflowMetricsSchema,
   characters: z.array(CharacterSchema),

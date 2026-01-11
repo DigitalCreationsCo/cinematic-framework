@@ -1,5 +1,6 @@
 import { ProjectRepository } from "../pipeline/project-repository";
 import { AssetHistory, AssetRegistry, AssetType, AssetVersion, Project, Scene, Character, Location, AssetKey } from "../shared/types/pipeline.types";
+import { mapDbProjectToDomain } from "../pipeline/helpers/domain/project-mappers";
 
 export type Scope = {
     projectId: string;
@@ -150,11 +151,21 @@ export class AssetVersionManager {
             const scene = await this.projectRepo.getScene(scope.sceneId);
             assetsHistoryList = [ scene.assets || {} ];
         } else if ("characterIds" in scope) {
-            const characters = await this.projectRepo.getCharacters(scope.characterIds);
-            assetsHistoryList = characters.map(c => c.assets || {});
+            const characters = await this.projectRepo.getProjectCharacters(scope.projectId);
+            assetsHistoryList = assetsHistoryList = characters.reduce((chars, next) => {
+                if (scope.characterIds.includes(next.id)) {
+                    chars.push(next.assets);
+                }
+                return chars;
+            }, [] as any);
         } else if ("locationIds" in scope) {
-            const locations = await this.projectRepo.getLocations(scope.locationIds);
-            assetsHistoryList = locations.map(l => l.assets || {});
+            const locations = await this.projectRepo.getProjectLocations(scope.projectId);
+            assetsHistoryList = locations.reduce((locs, next) => {
+                if (scope.locationIds.includes(next.id)) {
+                    locs.push(next.assets);
+                }
+                return locs;
+            }, [] as any);
         }
         else {
             const project = await this.projectRepo.getProject(scope.projectId);
@@ -173,12 +184,12 @@ export class AssetVersionManager {
 
             const updates: Partial<Scene> = { assets };
 
-            await this.projectRepo.updateSceneData(scope.sceneId, { ...scene, ...updates });
+            await this.projectRepo.updateScenes([{ ...scene, ...updates }]);
 
         } else if ("characterIds" in scope) {
             if (histories.length !== scope.characterIds.length) throw new Error("History count mismatch for characters");
-            const characters = await this.projectRepo.getCharacters(scope.characterIds);
-            const updates = characters.map((char, index) => {
+            const characters = await this.projectRepo.getCharactersByIds(scope.characterIds);
+            const updates: Character[] = characters.map((char, index) => {
                 const assets = char.assets || {};
                 assets[ assetKey ] = histories[ index ];
                 return { ...char, assets };
@@ -187,8 +198,8 @@ export class AssetVersionManager {
 
         } else if ("locationIds" in scope) {
             if (histories.length !== scope.locationIds.length) throw new Error("History count mismatch for locations");
-            const locations = await this.projectRepo.getLocations(scope.locationIds);
-            const updates = locations.map((loc, index) => {
+            const locations = await this.projectRepo.getLocationsByIds(scope.locationIds);
+            const updates: Location[] = locations.map((loc, index) => {
                 const assets = loc.assets || {};
                 assets[ assetKey ] = histories[ index ];
                 return { ...loc, assets };
@@ -203,11 +214,11 @@ export class AssetVersionManager {
 
             const updates: Partial<Project> = { assets };
 
-            await this.projectRepo.updateProject(scope.projectId, {
+            await this.projectRepo.updateProject(scope.projectId, mapDbProjectToDomain({
                 ...project,
-                ...updates,
+                ...updates, 
                 assets
-            });
+            }));
         }
     }
 

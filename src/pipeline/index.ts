@@ -29,6 +29,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { PoolManager } from "./services/pool-manager";
 import { JobControlPlane } from "./services/job-control-plane";
 import { ProjectRepository } from "./project-repository";
+import { handleJobCompletion } from "./handlers/handleJobCompletion";
 
 const projectIdStore = new AsyncLocalStorage<string>();
 
@@ -135,20 +136,7 @@ async function main() {
         if (event && 'type' in event && event.type.startsWith('JOB_')) {
             const { jobId } = event;
             if (event.type === 'JOB_COMPLETED') {
-                try {
-                    console.log(`[Pipeline] Handling completion for job ${jobId}`);
-                    const job = await jobControlPlane.getJob(jobId);
-                    if (!job || job.state !== "COMPLETED") {
-                        console.warn(`[Pipeline] Job ${jobId} not found or not completed`);
-                        return;
-                    }
-
-                    const { projectId } = job;
-                    console.log(`[Pipeline] Job ${jobId} (${job.type}) completed. Resuming pipeline for ${projectId}.`);
-                    await workflowOperator.resumePipeline(projectId);
-                } catch (err) {
-                    console.error("[Pipeline] Error handling job completion:", err);
-                }
+                await handleJobCompletion(jobId, workflowOperator, jobControlPlane);
             }
 
             if (event.type === 'JOB_FAILED') {

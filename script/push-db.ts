@@ -4,8 +4,6 @@ dotenv.config();
 
 import { execSync } from "child_process";
 
-}
-
 try {
     console.log("Generating migrations...");
     execSync("npx drizzle-kit generate", { stdio: "inherit", env: process.env });

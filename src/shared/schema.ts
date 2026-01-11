@@ -1,9 +1,21 @@
+import {
+  pgTable, uuid, text, timestamp, integer,
+  jsonb, boolean, real, pgEnum
+} from "drizzle-orm/pg-core";
+import {
+  ProjectMetadata, AssetRegistry, Lighting, Cinematography,
+  CharacterState, LocationState, PhysicalTraits, WorkflowMetrics,
+  AudioAnalysis,
+  Storyboard
+} from "./types/pipeline.types";
 import { z } from "zod";
-import { relations } from "drizzle-orm";
-import { jsonb } from "drizzle-orm/pg-core";
 import { createTableFromZod } from "zod-to-drizzle";
-import { InitialProjectSchema, CharacterSchema, LocationSchema, ProjectSchema, SceneSchema } from "./types/pipeline.types";
 
+// --- ENUMS ---
+export const assetStatusEnum = pgEnum("asset_status", [ "pending", "generating", "evaluating", "complete", "error" ]);
+export const jobStateEnum = pgEnum("job_state", [ "CREATED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED" ]);
+
+// --- USERS (Preserved from original) ---
 const UserSchema = z.object({
   id: z.uuid(),
   name: z.string(),
@@ -12,7 +24,7 @@ const UserSchema = z.object({
   updatedAt: z.string().default(new Date().toISOString()),
 });
 
-const users = createTableFromZod("users", UserSchema, {
+export const users = createTableFromZod("users", UserSchema, {
   dialect: "pg",
   primaryKey: "id"
 });
@@ -20,124 +32,106 @@ const users = createTableFromZod("users", UserSchema, {
 export type InsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
-// export const projects = pgTable("projects", {
-//   id: uuid("id").primaryKey().defaultRandom(),
-//   name: text("name").notNull(),
+// --- TABLES ---
 
-//   // High-level status for list filtering
-//   status: varchar("status", { length: 50 }).default("active").notNull(),
+export const projects = pgTable("projects", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 
-//   // The original prompt that started it all
-//   enhancedPrompt: text("creative_prompt").notNull(),
+  // Core Data
+  storyboard: jsonb("storyboard").$type<Storyboard>().notNull(),
+  metadata: jsonb("metadata").$type<ProjectMetadata>().notNull(),
 
-//   // Complex metadata (Genre, Style, user preferences)
-//   // Validated by: ProjectMetadataSchema
-//   metadata: jsonb("metadata").default({}),
+  // Workflow Control
+  status: assetStatusEnum("status").default("pending").notNull(),
+  currentSceneIndex: integer("current_scene_index").default(0).notNull(),
+  forceRegenerateSceneIds: text("force_regenerate_scene_ids").array().default([]).notNull(),
 
-//   createdAt: timestamp("created_at").defaultNow().notNull(),
-//   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-// });
+  assets: jsonb("assets").$type<AssetRegistry>().default({}).notNull(),
+  generationRules: text("generation_rules").array().default([]).notNull(),
+  generationRulesHistory: text("generation_rules_history").array().array().default([]).notNull(),
 
-export const scenes = createTableFromZod("scenes", SceneSchema, {
-  dialect: "pg",
-  primaryKey: "id",
-  jsonColumns: (schema) => {
-    const { projectId, sceneIndex, status, createdAt, updatedAt, ...metadataFields } = schema.shape;
-
-    return {
-      data: {
-        fields: [ 'projectId' ],
-        exclusive: true,
-      }
-    };
-  }
-  // id: uuid("id").primaryKey().defaultRandom(),
-
-  // // Foreign Key to Project
-  // projectId: uuid("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull(),
-
-  // // Ordering
-  // sceneIndex: integer("scene_index").notNull(),
-
-  // // Core Workflow AssetStatus (Queryable)
-  // status: varchar("status", { length: 50 }).default("pending").notNull(),
-
-  // // Artifact Pointers (GCS URIs) - Kept top-level for easy access
-  // videoUri: text("video_uri"),
-  // startFrameUri: text("start_frame_uri"),
-  // endFrameUri: text("end_frame_uri"),
-
-  // // THE CORE PAYLOAD
-  // // Contains: DirectorScene, Lighting, Camera, Metrics
-  // // Validated by: SceneSchema (minus the ID which is now the PK)
-  // data: jsonb("data").notNull(),
-
-  // createdAt: timestamp("created_at").defaultNow().notNull(),
-  // updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-export type InsertScene = typeof scenes.$inferInsert;
-
-export const characters = createTableFromZod("characters", CharacterSchema, {
-  dialect: "pg",
-  primaryKey: "id",
-  jsonColumns: (schema) => {
-    const { id, projectId, name, createdAt, updatedAt, ...dataFields } = schema.shape;
-    return {
-      data: {
-        fields: [ 'id' ],
-        exclusive: true
-      }
-    };
-  }
-});
-export type InsertCharacter = typeof characters.$inferInsert;
-
-export const locations = createTableFromZod("locations", LocationSchema, {
-  dialect: "pg",
-  primaryKey: "id",
-  jsonColumns: (schema) => {
-    const { id, projectId, name, createdAt, updatedAt, ...dataFields } = schema.shape;
-    return {
-      data: {
-        fields: [ 'mood' ],
-        exclusive: true
-      }
-    };
-  }
-});
-export type InsertLocation = typeof locations.$inferInsert;
-
-export const projects = createTableFromZod("projects", InitialProjectSchema, {
-  dialect: "pg",
-  primaryKey: 'id',
-  jsonColumns: (schema) => {
-    return {
-      metadata: {
-        fields: [ 'metadata' ],
-        exclusive: true,
-      },
-      storyboard: {
-        fields: [ 'storyboard' ],
-        exclusive: false,
-      }
-    };
-  },
+  metrics: jsonb("metrics").$type<WorkflowMetrics>(),
+  audioAnalysis: jsonb("audio_analysis").$type<AudioAnalysis>(),
 });
 
-export const projectRelations = relations(projects, ({ many }) => ({
-  scenes: many(scenes),
-  characters: many(characters),
-  locations: many(locations),
-}));
+export const characters = pgTable("characters", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  referenceId: text("reference_id").notNull(), // e.g. char_1
+  name: text("name").notNull(),
+  aliases: text("aliases").array().default([]).notNull(),
+  age: text("age").notNull(),
 
-export const sceneRelations = relations(scenes, ({ many }) => ({
-  project: many(projects),
-}));
+  physicalTraits: jsonb("physical_traits").$type<PhysicalTraits>().notNull(),
+  appearanceNotes: jsonb("appearance_notes").$type<string[]>().notNull(),
+  assets: jsonb("assets").$type<AssetRegistry>().default({}).notNull(),
+  state: jsonb("state").$type<CharacterState>(),
+});
 
-export const characterRelations = relations(characters, ({ many }) => ({
-  project: many(projects),
-}));
+export const locations = pgTable("locations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  referenceId: text("reference_id").notNull(), // e.g. loc_1
+  name: text("name").notNull(),
 
-export const locationRelations = relations(locations, ({ many }) => ({
-  project: many(projects),
-}));
+  lightingConditions: jsonb("lighting_conditions").$type<Lighting>().notNull(),
+  timeOfDay: text("time_of_day").notNull(),
+  weather: text("weather").notNull(),
+  colorPalette: jsonb("color_palette").$type<string[]>().notNull(),
+  mood: text("mood").notNull(),
+  
+  architecture: text("architecture").notNull(),
+  naturalElements: jsonb("natural_elements").$type<string[]>().notNull(),
+  manMadeObjects: jsonb("man_made_objects").$type<string[]>().notNull(),
+  groundSurface: text("ground_surface").notNull(),
+  skyOrCeiling: text("sky_or_ceiling").notNull(),
+
+  assets: jsonb("assets").$type<AssetRegistry>().default({}).notNull(),
+  state: jsonb("state").$type<LocationState>(),
+});
+
+export const scenes = pgTable("scenes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  sceneIndex: integer("scene_index").notNull(),
+
+  // Narrative & Sync
+  description: text("description").notNull(),
+  mood: text("mood").notNull(),
+  lyrics: text("lyrics"),
+  startTime: real("start_time").notNull(),
+  endTime: real("end_time").notNull(),
+
+  // Cinematic Specs
+  cinematography: jsonb("cinematography").$type<Cinematography>().notNull(),
+  lighting: jsonb("lighting").$type<Lighting>().notNull(),
+
+  // Script Supervisor Links
+  locationId: uuid("location_id").references(() => locations.id),
+  characterIds: uuid("character_ids").array().default([]),
+
+  // Persistent Results
+  status: assetStatusEnum("status").default("pending"),
+  assets: jsonb("assets").$type<AssetRegistry>().default({}),
+});
+
+export const jobs = pgTable("jobs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  type: text("type").notNull(), // JobType
+  state: jobStateEnum("state").default("CREATED").notNull(),
+  payload: jsonb("payload").notNull(),
+  result: jsonb("result"),
+  error: text("error"),
+  retryCount: integer("retry_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});

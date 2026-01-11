@@ -11,7 +11,7 @@ import { FrameCompositionAgent } from "../workflow/agents/frame-composition-agen
 import { SceneGeneratorAgent } from "../workflow/agents/scene-generator";
 import { ContinuityManagerAgent } from "../workflow/agents/continuity-manager";
 import { AttemptMetric, Project, Scene } from "../shared/types/pipeline.types";
-import { deleteBogusUrlsStoryboard } from "../workflow/utils/utils";
+import { deleteBogusUrlsStoryboard } from "../shared/utils/utils";
 import { PipelineEvent } from "../shared/types/pubsub.types";
 import { ProjectRepository } from "../pipeline/project-repository";
 import { MediaController } from "../workflow/media-controller";
@@ -165,7 +165,7 @@ export class WorkerService {
                     break;
                 }
                 case "SEMANTIC_ANALYSIS": {
-                    const project = await this.projectRepository.getProject(job.projectId);
+                    const project = await this.projectRepository.getProjectFullState(job.projectId);
                     const dynamicRules = await agents.semanticExpert.generateRules(project.storyboard);
                     result = { dynamicRules };
                     break;
@@ -180,16 +180,15 @@ export class WorkerService {
                     break;
                 }
 
-                // TODO None of these operations are writing to database
                 case "GENERATE_LOCATION_ASSETS": {
                     const locations = await this.projectRepository.getProjectLocations(job.projectId);
                     const project = await this.projectRepository.getProject(job.projectId);
 
                     const updatedLocations = await agents.continuityAgent.generateLocationAssets(
                         locations,
-                        project.generationRules
+                        project.generationRules || []
                     );
-                    result = { locations };
+                    result = { locations: updatedLocations };
                     break;
                 }
                 case "GENERATE_SCENE_FRAMES": {
@@ -200,6 +199,14 @@ export class WorkerService {
                     const project = await this.projectRepository.getProject(job.projectId);
                     const state: Project = {
                         ...project,
+                        metadata: project.metadata as any,
+                        projectId: project.id,
+                        status: project.status,
+                        currentSceneIndex: project.currentSceneIndex,
+                        generationRules: project.generationRules || [],
+                        generationRulesHistory: [ project.generationRules || [] ],
+                        forceRegenerateSceneIds: project.forceRegenerateSceneIds || [],
+                        assets: project.assets || {},
                         characters,
                         locations,
                         scenes,
@@ -233,7 +240,7 @@ export class WorkerService {
 
                     const onAttemptComplete = (_scene: Scene, attemptMetric: AttemptMetric) => {
                         console.log(`[Job ${jobId}] Attempt complete:`, attemptMetric);
-                        this.projectRepository.updateSceneData(_scene.id, _scene);
+                        this.projectRepository.updateScenes([_scene]);
                     };
 
                     const assets = scene.assets;
