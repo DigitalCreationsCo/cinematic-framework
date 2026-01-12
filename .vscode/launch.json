@@ -147,14 +147,19 @@
             "name": "Debug Server (Hot Reload)",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/node_modules/.bin/vite-node",
-            "args": [
+            "runtimeExecutable": "node",
+            "runtimeArgs": [
+                "--inspect-brk", 
+                "./node_modules/vite-node/dist/cli.mjs",
                 "--watch",
                 "-c",
-                "vite.config.node.ts",
+                "vite.config.node.ts"
+            ],
+            "args": [
                 "src/server/index.ts"
             ],
             "envFile": "${workspaceFolder}/.env",
+            "restart": true,
             "console": "integratedTerminal",
             "skipFiles": [
                 "<node_internals>/**"
@@ -164,14 +169,19 @@
             "name": "Debug Worker (Hot Reload)",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/node_modules/.bin/vite-node",
-            "args": [
+            "runtimeExecutable": "node",
+            "runtimeArgs": [
+                "--inspect-brk", 
+                "./node_modules/vite-node/dist/cli.mjs",
                 "--watch",
                 "-c",
-                "vite.config.node.ts",
+                "vite.config.node.ts"
+            ],
+            "args": [
                 "src/worker/index.ts"
             ],
             "envFile": "${workspaceFolder}/.env",
+            "restart": true,
             "console": "integratedTerminal",
             "skipFiles": [
                 "<node_internals>/**"
@@ -181,14 +191,19 @@
             "name": "Debug Pipeline (Hot Reload)",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/node_modules/.bin/vite-node",
-            "args": [
+            "runtimeExecutable": "node",
+            "runtimeArgs": [
+                "--inspect-brk", 
+                "./node_modules/vite-node/dist/cli.mjs",
                 "--watch",
                 "-c",
-                "vite.config.node.ts",
+                "vite.config.node.ts"
+            ],
+            "args": [
                 "src/pipeline/index.ts"
             ],
             "envFile": "${workspaceFolder}/.env",
+            "restart": true,
             "console": "integratedTerminal",
             "skipFiles": [
                 "<node_internals>/**"

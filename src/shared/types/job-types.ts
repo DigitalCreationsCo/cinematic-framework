@@ -166,7 +166,7 @@ export type JobRecordGenerateSceneVideo = JobRecordBase<
     {
         sceneId: string;
         sceneIndex: number;
-        attempt: number;
+        version: number;
     }
 >;
 

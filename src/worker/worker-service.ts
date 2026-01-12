@@ -240,7 +240,7 @@ export class WorkerService {
                         sceneCharacters,
                         sceneLocation: location,
                         previousScene,
-                        attempt: payload.attempt,
+                        version: payload.version,
                         startFrame: startFrame,
                         endFrame: endFrame,
                         characterReferenceImages,

@@ -78,7 +78,7 @@ export const PipelineCommandHandler = {
         payload: {
           sceneId,
           modification: promptModification,
-          attempt: 1 // Logic to increment attempt based on history could go here
+          version: 1 // Logic to increment attempt based on history could go here
         }
       }).returning();
 

@@ -112,6 +112,7 @@ export class WorkflowOperator {
             id: inserted.id,
             projectId: inserted.id,
             hasAudio: inserted.metadata.hasAudio,
+            nodeAttempts: {},
             jobIds: {},
             currentSceneIndex: inserted.currentSceneIndex,
             errors: [],

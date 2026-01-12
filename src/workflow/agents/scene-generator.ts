@@ -49,7 +49,7 @@ export class SceneGeneratorAgent {
         sceneCharacters,
         sceneLocation,
         previousScene,
-        attempt,
+        version,
         startFrame,
         endFrame,
         characterReferenceImages,
@@ -65,7 +65,7 @@ export class SceneGeneratorAgent {
         sceneCharacters: Character[],
         sceneLocation: Location,
         previousScene: Scene | undefined,
-        attempt: number,
+        version: number,
         startFrame?: string,
         endFrame?: string,
         characterReferenceImages?: string[],
@@ -83,7 +83,7 @@ export class SceneGeneratorAgent {
             const generated = await this.generateSceneWithSafetyRetry(
                 scene,
                 enhancedPrompt,
-                attempt,
+                version,
                 startFrame,
                 endFrame,
                 characterReferenceImages,
@@ -108,7 +108,7 @@ export class SceneGeneratorAgent {
             if (onAttemptComplete) {
                 onAttemptComplete(generated.scene, {
                     sceneId: generated.scene.id,
-                    attemptNumber: attempt,
+                    attemptNumber: version,
                     finalScore: 1.0,
                 });
             }
@@ -116,10 +116,10 @@ export class SceneGeneratorAgent {
             return {
                 scene: generated.scene,
                 videoUrl: generated.videoUrl,
-                attempts: attempt,
+                attempts: version,
                 finalScore: 1.0,
                 evaluation: null,
-                acceptedAttempt: attempt
+                acceptedAttempt: version
             };
         }
 
@@ -129,7 +129,7 @@ export class SceneGeneratorAgent {
             sceneCharacters,
             sceneLocation,
             previousScene,
-            attempt,
+            version,
             startFrame,
             endFrame,
             characterReferenceImages,
@@ -165,7 +165,7 @@ export class SceneGeneratorAgent {
         characters: Character[],
         location: Location,
         previousScene: Scene | undefined,
-        attempt: number,
+        version: number,
         startFrame?: string,
         endFrame?: string,
         characterReferenceImages?: string[],
@@ -187,7 +187,7 @@ export class SceneGeneratorAgent {
         let totalAttempts = 0;
         let numAttempts = 1;
 
-        for (let lastestAttempt = attempt + numAttempts; numAttempts <= this.qualityAgent.qualityConfig.maxRetries; numAttempts++) {
+        for (let lastestAttempt = version + numAttempts; numAttempts <= this.qualityAgent.qualityConfig.maxRetries; numAttempts++) {
             totalAttempts = numAttempts;
             let evaluation: QualityEvaluationResult | null = null;
             let score = 0;
@@ -323,7 +323,7 @@ export class SceneGeneratorAgent {
     private async generateSceneWithSafetyRetry(
         scene: Scene,
         enhancedPrompt: string,
-        attempt: number,
+        version: number,
         startFrame?: string,
         endFrame?: string,
         characterReferenceImages?: string[],
@@ -336,16 +336,16 @@ export class SceneGeneratorAgent {
     ): Promise<{ scene: GeneratedScene, videoUrl: string }> {
         console.log(`\n🎬 Generating Scene ${scene.id}: ${formatTime(scene.duration)}`);
         console.log(`   Duration: ${scene.duration}s | Shot: ${scene.shotType}`);
-        const attemptLabel = attempt ? ` (Quality Attempt ${attempt})` : "";
+        const attemptLabel = version ? ` (Quality Attempt ${version})` : "";
         let finalPrompt = enhancedPrompt;
-        const maxRetries = this.qualityAgent.qualityConfig.safetyRetries + attempt;
+        const maxRetries = this.qualityAgent.qualityConfig.safetyRetries + version;
         const generatedVideo = await retryLlmCall(
             (params: { prompt: string; startFrame?: string; endFrame?: string; }) => this.executeVideoGeneration(
                 scene,
                 params.prompt,
                 scene.duration,
                 scene.id,
-                attempt,
+                version,
                 params.startFrame,
                 params.endFrame,
                 characterReferenceImages,
@@ -360,7 +360,7 @@ export class SceneGeneratorAgent {
                 endFrame: endFrame,
             },
             {
-                attempt,
+                attempt: version,
                 maxRetries,
                 initialDelay: 1000,
                 backoffFactor: 2
@@ -395,7 +395,7 @@ export class SceneGeneratorAgent {
         prompt: string,
         duration: number,
         sceneId: string,
-        attempt: number,
+        version: number,
         startFrame?: string,
         endFrame?: string,
         characerterReferenceUrls?: string[],
@@ -411,7 +411,7 @@ export class SceneGeneratorAgent {
         if (onProgress) onProgress(scene);
 
         const outputMimeType = "video/mp4";
-        const objectPath = this.storageManager.getObjectPath({ type: "scene_video", sceneId: sceneId, attempt });
+        const objectPath = this.storageManager.getObjectPath({ type: "scene_video", sceneId: sceneId, attempt: version });
 
         let durationSeconds = roundToValidDuration(duration);
 

@@ -61,16 +61,12 @@ export default function PipelineHeader({ title, handleStart, handleStop, handleR
               type="button"
               onClick={ () => {
                 if (confirm('Are you sure you want to execute this?')) {
-                  if (projectStatus === 'paused') {
-                    handleResume();
-                  } else {
-                    handleStart();
-                  }
+                  handleResume();
                 }
               }
               }>
               <Play className="w-4 h-4 mr-1" />
-              { projectStatus === 'paused' ? 'Resume Pipeline' : 'Start Pipeline' }
+              { 'Resume Pipeline' }
             </Button>
           ) : (
             <Button

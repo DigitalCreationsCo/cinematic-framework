@@ -32,7 +32,7 @@ export class JobControlPlane {
             retryCount: retryCount,
             maxRetries: maxRetries,
         }).returning();
-
+ 
             await this.publishJobEvent({
                 type: "JOB_DISPATCHED",
                 jobId: newJob.id
@@ -42,8 +42,29 @@ export class JobControlPlane {
     }
 
     async getJob<T>(jobId: string): Promise<Extract<JobRecord, { type: T; }> | null> {
-        const result = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
-        return result[ 0 ] as Extract<JobRecord, { type: T; }>;
+
+        const isoDateFormat = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d*)?Z$/;
+        function reviveDates(obj: any): any {
+            if (obj === null || typeof obj !== 'object') {
+                if (typeof obj === "string" && isoDateFormat.test(obj)) {
+                    return new Date(obj);
+                }
+                return obj;
+            }
+            for (const key in obj) {
+                obj[ key ] = reviveDates(obj[ key ]);
+            }
+            return obj;
+        }
+
+        const [ row ] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
+        if (row && row.result) {
+            const parsed = typeof row.result === 'string'
+                ? JSON.parse(row.result)
+                : row.result;
+            row.result = reviveDates(parsed);
+        }
+        return row as Extract<JobRecord, { type: T; }>;
     }
 
     async claimJob(jobId: string, workerId: string): Promise<boolean> {
@@ -86,17 +107,19 @@ export class JobControlPlane {
     }
 
     async updateJobState(jobId: string, state: JobState, result?: Record<string, any>, error?: string): Promise<void> {
+        
+        const jsonSafeResult = result
+            ? JSON.parse(JSON.stringify(result))
+            : null;
         await db.update(jobs)
             .set({
                 state: state,
-                result: result ?? null,
+                result: jsonSafeResult, // Pass the object directly for jsonb
                 error: error ?? null,
                 updatedAt: new Date(),
-                // Increment retry count only if failed
                 retryCount: sql`CASE WHEN ${jobs.state} = 'FAILED' THEN ${jobs.retryCount} + 1 ELSE ${jobs.retryCount} END`
             })
             .where(eq(jobs.id, jobId));
-
         console.log(`[JobControlPlane] Updated job ${jobId} to state ${state}`);
     }
 

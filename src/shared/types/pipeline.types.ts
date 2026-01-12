@@ -626,11 +626,13 @@ export const WorkflowStateSchema = z.object({
   // Transient execution data
   jobIds: z.record(z.string(), z.string()).describe("Active generative worker jobs"),
   currentSceneIndex: z.number().describe("index of scene currently being processed").default(0),
+  nodeAttempts: z.record(z.string(), z.number()).describe("Count of node executions inthe current workflow"),
 
   errors: z.array(z.object({
     node: z.string(),
-    error: z.string(),
-    skipped: z.boolean(),
+    message: z.string(),
+    value: z.record(z.string(), z.any()),
+    shouldRetry: z.boolean(),
     timestamp: z.string(),
   })).describe("errors encountered during workflow").default([]),
 });

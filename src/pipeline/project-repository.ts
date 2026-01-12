@@ -90,7 +90,7 @@ export class ProjectRepository {
     }
 
     async updateInitialProject(projectId: string, data: Partial<InitialProject>): Promise<InitialProject> {
-        const updateValues: any = {};
+        const updateValues: Partial<InitialProject> = {};
         if (data.metadata) updateValues.metadata = data.metadata;
         if (data.metrics) updateValues.metrics = data.metrics;
         if (data.currentSceneIndex !== undefined) updateValues.currentSceneIndex = data.currentSceneIndex;
@@ -98,7 +98,7 @@ export class ProjectRepository {
         if (data.assets) updateValues.assets = data.assets;
         if (data.generationRules) updateValues.generationRules = data.generationRules;
         if (data.storyboard) updateValues.storyboard = data.storyboard;
-        // forceRegenerateSceneIds?
+        if (data.forceRegenerateSceneIds) updateValues.forceRegenerateSceneIds = data.forceRegenerateSceneIds;
 
         if (Object.keys(updateValues).length > 0) {
             await db.update(projects)
