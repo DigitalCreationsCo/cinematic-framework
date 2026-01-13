@@ -50,7 +50,7 @@ export async function aggregateProjectPerformance(projectId: string) {
 
   const metrics: WorkflowMetrics = {
     totalScenes,
-    completedScenes: completedCount,
+    completedScenes: Completed\nCount,
     averageAttemptsPerScene: avgAttempts,
     estimatedRemainingAttempts: predictedAttempts,
     qualityTrendSlope: trend.slope,
