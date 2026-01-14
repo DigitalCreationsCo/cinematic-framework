@@ -351,22 +351,19 @@ export class CinematicVideoWorkflow {
         console.log(" [Cinematic-Canvas]: Resuming from 'process_scene'");
         return "process_scene";
       }
-      if (project.generationRules.length > 0) {
+      if (project.generationRules.length > 0 && project.storyboard?.scenes?.length > 0) {
         console.log("[Cinematic-Canvas]:  Proceeding to 'generate_character_assets'");
         return "generate_character_assets";
       }
-      if (project.metadata.enhancedPrompt) {
+      if (project.metadata.enhancedPrompt && project.storyboard?.scenes?.length > 0) {
         console.log("[Cinematic-Canvas]:  Proceeding to 'semantic_analysis'");
         return "semantic_analysis";
       }
       console.log("[Cinematic-Canvas]: Proceeding to 'expand_creative_prompt'");
       return "expand_creative_prompt";
     });
-    // Non-audio workflow path
-    workflow.addEdge("expand_creative_prompt" as any, "generate_storyboard_exclusively_from_prompt" as any);
-    workflow.addEdge("generate_storyboard_exclusively_from_prompt" as any, "semantic_analysis" as any);
-    // Audio-based workflow path
-    workflow.addEdge("expand_creative_prompt" as any, "create_scenes_from_audio" as any);
+    // Branching paths (non-audio vs audio-based)
+    workflow.addEdge("generate_storyboard_exclusively_from_prompt" as any, "enrich_storyboard_and_scenes" as any);
     workflow.addEdge("create_scenes_from_audio" as any, "enrich_storyboard_and_scenes" as any);
     workflow.addEdge("enrich_storyboard_and_scenes" as any, "semantic_analysis" as any);
     workflow.addEdge("semantic_analysis" as any, "generate_character_assets" as any);
@@ -467,7 +464,7 @@ export class CinematicVideoWorkflow {
         });
       }
     }, {
-      ends: [ "generate_storyboard_exclusively_from_prompt", "create_scenes_from_audio", "error_handler" ]
+      ends: [ "create_scenes_from_audio", "generate_storyboard_exclusively_from_prompt", "error_handler" ]
     });
 
     workflow.addNode("generate_storyboard_exclusively_from_prompt", async (state: WorkflowState) => {
@@ -523,7 +520,7 @@ export class CinematicVideoWorkflow {
         });
       }
     }, {
-      ends: [ "semantic_analysis", "error_handler" ]
+      ends: [ "enrich_storyboard_and_scenes", "error_handler" ]
     });
 
     workflow.addNode("create_scenes_from_audio", async (state: WorkflowState) => {

@@ -145,6 +145,32 @@ export class JobControlPlane {
         });
     }
 
+    /**
+     * Resets a job to CREATED state and dispatches a notification.
+     * Includes audit logging to track whether this was a recovery or a retry.
+     * * @param jobId - The ID of the job to requeue.
+     * @param currentAttempt - The current attempt for optimistic locking.
+     * @param context - The monitor context (e.g., 'STALE_RECOVERY' or 'BACKOFF_RETRY').
+     */
+    async requeueJob(jobId: string, currentAttempt: number, context: 'STALE_RECOVERY' | 'BACKOFF_RETRY'): Promise<void> {
+        const auditLog = ` [Monitor] Action: ${context} at ${new Date().toISOString()}`;
+
+        const result = await this.updateJobSafe(jobId, currentAttempt, {
+            state: "CREATED",
+            error: sql<string>`COALESCE(${jobs.error}, '') || ${auditLog}` as any,
+        });
+
+        if (result) {
+            await this.publishJobEvent({
+                type: "JOB_DISPATCHED",
+                jobId: result.id
+            });
+            console.log(`[JobControlPlane] ${auditLog.trim()} | Job: ${jobId} | New Attempt: ${result.attempt}`);
+        } else {
+            console.warn(`[JobControlPlane] Race condition avoided: Job ${jobId} already updated by worker.`);
+        }
+    }
+
     async updateJobState(jobId: string, state: JobState, result?: Record<string, any>, error?: string): Promise<void> {
 
         const jsonSafeResult = result
@@ -192,7 +218,8 @@ export class JobControlPlane {
             .returning();
 
         if (!result) {
-            throw new Error(`OptimisticLockError: Job ${jobId} was updated by another process.`);
+            console.warn(`OptimisticLockError: Job ${jobId} was updated by another process.`);
+            return null;
         }
 
         return this.reviveDates(result) as JobRecord;

@@ -34,6 +34,7 @@ export type JobState =
     | "RUNNING"
     | "COMPLETED"
     | "FAILED"
+    | "FATAL"
     | "CANCELLED";
 
 export type JobRecord =

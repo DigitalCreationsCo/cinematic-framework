@@ -39,7 +39,7 @@ const poolManager = new PoolManager({
 
 const pubsub = new PubSub({
     projectId: gcpProjectId,
-    apiEndpoint: process.env.PUBSUB_EMULATOR_HOST,
+    ...(process.env.PUBSUB_EMULATOR_HOST ? { apiEndpoint: process.env.PUBSUB_EMULATOR_HOST } : {}),
 });
 
 const jobEventsTopicPublisher = pubsub.topic(JOB_EVENTS_TOPIC_NAME);
@@ -48,12 +48,18 @@ const videoEventsTopicPublisher = pubsub.topic(PIPELINE_EVENTS_TOPIC_NAME);
 async function publishJobEvent(event: JobEvent) {
     console.log(`[Worker] Publishing job event ${event.type} to ${JOB_EVENTS_TOPIC_NAME}`);
     const dataBuffer = Buffer.from(JSON.stringify(event));
-    await jobEventsTopicPublisher.publishMessage({ data: dataBuffer });
+    await jobEventsTopicPublisher.publishMessage({
+        data: dataBuffer,
+        attributes: { type: event.type }
+    });
 }
 
 export async function publishPipelineEvent(event: PipelineEvent) {
     const dataBuffer = Buffer.from(JSON.stringify(event));
-    await videoEventsTopicPublisher.publishMessage({ data: dataBuffer });
+    await videoEventsTopicPublisher.publishMessage({
+        data: dataBuffer,
+        attributes: { type: event.type }
+    });
 }
 
 const jobControlPlane = new JobControlPlane(poolManager, publishJobEvent);
@@ -76,19 +82,21 @@ async function main() {
         try {
 
             const [ topic ] = await pubsub.topic(JOB_EVENTS_TOPIC_NAME).get({ autoCreate: true });
-            const ensureSubscription = async (topic: any, subscriptionName: string) => {
+            const ensureSubscription = async (topic: any, subscriptionName: string, filter?: string) => {
                 console.log(`[Worker ${workerId}] Ensuring subscription ${subscriptionName} exists on ${topic.name}...`);
                 const isDev = process.env.NODE_ENV !== 'production';
                 try {
                     await topic.createSubscription(subscriptionName, {
-                        ackDeadlineSeconds: isDev ? 600 : 10
+                        enableExactlyOnceDelivery: true,
+                        ackDeadlineSeconds: 60, // Increased to 60s for stability
+                        expirationPolicy: { ttl: { seconds: 24 * 60 * 60 } }, // 24h expiration
+                        filter
                     });
                 } catch (e: any) {
                     if (e.code !== 6) throw e;
                 }
             };
-            await ensureSubscription(topic, WORKER_JOB_EVENTS_SUBSCRIPTION);
-            await ensureSubscription(topic, PIPELINE_JOB_EVENTS_SUBSCRIPTION);
+            await ensureSubscription(topic, WORKER_JOB_EVENTS_SUBSCRIPTION, 'attributes.type = "JOB_DISPATCHED"');
 
             const subscription = pubsub.subscription(WORKER_JOB_EVENTS_SUBSCRIPTION);
             console.log(`[Worker ${workerId}] Listening on ${WORKER_JOB_EVENTS_SUBSCRIPTION}`);
@@ -108,10 +116,10 @@ async function main() {
                         await logContextStore.run({ ...logContext, jobId: event.jobId, shouldPublishLog: false }, async () => {
 
                             console.log(`[Worker ${workerId}] Received JOB_DISPATCHED for ${event.jobId}`);
-                            workerService.processJob(event.jobId);
+                            await workerService.processJob(event.jobId);
                         });
                     }
-                    message.ack();
+                    await message.ackWithResponse(); // Using ackWithResponse for exactly-once
                 } catch (error) {
                     console.error(`[Worker ${workerId}] Error processing message:`, error);
                 }

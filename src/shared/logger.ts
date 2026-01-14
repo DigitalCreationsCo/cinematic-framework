@@ -8,6 +8,7 @@ export interface LogContext {
     jobId?: string;
     projectId?: string;
     workerId: string;
+    serverId?: string;
     correlationId: string;
     shouldPublishLog: boolean;
     [ key: string ]: any;

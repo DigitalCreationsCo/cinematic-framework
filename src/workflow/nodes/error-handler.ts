@@ -4,7 +4,7 @@ import { interceptNodeInterruptAndThrow } from "@shared/utils/errors";
 
 export const errorHandler = async (state: WorkflowState) => {
     const errorContext = state[ 'errors' ].at(-1);
-    if (state.__interrupt__?.length && !state.__interrupt_resolved__) {
+    if (state.__interrupt__?.length && state.__interrupt_resolved__ === true) {
         console.log(`[Error Handler Node]: Interrupt found. Retrying node: ${errorContext?.node}`);
         console.debug(`Error context: `, JSON.stringify({ errorContext }));
         return new Command({
@@ -27,6 +27,5 @@ export const errorHandler = async (state: WorkflowState) => {
     //     });
     // }
     
-    console.log(`[Error Handler Node]: Retrying node: ${errorContext?.node}`);
     interceptNodeInterruptAndThrow(errorContext, errorContext?.node || "Error Handler Node", state.projectId);
 };

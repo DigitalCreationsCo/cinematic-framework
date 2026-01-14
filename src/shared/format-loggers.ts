@@ -49,6 +49,7 @@ export function formatLoggers(
                     message, // The clean, formatted string
                     job_id: context.jobId,
                     worker_id: context.workerId,
+                    server_id: context.serverId,
                     hostname: os.hostname(),
                     process_id: process.pid,
                     // If you really want raw args dump, put it in a specific field

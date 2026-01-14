@@ -15,6 +15,10 @@ import { GCPStorageManager } from "../workflow/storage-manager";
 import { ProjectRepository } from "src/pipeline/project-repository";
 import { AssetVersionManager } from "src/workflow/asset-version-manager";
 
+
+
+export const serverId = `server-${uuidv7()}`;
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express,
@@ -38,7 +42,7 @@ export async function registerRoutes(
   try {
     pubsub = new PubSub({
       projectId: process.env.GCP_PROJECT_ID,
-      apiEndpoint: process.env.PUBSUB_EMULATOR_HOST,
+      ...(process.env.PUBSUB_EMULATOR_HOST ? { apiEndpoint: process.env.PUBSUB_EMULATOR_HOST } : {}),
     });
 
     pipelineCommandsTopicPublisher = pubsub.topic(PIPELINE_COMMANDS_TOPIC_NAME);
@@ -54,19 +58,31 @@ export async function registerRoutes(
   async function ensureSharedSubscription() {
     if (!sharedEventsSubscription) {
       try {
-        [ sharedEventsSubscription ] = await pubsub
-          .topic(PIPELINE_EVENTS_TOPIC_NAME)
-          .subscription(SERVER_PIPELINE_EVENTS_SUBSCRIPTION)
-          .get({ autoCreate: true });
-        console.log(`✓ Using shared subscription: ${SERVER_PIPELINE_EVENTS_SUBSCRIPTION}`);
-        sharedEventsSubscription.on("message", (message) => {
+        const [ topic ] = await pubsub.topic(PIPELINE_EVENTS_TOPIC_NAME).get({ autoCreate: true });
+        const subName = `${SERVER_PIPELINE_EVENTS_SUBSCRIPTION}-${serverId}`;
+        const subscription = topic.subscription(subName);
+
+        try {
+          await subscription.create({
+            enableExactlyOnceDelivery: true,
+            ackDeadlineSeconds: 60,
+            expirationPolicy: { ttl: { seconds: 12 * 60 * 60 } } // 12h expiration
+          });
+        } catch (e: any) {
+          if (e.code !== 6) throw e; // Ignore "already exists" (6)
+        }
+
+        sharedEventsSubscription = subscription;
+        console.log(`✓ Using instance-unique subscription: ${subName}`);
+
+        sharedEventsSubscription.on("message", async (message) => {
           try {
             const event = JSON.parse(message.data.toString()) as PipelineEvent;
             const projectId = event.projectId;
             const clients = clientConnections.get(projectId);
             console.info(`[Server] New pipeline event: ${event.type}`);
             console.debug(`[Server] Event: ${event.type} `, JSON.stringify(event));
-            
+
             switch (event.type) {
               case "LLM_INTERVENTION_NEEDED":
                 console.log(`[Server] Forwarding LLM_INTERVENTION_NEEDED for projectId: ${projectId}`, event.payload);
@@ -96,7 +112,7 @@ export async function registerRoutes(
               default:
                 console.log(`Unknown pipeline event type: ${JSON.stringify(event)}`);
             }
-            message.ack();
+            await message.ackWithResponse();
 
           } catch (error) {
             console.error(`Failed to process message:`, error);
@@ -126,7 +142,10 @@ export async function registerRoutes(
       commandId: command.commandId || uuidv7(),
     };
     const dataBuffer = Buffer.from(JSON.stringify(fullCommand));
-    await pipelineCommandsTopicPublisher.publishMessage({ data: dataBuffer });
+    await pipelineCommandsTopicPublisher.publishMessage({
+      data: dataBuffer,
+      attributes: { type: fullCommand.type }
+    });
     return fullCommand.commandId;
   }
 

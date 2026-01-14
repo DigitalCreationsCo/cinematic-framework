@@ -14,7 +14,7 @@ import { sql } from "drizzle-orm";
 
 // --- ENUMS ---
 export const assetStatusEnum = pgEnum("asset_status", [ "pending", "generating", "evaluating", "complete", "error" ]);
-export const jobStateEnum = pgEnum("job_state", [ "CREATED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED" ]);
+export const jobStateEnum = pgEnum("job_state", [ "CREATED", "RUNNING", "COMPLETED", "FAILED", "FATAL", "CANCELLED" ]);
 
 export const users = pgTable("users", {
   id: uuid("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
@@ -139,15 +139,20 @@ export const jobs = pgTable("jobs", {
   payload: jsonb("payload"),
   result: jsonb("result"),
   error: text("error"),
-  attempt: integer("attempt").default(0),
-  maxRetries: integer("max_retries").default(0),
+  attempt: integer("attempt").default(1).notNull(),
+  maxRetries: integer("max_retries").default(3).notNull(),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
+
   // Optimization: Fast counting of running jobs per project
-  // This speeds up the 'claimJob' concurrency check significantly
+  // 'claimJob' concurrency check 
   projectStateIdx: index("idx_project_running_jobs").on(table.projectId).where(sql`state = 'RUNNING'`),
+
   // Composite index for general lookups
   projectCreatedIdx: index("idx_project_created").on(table.projectId, table.state),
+
+  // Fast recovery of stale jobs
+  stateIdx: index("idx_jobs_state_updated").on(table.state, table.updatedAt),
 }));

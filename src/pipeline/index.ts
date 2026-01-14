@@ -1,5 +1,5 @@
 // src/pipeline/index.ts
-import { PubSub } from "@google-cloud/pubsub";
+import { PubSub, Topic } from "@google-cloud/pubsub";
 import { PipelineCommand, PipelineEvent } from "../shared/types/pipeline.types";
 import {
     JOB_EVENTS_TOPIC_NAME,
@@ -29,6 +29,7 @@ import { PoolManager } from "./services/pool-manager";
 import { JobControlPlane } from "./services/job-control-plane";
 import { ProjectRepository } from "./project-repository";
 import { handleJobCompletion } from "./handlers/handleJobCompletion";
+import { JobLifecycleMonitor } from "./services/job-lifecycle-monitor";
 
 
 
@@ -59,7 +60,7 @@ const PIPELINE_CANCELLATIONS_SUBSCRIPTION_NAME = `worker-${workerId}-cancellatio
 
 const pubsub = new PubSub({
     projectId: gcpProjectId,
-    apiEndpoint: process.env.PUBSUB_EMULATOR_HOST,
+    ...(process.env.PUBSUB_EMULATOR_HOST ? { apiEndpoint: process.env.PUBSUB_EMULATOR_HOST } : {}),
 });
 
 const jobEventsTopicPublisher = pubsub.topic(JOB_EVENTS_TOPIC_NAME);
@@ -68,11 +69,17 @@ const videoEventsTopicPublisher = pubsub.topic(PIPELINE_EVENTS_TOPIC_NAME);
 export async function publishJobEvent(event: JobEvent) {
     console.log(`[Pipeline] Publishing job event ${event.type} to ${JOB_EVENTS_TOPIC_NAME}`);
     const dataBuffer = Buffer.from(JSON.stringify(event));
-    await jobEventsTopicPublisher.publishMessage({ data: dataBuffer });
+    await jobEventsTopicPublisher.publishMessage({
+        data: dataBuffer,
+        attributes: { type: event.type }
+    });
 }
 export async function publishPipelineEvent(event: PipelineEvent) {
     const dataBuffer = Buffer.from(JSON.stringify(event));
-    await videoEventsTopicPublisher.publishMessage({ data: dataBuffer });
+    await videoEventsTopicPublisher.publishMessage({
+        data: dataBuffer,
+        attributes: { type: event.type }
+    });
 }
 
 const logContext: LogContext = {
@@ -92,6 +99,9 @@ async function main() {
 
         checkpointerManager.getCheckpointer();
         const jobControlPlane = new JobControlPlane(poolManager, publishJobEvent);
+        const jobLifecycleMonitor = JobLifecycleMonitor.getInstance(jobControlPlane);
+        jobLifecycleMonitor.start();
+
         const projectRepository = new ProjectRepository();
         const workflowOperator = new WorkflowOperator(checkpointerManager, jobControlPlane, publishPipelineEvent, projectRepository);
 
@@ -99,20 +109,24 @@ async function main() {
         console.log(`[Pipeline ${workerId}] Ensuring topic ${JOB_EVENTS_TOPIC_NAME} exists...`);
         const [ jobEventsTopic ] = await pubsub.topic(JOB_EVENTS_TOPIC_NAME).get({ autoCreate: true });
 
-        const ensureSubscription = async (topic: any, subscriptionName: string) => {
+        const ensureSubscription = async (topic: Topic, subscriptionName: string, filter?: string) => {
             console.log(`[Pipeline ${workerId}] Ensuring subscription ${subscriptionName} exists on ${topic.name}...`);
             const isDev = process.env.NODE_ENV !== 'production';
             try {
                 await topic.createSubscription(subscriptionName, {
-                    ackDeadlineSeconds: isDev ? 600 : 10
+                    enableExactlyOnceDelivery: true,
+                    ackDeadlineSeconds: 60,
+                    expirationPolicy: { ttl: { seconds: 24 * 60 * 60 } }, // 24h expiration
+                    filter
                 });
             } catch (e: any) {
                 if (e.code !== 6) throw e;
             }
         };
 
-        await ensureSubscription(jobEventsTopic, PIPELINE_JOB_EVENTS_SUBSCRIPTION);
-        await ensureSubscription(jobEventsTopic, WORKER_JOB_EVENTS_SUBSCRIPTION);
+        await ensureSubscription(jobEventsTopic, PIPELINE_JOB_EVENTS_SUBSCRIPTION, 'attributes.type = "JOB_COMPLETED" OR attributes.type = "JOB_FAILED"');
+        // Note: WORKER_JOB_EVENTS_SUBSCRIPTION is managed by the worker service, but ensured here for robustness
+        await ensureSubscription(jobEventsTopic, WORKER_JOB_EVENTS_SUBSCRIPTION, 'attributes.type = "JOB_DISPATCHED"');
 
         // subscribe to worker job events
         const workerEventsSubscription = pubsub.subscription(PIPELINE_JOB_EVENTS_SUBSCRIPTION);
@@ -129,7 +143,9 @@ async function main() {
         const isDev = process.env.NODE_ENV !== 'production';
         try {
             await videoCancellationsTopic.createSubscription(PIPELINE_CANCELLATIONS_SUBSCRIPTION_NAME, {
-                ackDeadlineSeconds: isDev ? 600 : 10
+                enableExactlyOnceDelivery: true,
+                ackDeadlineSeconds: 30,
+                expirationPolicy: { ttl: { seconds: 12 * 60 * 60 } }, // 12h expiration for cancellations
             });
         } catch (e: any) {
             if (e.code !== 6) throw e;
@@ -148,13 +164,13 @@ async function main() {
             event = JSON.parse(message.data.toString());
         } catch (error) {
             console.error("[Job Listener]: Error parsing message:", error);
-            message.ack();
+            await message.ackWithResponse();
             return;
         }
 
         if (event && 'type' in event && event.type.startsWith('JOB_')) {
-
             await logContextStore.run({ ...logContext, jobId: event.jobId, shouldPublishLog: true }, async () => {
+
                 const { jobId } = event;
                 if (event.type === 'JOB_COMPLETED') {
                     await handleJobCompletion(jobId, workflowOperator, jobControlPlane);
@@ -168,15 +184,18 @@ async function main() {
                             return;
                         }
 
-                        const projectId = job.projectId;
-                        await publishPipelineEvent({
-                            type: "WORKFLOW_FAILED",
-                            projectId: projectId,
-                            payload: { error: job.error || `Job ${jobId} (${job.type}) failed` },
-                            timestamp: new Date().toISOString(),
+                        const { maxRetries } = job;
+                        const nextAttempt = job.attempt + 1;
+                        const isPermanentlyFailed = nextAttempt > maxRetries;
+
+                        await jobControlPlane.updateJobSafe(jobId, job.attempt, {
+                            state: isPermanentlyFailed ? "FATAL" : "FAILED",
+                            error: job.error,
+                            attempt: nextAttempt,
+                            updatedAt: new Date()
                         });
-                        console.warn(`[Pipeline] Job ${jobId} (${job.type}) failed.`);
-                        return;
+
+                        console.warn(`[Job ${jobId}] ${isPermanentlyFailed ? 'Max retries reached' : 'Marked for retry'}`); return;
                     } catch (err) {
                         console.error("[Pipeline] Error handling job failure:", err);
                     }
@@ -184,7 +203,7 @@ async function main() {
 
             });
         }
-        message.ack();
+        await message.ackWithResponse();
     });
 
 
@@ -200,12 +219,15 @@ async function main() {
             } catch (err) {
                 console.error("Error processing cancellation message:", err);
             }
-        message.ack();
+            await message.ackWithResponse();
     });
 
     const publishCancellation = async (projectId: string) => {
         const dataBuffer = Buffer.from(JSON.stringify({ projectId }));
-        await videoCancellationsTopic.publishMessage({ data: dataBuffer });
+        await videoCancellationsTopic.publishMessage({
+            data: dataBuffer,
+            attributes: { type: "CANCEL" }
+        });
     };
 
     pipelineCommandsSubscription.on("message", async (message) => {
@@ -215,12 +237,12 @@ async function main() {
             command = JSON.parse(message.data.toString()) as PipelineCommand;
         } catch (error) {
             console.error("[Pipeline Command]: Error parsing command:", error);
-            message.ack();
+            await message.ackWithResponse();
             return;
         }
 
 
-        message.ack();
+        await message.ackWithResponse();
         try {
             await logContextStore.run({
                 ...logContext,
@@ -269,6 +291,8 @@ async function main() {
 
     process.on("SIGINT", async () => {
         console.log("Shutting down worker...");
+        jobLifecycleMonitor.stop();
+
         workerEventsSubscription.close();
         cancellationSubscription.close();
         pipelineCommandsSubscription.close();
