@@ -19,7 +19,7 @@ export const logger = pino({
     level: process.env.LOG_LEVEL || 'info',
     // Mix in global worker context to every log
     mixin() {
-        return { worker_id: `${os.hostname()}-${process.pid}` };
+        return { worker_id: `${os.hostname()}-${process.pid}`.toLowerCase() };
     },
     formatters: {
         level: (label) => ({ level: label.toUpperCase() }),

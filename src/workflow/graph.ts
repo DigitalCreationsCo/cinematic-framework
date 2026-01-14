@@ -199,7 +199,7 @@ export class CinematicVideoWorkflow {
       });
       console.log(`[${nodeName}] Dispatched job ${jobId}`);
 
-      throw new NodeInterrupt(interruptValue);
+      interrupt(interruptValue);
     }
 
     if (job) {
@@ -217,7 +217,7 @@ export class CinematicVideoWorkflow {
       }
     }
 
-    throw new NodeInterrupt(interruptValue);
+    interrupt(interruptValue);
   }
 
   private async ensureBatchJobs<T extends JobType>(
@@ -267,7 +267,7 @@ export class CinematicVideoWorkflow {
         lastAttemptTimestamp: new Date().toISOString(),
       };
 
-      throw new NodeInterrupt(interruptValue);
+      interrupt(interruptValue);
     }
 
     // 3. Throttling & Creation
@@ -307,7 +307,7 @@ export class CinematicVideoWorkflow {
         attempt: jobs[ 0 ].attempt,
         lastAttemptTimestamp: new Date().toISOString(),
       };
-      throw new NodeInterrupt(interruptValue);
+      interrupt(interruptValue);
     }
 
     return results as any;
@@ -474,15 +474,18 @@ export class CinematicVideoWorkflow {
       const nodeName = "generate_storyboard_exclusively_from_prompt";
       console.log(`[${nodeName}]: Started`);
       const project = state.initialProject;
+
+      if (!project?.metadata.enhancedPrompt) throw new Error("No enhanced prompt available");
+
       const currentAttempt = (state.nodeAttempts?.[ nodeName ] || 0) + 1;
       try {
-        const result = await this.ensureJob(
+        const result =  await this.ensureJob(
           nodeName,
           "GENERATE_STORYBOARD",
           currentAttempt,
           {
-            title: project?.metadata.title!,
-            enhancedPrompt: project?.metadata.enhancedPrompt!
+            title: project?.metadata.title,
+            enhancedPrompt: project?.metadata.enhancedPrompt
           },
         );
         const { storyboard } = result!;
@@ -527,7 +530,7 @@ export class CinematicVideoWorkflow {
       const nodeName = "create_scenes_from_audio";
       console.log(`[${nodeName}]: Started`);
       const project = state.initialProject;
-      if (!project?.metadata.enhancedPrompt) throw new Error("No creative prompt available");
+      if (!project?.metadata.enhancedPrompt) throw new Error("No enhanced prompt available");
       if (!project?.metadata.audioPublicUri) throw new Error("No audio public url available");
 
       const currentAttempt = (state.nodeAttempts?.[ nodeName ] || 0) + 1;
