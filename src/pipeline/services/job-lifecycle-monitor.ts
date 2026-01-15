@@ -3,7 +3,10 @@ import { jobs } from "../../shared/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { JobControlPlane } from "./job-control-plane";
 
+
+
 export class JobLifecycleMonitor {
+
     private static instance: JobLifecycleMonitor;
     private isRunning: boolean = false;
     private interval: NodeJS.Timeout | null = null;
@@ -18,12 +21,15 @@ export class JobLifecycleMonitor {
     }
 
     public start(frequencyMs: number = 60000) {
+        console.log("[JobLifecycleMonitor] Starting...");
         if (this.isRunning) return;
         this.isRunning = true;
         this.interval = setInterval(() => this.maintenanceCycle(), frequencyMs);
     }
 
     private async maintenanceCycle() {
+
+        console.log("[JobLifecycleMonitor] maintenanceCycle");
         try {
             await Promise.all([
                 this.processStaleJobs(),
@@ -35,9 +41,11 @@ export class JobLifecycleMonitor {
     }
 
     /**
-     * RECOVERY: Finds jobs stuck in RUNNING.
+     * RECOVERY: Finds jobs stuck in RUNNING state.
      */
     private async processStaleJobs() {
+
+        console.log("[JobLifecycleMonitor] processStaleJobs");
         const staleJobs = await db.select({ id: jobs.id, attempt: jobs.attempt })
             .from(jobs)
             .where(and(
@@ -55,6 +63,8 @@ export class JobLifecycleMonitor {
      * RETRY: Finds jobs in FAILED state that have passed their backoff period.
      */
     private async processRetryableJobs() {
+
+        console.log("[JobLifecycleMonitor] processRetryableJobs");
         const retryableJobs = await db.select({ id: jobs.id, attempt: jobs.attempt })
             .from(jobs)
             .where(and(
@@ -69,6 +79,7 @@ export class JobLifecycleMonitor {
     }
 
     public stop() {
+        console.log("[JobLifecycleMonitor] Stopping...");
         if (this.interval) clearInterval(this.interval!);
         this.isRunning = false;
     }

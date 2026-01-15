@@ -89,7 +89,7 @@ async function main() {
                     await topic.createSubscription(subscriptionName, {
                         enableExactlyOnceDelivery: true,
                         ackDeadlineSeconds: 60, // Increased to 60s for stability
-                        expirationPolicy: { ttl: { seconds: 24 * 60 * 60 } }, // 24h expiration
+                        expirationPolicy: { ttl: { seconds: 24 * 60 * 60 } }, 
                         filter
                     });
                 } catch (e: any) {

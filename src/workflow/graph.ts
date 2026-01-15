@@ -341,8 +341,9 @@ export class CinematicVideoWorkflow {
     });
 
     workflow.addConditionalEdges(START, async (state: WorkflowState) => {
-      const scenes = await this.projectRepository.getProjectScenes(state.projectId);
       const project = await this.projectRepository.getProject(state.projectId);
+      const scenes = await this.projectRepository.getProjectScenes(state.projectId);
+
       if (scenes.some(s => {
         const sceneVideoAssets = s.assets[ 'scene_video' ];
         const hasVideo = !!sceneVideoAssets?.versions[ sceneVideoAssets.best ]?.data;
@@ -351,16 +352,25 @@ export class CinematicVideoWorkflow {
         console.log(" [Cinematic-Canvas]: Resuming from 'process_scene'");
         return "process_scene";
       }
-      if (project.generationRules.length > 0 && project.storyboard?.scenes?.length > 0) {
-        console.log("[Cinematic-Canvas]:  Proceeding to 'generate_character_assets'");
-        return "generate_character_assets";
-      }
-      if (project.metadata.enhancedPrompt && project.storyboard?.scenes?.length > 0) {
-        console.log("[Cinematic-Canvas]:  Proceeding to 'semantic_analysis'");
+      if (project.storyboard?.scenes?.length > 0) {
+        if (project.generationRules.length > 0) {
+          console.log("[Cinematic-Canvas]: Proceeding to 'generate_character_assets'");
+          return "generate_character_assets";
+        }
+        console.log("[Cinematic-Canvas]: Proceeding to 'semantic_analysis'");
         return "semantic_analysis";
       }
       console.log("[Cinematic-Canvas]: Proceeding to 'expand_creative_prompt'");
       return "expand_creative_prompt";
+    });
+
+    workflow.addConditionalEdges("expand_creative_prompt" as any, (state: WorkflowState) => {
+      if (state.hasAudio) {
+        console.log("[expand_creative_prompt edge]: Proceeding to 'create_scenes_from_audio'");
+        return "create_scenes_from_audio";
+      }
+      console.log("[expand_creative_prompt edge]: Proceeding to 'generate_storyboard_exclusively_from_prompt'");
+      return "generate_storyboard_exclusively_from_prompt";
     });
     // Branching paths (non-audio vs audio-based)
     workflow.addEdge("generate_storyboard_exclusively_from_prompt" as any, "enrich_storyboard_and_scenes" as any);
@@ -429,31 +439,18 @@ export class CinematicVideoWorkflow {
         await this.publishStateUpdate(updated, nodeName);
         console.log(`[${nodeName}]: Completed\n`);
 
-        if (state.hasAudio) {
-          console.log("[expand_creative_prompt edge]: state.hasAudio: ", state.hasAudio);
-          console.log("[expand_creative_prompt edge]: Proceeding to 'create_scenes_from_audio'");
-          return new Command({
-            goto: "create_scenes_from_audio",
-            update: {
-              initialProject: updated,
-              nodeAttempts: { [ nodeName ]: currentAttempt },
-              __interrupt__: undefined,
-              __interrupt_resolved__: false,
-            }
-          });
-        } else {
-          console.log("[expand_creative_prompt edge]: Proceeding to 'generate_storyboard_exclusively_from_prompt'");
-          return new Command({
-            goto: "generate_storyboard_exclusively_from_prompt",
-            update: {
-              initialProject: updated,
-              nodeAttempts: { [ nodeName ]: currentAttempt },
-              __interrupt__: undefined,
-              __interrupt_resolved__: false,
-            }
-          });
-        }
+        return {
+          ...state,
+          initialProject: updated,
+          nodeAttempts: { [ nodeName ]: currentAttempt },
+          __interrupt__: undefined,
+          __interrupt_resolved__: false,
+        };
       } catch (error: any) {
+        if (error instanceof NodeInterrupt) {
+          throw error;
+        }
+
         console.error(`[${nodeName}] error`, { error });
         return new Command({
           goto: "error_handler",
@@ -510,6 +507,10 @@ export class CinematicVideoWorkflow {
           __interrupt_resolved__: false,
         };
       } catch (error: any) {
+        if (error instanceof NodeInterrupt) {
+          throw error;
+        }
+
         console.error(`[${nodeName}] error`, { error });
         return new Command({
           goto: "error_handler",
@@ -580,6 +581,10 @@ export class CinematicVideoWorkflow {
           __interrupt_resolved__: false,
         };
       } catch (error: any) {
+        if (error instanceof NodeInterrupt) {
+          throw error;
+        }
+
         console.error(`[${nodeName}] error`, { error });
         return new Command({
           goto: "error_handler",
@@ -593,7 +598,7 @@ export class CinematicVideoWorkflow {
       ends: [ "enrich_storyboard_and_scenes", "error_handler" ]
     });
 
-    workflow.addNode("enrich_storyboard_and_scenes", async (state: WorkflowState) => {
+    workflow.addNode("enrich_storyboard_and_scenes", async (state: WorkflowState) => {  
       const nodeName = "enrich_storyboard_and_scenes";
       console.log(`[${nodeName}]: Started`);
       const project = state.initialProject;
@@ -649,6 +654,10 @@ export class CinematicVideoWorkflow {
           __interrupt_resolved__: false,
         };
       } catch (error: any) {
+        if (error instanceof NodeInterrupt) {
+          throw error;
+        }
+
         console.error(`[${nodeName}] error`, { error });
         return new Command({
           goto: "error_handler",
@@ -698,6 +707,10 @@ export class CinematicVideoWorkflow {
           __interrupt_resolved__: false,
         };
       } catch (error: any) {
+        if (error instanceof NodeInterrupt) {
+          throw error;
+        }
+
         console.error(`[${nodeName}] error`, { error });
         return new Command({
           goto: "error_handler",
@@ -720,87 +733,37 @@ export class CinematicVideoWorkflow {
       const currentAttempt = (state.nodeAttempts?.[ nodeName ] || 0) + 1;
       console.log(` Generating Character References...Attempt ${currentAttempt}`);
       try {
-        const executionMode = process.env.EXECUTION_MODE || 'SEQUENTIAL';
-        console.log(`[${nodeName}]: Executing in ${executionMode.toLowerCase()} mode.`);
-
         const characters = project.storyboard.characters;
+        const result = await this.ensureJob(
+          nodeName,
+          "GENERATE_CHARACTER_ASSETS",
+          currentAttempt,
+          {
+            characters: characters,
+            generationRules: project.generationRules,
+          },
+        );
+        const { characters: updatedChars } = result!;
 
-        let updatedProject: Project;
-        if (executionMode === 'SEQUENTIAL') {
-          const result = await this.ensureJob(
-            nodeName,
-            "GENERATE_CHARACTER_ASSETS",
-            currentAttempt,
-            {
-              characters: characters,
-              generationRules: project.generationRules,
-            },
+        const updated = await this.projectRepository.updateCharacters(updatedChars);
+        const characterIds: string[] = [];
+        const characterImageUris: string[] = [];
+        updated.forEach((char) => {
+          characterIds.push(char.id);
+          const assets = getAllBestFromAssets(char.assets);
+          characterImageUris.push(assets[ 'character_image' ]?.data || "");
+        });
+        if (characterIds.length > 0) {
+          await this.assetManager.createVersionedAssets(
+            { projectId: this.projectId, characterIds },
+            'character_image',
+            'image',
+            characterImageUris,
+            { model: imageModelName }
           );
-          const { characters: updatedChars } = result!;
-
-          const updated = await this.projectRepository.updateCharacters(updatedChars);
-          const characterIds: string[] = [];
-          const characterImageUris: string[] = [];
-          updated.forEach((char) => {
-            characterIds.push(char.id);
-            const assets = getAllBestFromAssets(char.assets);
-            characterImageUris.push(assets[ 'character_image' ]?.data || "");
-          });
-          if (characterIds.length > 0) {
-            await this.assetManager.createVersionedAssets(
-              { projectId: this.projectId, characterIds },
-              'character_image',
-              'image',
-              characterImageUris,
-              { model: imageModelName }
-            );
-          }
-          updatedProject = await this.projectRepository.getProjectFullState(state.projectId);
-          await this.publishStateUpdate(updatedProject, nodeName);
-
-        } else {
-          // Parallel logic (fan-out)
-          const characterIds = characters.map(c => c.id);
-          const nextVersions = await this.assetManager.getNextVersionNumber(
-            { projectId: this.projectId, characterIds }, 'character_image'
-          );
-          const jobs = characters.map((char, index) => ({
-            id: this.jobControlPlane.jobId(this.projectId, nodeName, currentAttempt, `char-${char.id}`),
-            type: "GENERATE_CHARACTER_ASSETS" as const,
-            payload: {
-              characters: [ char ],
-              generationRules: project.generationRules
-            },
-            attempt: currentAttempt
-          }));
-
-          const results = await this.ensureBatchJobs(nodeName, jobs);
-          const allUpdatedChars = results.flatMap(r => r.characters);
-          const updated = await this.projectRepository.updateCharacters(allUpdatedChars);
-
-          const validIds: string[] = [];
-          const validUris: string[] = [];
-          const charMap = new Map(updated.map(c => [ c.id, c ]));
-          characters.forEach(c => {
-            const updatedChar = charMap.get(c.id);
-            const assets = getAllBestFromAssets(updatedChar?.assets);
-            if (updatedChar && assets[ 'character_image' ]?.data) {
-              validIds.push(updatedChar.id);
-              validUris.push(assets[ 'character_image' ].data);
-            }
-          });
-          if (validIds.length > 0) {
-            await this.assetManager.createVersionedAssets(
-              { projectId: this.projectId, characterIds: validIds },
-              'character_image',
-              'image',
-              validUris,
-              { model: imageModelName }
-            );
-          }
-          updatedProject = await this.projectRepository.getProjectFullState(state.projectId);
-          await this.publishStateUpdate(updatedProject, nodeName);
         }
+        const updatedProject = await this.projectRepository.getProjectFullState(state.projectId);
+        await this.publishStateUpdate(updatedProject, nodeName);
 
         console.log(`[${nodeName}]: Completed\n`);
         return {
@@ -811,6 +774,10 @@ export class CinematicVideoWorkflow {
           __interrupt_resolved__: false,
         };
       } catch (error: any) {
+        if (error instanceof NodeInterrupt) {
+          throw error;
+        }
+
         console.error(`[${nodeName}] error`, { error });
         return new Command({
           goto: "error_handler",
@@ -834,83 +801,39 @@ export class CinematicVideoWorkflow {
       console.log(` Generating Location References...Attempt ${currentAttempt}`);
       let updatedProject: Project;
       try {
-        const executionMode = process.env.EXECUTION_MODE || 'SEQUENTIAL';
-        console.log(`[${nodeName}]: Executing in ${executionMode.toLowerCase()} mode.`);
         const locations = project.storyboard.locations;
         const locationIds = locations.map(loc => loc.id);
 
-        if (executionMode === 'SEQUENTIAL') {
-          const result = await this.ensureJob(
-            nodeName,
-            "GENERATE_LOCATION_ASSETS",
-            currentAttempt,
-            {
-              locations: locations,
-              generationRules: project.generationRules,
-            },
-          );
-          const { locations: updatedLocs } = result!;
+        const result = await this.ensureJob(
+          nodeName,
+          "GENERATE_LOCATION_ASSETS",
+          currentAttempt,
+          {
+            locations: locations,
+            generationRules: project.generationRules,
+          },
+        );
+        const { locations: updatedLocs } = result!;
 
-          const updated = await this.projectRepository.updateLocations(updatedLocs);
-          const locationImageUris: string[] = [];
-          updated.forEach((loc) => {
-            const assets = getAllBestFromAssets(loc.assets);
-            if (assets[ 'location_image' ]?.data) {
-              locationImageUris.push(assets[ 'location_image' ].data);
-            }
-          });
-          if (locationIds.length > 0 && locationImageUris.length > 0) {
-            await this.assetManager.createVersionedAssets(
-              { projectId: this.projectId, locationIds },
-              'location_image',
-              'image',
-              locationImageUris,
-              { model: imageModelName }
-            );
+        const updated = await this.projectRepository.updateLocations(updatedLocs);
+        const locationImageUris: string[] = [];
+        updated.forEach((loc) => {
+          const assets = getAllBestFromAssets(loc.assets);
+          if (assets[ 'location_image' ]?.data) {
+            locationImageUris.push(assets[ 'location_image' ].data);
           }
-          updatedProject = await this.projectRepository.getProjectFullState(state.projectId);
-          await this.publishStateUpdate(updatedProject, nodeName);
-        } else {
-
-          const nextVersions = await this.assetManager.getNextVersionNumber(
-            { projectId: this.projectId, locationIds }, 'location_image'
+        });
+        if (locationIds.length > 0 && locationImageUris.length > 0) {
+          await this.assetManager.createVersionedAssets(
+            { projectId: this.projectId, locationIds },
+            'location_image',
+            'image',
+            locationImageUris,
+            { model: imageModelName }
           );
-          const jobs = locations.map((loc, index) => ({
-            id: this.jobControlPlane.jobId(this.projectId, nodeName, currentAttempt, `loc-${loc.id}`),
-            type: "GENERATE_LOCATION_ASSETS" as const,
-            payload: {
-              locations: [ loc ],
-              generationRules: project.generationRules
-            },
-            attempt: currentAttempt,
-          }));
-
-          const results = await this.ensureBatchJobs(nodeName, jobs);
-          const allUpdatedLocs = results.flatMap(r => r.locations);
-          const updated = await this.projectRepository.updateLocations(allUpdatedLocs);
-          const validIds: string[] = [];
-          const validUris: string[] = [];
-          const locMap = new Map(updated.map(l => [ l.id, l ]));
-          locations.forEach(l => {
-            const updatedLoc = locMap.get(l.id);
-            const assets = getAllBestFromAssets(updatedLoc?.assets);
-            if (updatedLoc && assets[ 'location_image' ]?.data) {
-              validIds.push(updatedLoc.id);
-              validUris.push(assets[ 'location_image' ].data);
-            }
-          });
-          if (validIds.length > 0) {
-            await this.assetManager.createVersionedAssets(
-              { projectId: this.projectId, locationIds: validIds },
-              'location_image',
-              'image',
-              validUris,
-              { model: imageModelName }
-            );
-          }
-          updatedProject = await this.projectRepository.getProjectFullState(state.projectId);
-          await this.publishStateUpdate(updatedProject, nodeName);
         }
+        const updatedProject = await this.projectRepository.getProjectFullState(state.projectId);
+        await this.publishStateUpdate(updatedProject, nodeName);
         console.log(`[${nodeName}]: Completed\n`);
         return {
           ...state,
@@ -920,6 +843,10 @@ export class CinematicVideoWorkflow {
           __interrupt_resolved__: false,
         };
       } catch (error: any) {
+        if (error instanceof NodeInterrupt) {
+          throw error;
+        }
+
         console.error(`[${nodeName}] error`, { error });
         return new Command({
           goto: "error_handler",
@@ -942,43 +869,21 @@ export class CinematicVideoWorkflow {
       const currentAttempt = (state.nodeAttempts?.[ nodeName ] || 0) + 1;
       console.log(` Generating Scene Reference Images...Attempt ${currentAttempt}`);
       try {
-        const executionMode = process.env.EXECUTION_MODE || 'SEQUENTIAL';
-        console.log(`[${nodeName}]: Executing in ${executionMode.toLowerCase()} mode.`);
         const scenes = await this.projectRepository.getProjectScenes(state.projectId);
+        for (const scene of scenes) {
+          const result = await this.ensureJob(
+            nodeName,
+            "GENERATE_SCENE_FRAMES",
+            currentAttempt,
+            {
+              sceneId: scene.id,
+              sceneIndex: scene.sceneIndex
+            },
+          );
 
-        if (executionMode === 'SEQUENTIAL') {
-          for (const scene of scenes) {
-            const result = await this.ensureJob(
-              nodeName,
-              "GENERATE_SCENE_FRAMES",
-              currentAttempt,
-              {
-                sceneId: scene.id,
-                sceneIndex: scene.sceneIndex
-              },
-            );
-
-            if (result!.updatedScenes && result!.updatedScenes.length > 0) {
-              await this.projectRepository.updateScenes(result!.updatedScenes);
-            }
+          if (result!.updatedScenes && result!.updatedScenes.length > 0) {
+            await this.projectRepository.updateScenes(result!.updatedScenes);
           }
-        } else {
-
-          const jobs = await Promise.all(scenes.map(async (scene) => {
-            return {
-              id: this.jobControlPlane.jobId(this.projectId, nodeName, currentAttempt, `scene-${scene.id}`),
-              type: "GENERATE_SCENE_FRAMES" as const,
-              payload: {
-                sceneId: scene.id,
-                sceneIndex: scene.sceneIndex
-              },
-              attempt: currentAttempt
-            };
-          }));
-
-          const results = await this.ensureBatchJobs(nodeName, jobs);
-          const allUpdatedScenes = results.flatMap(r => r.updatedScenes);
-          await this.projectRepository.updateScenes(allUpdatedScenes);
         }
 
         let updatedProject = await this.projectRepository.getProjectFullState(state.projectId);
@@ -992,6 +897,10 @@ export class CinematicVideoWorkflow {
           __interrupt_resolved__: false,
         };
       } catch (error: any) {
+        if (error instanceof NodeInterrupt) {
+          throw error;
+        }
+
         console.error(`[${nodeName}] error`, { error });
         return new Command({
           goto: "error_handler",
@@ -1008,96 +917,54 @@ export class CinematicVideoWorkflow {
     workflow.addNode("process_scene", async (state: WorkflowState) => {
 
       const nodeName = "process_scene";
-      const executionMode = process.env.EXECUTION_MODE || 'SEQUENTIAL';
       const currentAttempt = (state.nodeAttempts?.[ nodeName ] || 0) + 1;
-      console.log(`[${nodeName}]: Processing Scene ${state.currentSceneIndex}. Executing in ${executionMode.toLowerCase()} mode. Attempt ${currentAttempt}`);
+      console.log(`[${nodeName}]: Processing Scene ${state.currentSceneIndex}. Attempt ${currentAttempt}`);
       let project = state.project;
       if (!project) throw new Error("No project state available");
       const { scenes } = project;
 
       let updatedProject: Project;
-      if (executionMode === 'SEQUENTIAL') {
-        const index = state.currentSceneIndex;
-        if (index >= scenes.length) return state;
+      const index = state.currentSceneIndex;
+      if (index >= scenes.length) return state;
 
-        const scene = scenes[ index ];
-        const nextScene = scenes[ index + 1 ];
-        const [ best ] = await this.assetManager.getBestVersion({ projectId: this.projectId, sceneId: scene.id }, 'scene_video');
-        const videoUrl = best ? scene.assets[ 'scene_video' ]?.versions[ best.version ].data : null;
-        const forceRegenerateIndex = project.forceRegenerateSceneIds.findIndex(id => id === scene.id);
-        const shouldForceRegenerate = forceRegenerateIndex !== -1;
-        if (!shouldForceRegenerate && videoUrl && await this.storageManager.fileExists(videoUrl)) {
-          console.log(`   ... Scene video already exists at ${videoUrl}, skipping.`);
-          await this.publishEvent({
-            type: "SCENE_SKIPPED",
-            projectId: this.projectId,
-            payload: {
-              sceneId: scene.id,
-              reason: "Video already exists",
-              videoUrl: videoUrl
-            },
-            timestamp: new Date().toISOString(),
-          });
+      const scene = scenes[ index ];
+      const nextScene = scenes[ index + 1 ];
+      const [ best ] = await this.assetManager.getBestVersion({ projectId: this.projectId, sceneId: scene.id }, 'scene_video');
+      const videoUrl = best ? scene.assets[ 'scene_video' ]?.versions[ best.version ].data : null;
+      const forceRegenerateIndex = project.forceRegenerateSceneIds.findIndex(id => id === scene.id);
+      const shouldForceRegenerate = forceRegenerateIndex !== -1;
+      if (!shouldForceRegenerate && videoUrl && await this.storageManager.fileExists(videoUrl)) {
+        console.log(`   ... Scene video already exists at ${videoUrl}, skipping.`);
+        await this.publishEvent({
+          type: "SCENE_SKIPPED",
+          projectId: this.projectId,
+          payload: {
+            sceneId: scene.id,
+            reason: "Video already exists",
+            videoUrl: videoUrl
+          },
+          timestamp: new Date().toISOString(),
+        });
 
-          let shouldRenderScenes = false;
-          const [ nextSceneBest ] = await this.assetManager.getBestVersion({ projectId: this.projectId, sceneId: nextScene.id }, 'scene_video');
-          const nextScenePath = nextSceneBest ? await this.storageManager.getObjectPath({ type: "scene_video", sceneId: nextScene.id, attempt: nextSceneBest.version }) : "";
-          const nextExists = await this.storageManager.fileExists(nextScenePath);
-          if (!nextExists) {
-            shouldRenderScenes = true;
-          } else {
-            console.log(` ... Next scene (${nextScene.id}) also exists, skipping redundant stitch.`);
-          }
-          if (!shouldRenderScenes) {
-            const renderedVideo = await this.audioProcessingAgent.mediaController.performIncrementalVideoRender(scenes, project.metadata.audioGcsUri, this.projectId, 1);
-            if (renderedVideo) { await this.assetManager.createVersionedAssets({ projectId: this.projectId }, 'render_video', 'video', [ renderedVideo ], { model: videoModelName }); }
-          }
-
-          project.forceRegenerateSceneIds = project.forceRegenerateSceneIds.slice(0, forceRegenerateIndex).concat(project.forceRegenerateSceneIds.slice(forceRegenerateIndex + 1));
-          updatedProject = await this.projectRepository.updateProject(this.projectId, project);
-          await this.publishStateUpdate(updatedProject, "process_scene");
-
-          console.log(`[${nodeName}]: Completed (Skipped)\n`);
-          return {
-            ...state,
-            project: updatedProject,
-            nodeAttempts: { [ nodeName ]: currentAttempt },
-            __interrupt__: undefined,
-            __interrupt_resolved__: false,
-          };
+        let shouldRenderScenes = false;
+        const [ nextSceneBest ] = await this.assetManager.getBestVersion({ projectId: this.projectId, sceneId: nextScene?.id }, 'scene_video');
+        const nextScenePath = nextSceneBest ? await this.storageManager.getObjectPath({ type: "scene_video", sceneId: nextScene.id, attempt: nextSceneBest.version }) : "";
+        const nextExists = await this.storageManager.fileExists(nextScenePath);
+        if (!nextExists) {
+          shouldRenderScenes = true;
+        } else {
+          console.log(` ... Next scene (${nextScene.id}) also exists, skipping redundant stitch.`);
+        }
+        if (!shouldRenderScenes) {
+          const renderedVideo = await this.audioProcessingAgent.mediaController.performIncrementalVideoRender(scenes, project.metadata.audioGcsUri, this.projectId, 1);
+          if (renderedVideo) { await this.assetManager.createVersionedAssets({ projectId: this.projectId }, 'render_video', 'video', [ renderedVideo ], { model: videoModelName }); }
         }
 
-        console.log(`[${nodeName}]: Processing scene ${scene.sceneIndex} (${index + 1}/${scenes.length}).`);
-        const [ next ] = await this.assetManager.getNextVersionNumber({ projectId: this.projectId, sceneId: scene.id }, 'scene_video');
-        const result = await this.ensureJob(
-          nodeName,
-          "GENERATE_SCENE_VIDEO",
-          currentAttempt,
-          {
-            sceneId: scene.id,
-            sceneIndex: scene.sceneIndex,
-            version: next,
-          },
-        );
-        const { scene: generatedScene, acceptedAttempt, evaluation } = result!;
-
-        await this.assetManager.createVersionedAssets(
-          { projectId: this.projectId, sceneId: scene.id },
-          'scene_video',
-          'video',
-          [ generatedScene.assets[ 'scene_video' ]?.versions[ acceptedAttempt ].data! ],
-          { model: videoModelName, evaluation },
-          true
-        );
-
-        await this.projectRepository.updateScenes([ generatedScene ]);
-        project = this.continuityAgent.updateNarrativeState(generatedScene, project);
-        if (evaluation) { project.generationRules = Array.from(new Set(...project.generationRules, ...extractGenerationRules([ evaluation ]))); }
         project.forceRegenerateSceneIds = project.forceRegenerateSceneIds.slice(0, forceRegenerateIndex).concat(project.forceRegenerateSceneIds.slice(forceRegenerateIndex + 1));
         updatedProject = await this.projectRepository.updateProject(this.projectId, project);
-        await this.publishStateUpdate(updatedProject, nodeName);
+        await this.publishStateUpdate(updatedProject, "process_scene");
 
-        console.log(`[${nodeName}]: Completed\n`);
+        console.log(`[${nodeName}]: Completed (Skipped)\n`);
         return {
           ...state,
           project: updatedProject,
@@ -1106,115 +973,47 @@ export class CinematicVideoWorkflow {
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
-      } else {
-
-        // Parallel logic (fan-out)
-        const jobs: {
-          id: string;
-          type: "GENERATE_SCENE_VIDEO";
-          payload: { sceneIndex: number; sceneId: string; version: number; };
-          attempt: number;
-        }[] = [];
-
-        await Promise.all(scenes.map(async (scene) => {
-          const forceRegenerateIndex = project?.forceRegenerateSceneIds.findIndex(id => id === scene.id);
-          const shouldForceRegenerate = forceRegenerateIndex !== -1;
-
-          let videoExists = false;
-          if (!shouldForceRegenerate) {
-            const [ best ] = await this.assetManager.getBestVersion({ projectId: this.projectId, sceneId: scene.id }, 'scene_video');
-            const videoUrl = best?.data;
-            if (videoUrl && await this.storageManager.fileExists(videoUrl)) {
-              videoExists = true;
-              console.log(`   ... Scene ${scene.id} video already exists, skipping.`);
-            }
-          }
-
-          if (shouldForceRegenerate || !videoExists) {
-            const [ nextVersion ] = await this.assetManager.getNextVersionNumber({ projectId: this.projectId, sceneId: scene.id }, "scene_video");
-            jobs.push({
-              id: this.jobControlPlane.jobId(this.projectId, nodeName, nextVersion, `scene-video-${scene.id}`),
-              type: "GENERATE_SCENE_VIDEO" as const,
-              payload: {
-                sceneIndex: scene.sceneIndex,
-                sceneId: scene.id,
-                version: nextVersion,
-              },
-              attempt: currentAttempt,
-            });
-          }
-        }));
-
-        try {
-          if (jobs.length > 0) {
-            const results = await this.ensureBatchJobs(
-              nodeName,
-              jobs,
-            );
-
-            const generatedSceneIds: string[] = [];
-            for (const res of results) {
-              const { scene: generatedScene, evaluation, acceptedAttempt } = res;
-              await this.assetManager.createVersionedAssets(
-                { projectId: this.projectId, sceneId: generatedScene.id },
-                'scene_video',
-                'video',
-                [ generatedScene.assets[ 'scene_video' ]?.versions[ acceptedAttempt ].data! ],
-                {
-                  model: videoModelName,
-                  evaluation
-                },
-                true
-              );
-              await this.projectRepository.updateScenes([ generatedScene ]);
-              generatedSceneIds.push(generatedScene.id);
-            }
-
-            // Update forceRegenerateSceneIds
-            if (generatedSceneIds.length > 0) {
-              const currentProject = await this.projectRepository.getProject(this.projectId);
-              const newForceList = currentProject.forceRegenerateSceneIds.filter(id => !generatedSceneIds.includes(id));
-
-              if (newForceList.length !== currentProject.forceRegenerateSceneIds.length) {
-                updatedProject = await this.projectRepository.updateProject(this.projectId, {
-                  forceRegenerateSceneIds: newForceList
-                });
-                console.log(`   ✓ Updated forceRegenerateSceneIds (removed ${generatedSceneIds.length} scenes)`);
-              }
-            }
-          } else {
-            console.log(`[${nodeName}]: All scenes skipped (already exist and not forced).`);
-          }
-
-          updatedProject = await this.projectRepository.getProjectFullState(state.projectId);
-          await this.publishStateUpdate(project, nodeName);
-          console.log(`[${nodeName}]: Completed\n`);
-          return {
-            ...state,
-            project: updatedProject,
-            nodeAttempts: { [ nodeName ]: currentAttempt },
-            __interrupt__: undefined,
-            __interrupt_resolved__: false,
-          };
-        } catch (error: any) {
-          console.error(`[${nodeName}] error`, { error });
-          const currentAttempt = jobs.reduce((max, job) => Math.max(max, job.attempt || 0), 0);
-          return new Command({
-            goto: "error_handler",
-            update: {
-              nodeAttempts: { [ nodeName ]: currentAttempt },
-              errors: [ { node: nodeName, message: error?.message, value: error?.value, shouldRetry: true, timestamp: new Date().toISOString() } ]
-            }
-          });
-          // interceptNodeInterruptAndThrow(error, nodeName, {
-          //   currentAttempt,
-          //   maxRetries: 3,
-          //   functionName: 'process_scene',
-          //   params: { sceneIds: jobs.map(j => j.payload.sceneId) },
-          //   lastAttemptTimestamp: new Date().toISOString()
-          // });
-        }
       }
+
+      console.log(`[${nodeName}]: Processing scene ${scene.sceneIndex} (${index + 1}/${scenes.length}).`);
+      const [ next ] = await this.assetManager.getNextVersionNumber({ projectId: this.projectId, sceneId: scene.id }, 'scene_video');
+      const result = await this.ensureJob(
+        nodeName,
+        "GENERATE_SCENE_VIDEO",
+        currentAttempt,
+        {
+          sceneId: scene.id,
+          sceneIndex: scene.sceneIndex,
+          version: next,
+        },
+      );
+      const { scene: generatedScene, acceptedAttempt, evaluation } = result!;
+
+      await this.assetManager.createVersionedAssets(
+        { projectId: this.projectId, sceneId: scene.id },
+        'scene_video',
+        'video',
+        [ generatedScene.assets[ 'scene_video' ]?.versions[ acceptedAttempt ].data! ],
+        { model: videoModelName, evaluation },
+        true
+      );
+
+      await this.projectRepository.updateScenes([ generatedScene ]);
+      project = this.continuityAgent.updateNarrativeState(generatedScene, project);
+      if (evaluation) { project.generationRules = Array.from(new Set([ ...project.generationRules, ...extractGenerationRules([ evaluation ]) ])); }
+      project.forceRegenerateSceneIds = project.forceRegenerateSceneIds.slice(0, forceRegenerateIndex).concat(project.forceRegenerateSceneIds.slice(forceRegenerateIndex + 1));
+      updatedProject = await this.projectRepository.updateProject(this.projectId, project);
+      await this.publishStateUpdate(updatedProject, nodeName);
+
+      console.log(`[${nodeName}]: Completed\n`);
+      return {
+        ...state,
+        project: updatedProject,
+        currentSceneIndex: index + 1,
+        nodeAttempts: { [ nodeName ]: currentAttempt },
+        __interrupt__: undefined,
+        __interrupt_resolved__: false,
+      };
     }, {
       ends: [ "process_scene", "render_video", "error_handler" ]
     });
@@ -1268,6 +1067,10 @@ export class CinematicVideoWorkflow {
           __interrupt_resolved__: false,
         };
       } catch (error: any) {
+        if (error instanceof NodeInterrupt) {
+          throw error;
+        }
+
         console.error(`[${nodeName}] error`, { error });
         return new Command({
           goto: "error_handler",
@@ -1358,13 +1161,16 @@ export class CinematicVideoWorkflow {
 
     let initialState: WorkflowState;
     if (existingCheckpoint) {
+      console.log(" Resuming from existing checkpoint...");
       const stateValues = existingCheckpoint.channel_values as WorkflowState;
+      const project = await this.projectRepository.getProjectFullState(this.projectId);
+
       initialState = {
         ...stateValues,
         id: stateValues.id,
         projectId: stateValues.projectId,
-        initialProject: null,
-        project: null,
+        initialProject: project as any,
+        project: project as any,
         localAudioPath,
         hasAudio,
         nodeAttempts: stateValues.nodeAttempts || {},
@@ -1373,8 +1179,6 @@ export class CinematicVideoWorkflow {
         errors: stateValues.errors || [],
       };
 
-      const project = await this.projectRepository.getProject(this.projectId);
-      z.parse(InitialProjectSchema, project);
       console.log("   Checkpoint found previous project.");
 
     } else {
@@ -1491,11 +1295,11 @@ async function main() {
     jobEventsTopicPublisher = pubsub.topic(JOB_EVENTS_TOPIC_NAME);
     console.debug(`Initialized topic ${JOB_EVENTS_TOPIC_NAME}`);
 
-    async function publishJobEvent(event: JobEvent) {
+    const publishJobEvent = async (event: JobEvent) => {
       console.log(`[Cinematic-Canvas] Publishing job event ${event.type} to ${JOB_EVENTS_TOPIC_NAME}`);
       const dataBuffer = Buffer.from(JSON.stringify(event));
       await jobEventsTopicPublisher.publishMessage({ data: dataBuffer });
-    }
+    };
 
     poolManager = new PoolManager({
       connectionString: postgresUrl,
