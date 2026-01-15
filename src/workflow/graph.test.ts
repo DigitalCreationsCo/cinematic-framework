@@ -26,6 +26,11 @@ describe('CinematicVideoWorkflow', () => {
         mockJobControlPlane = {
             createJob: vi.fn(),
             getJob: vi.fn(),
+            jobId: vi.fn((projectId, node, attempt, uniqueKey) => {
+                return uniqueKey
+                    ? `${projectId}-${node}-${uniqueKey}-${attempt}`
+                    : `${projectId}-${node}-${attempt}`;
+            })
         };
 
         (GCPStorageManager as any).mockImplementation(function () {
@@ -34,7 +39,7 @@ describe('CinematicVideoWorkflow', () => {
                 uploadJSON: vi.fn(),
                 getObjectPath: vi.fn().mockResolvedValue('gs://path'),
                 initializeAttempts: vi.fn(),
-                registerBestAttempt: vi.fn()
+                registerBestAttempt: vi.fn(),
             };
         });
 
@@ -42,7 +47,12 @@ describe('CinematicVideoWorkflow', () => {
             gcpProjectId,
             projectId,
             bucketName,
-            jobControlPlane: mockJobControlPlane
+            jobControlPlane: mockJobControlPlane,
+            lockManager: {
+                acquireLock: vi.fn().mockResolvedValue(true),
+                releaseLock: vi.fn().mockResolvedValue(true),
+                init: vi.fn().mockResolvedValue(undefined)
+            } as any
         });
     });
 

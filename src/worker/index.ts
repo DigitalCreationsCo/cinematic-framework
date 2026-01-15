@@ -13,6 +13,7 @@ import { JobControlPlane } from "../pipeline/services/job-control-plane";
 import { AsyncLocalStorage } from "async_hooks";
 import { v7 as uuidv7 } from 'uuid';
 import { WorkerService } from "./worker-service";
+import { DistributedLockManager } from "../pipeline/services/lock-manager";
 import { LogContext } from "../shared/logger";
 import * as dotenv from "dotenv";
 import { formatLoggers } from "../shared/format-loggers";
@@ -36,6 +37,9 @@ const poolManager = new PoolManager({
     max: 10,
     min: 2,
 });
+
+const lockManager = new DistributedLockManager(poolManager, workerId);
+await lockManager.init();
 
 const pubsub = new PubSub({
     projectId: gcpProjectId,
@@ -64,7 +68,7 @@ export async function publishPipelineEvent(event: PipelineEvent) {
 
 const jobControlPlane = new JobControlPlane(poolManager, publishJobEvent);
 
-const workerService = new WorkerService(gcpProjectId, workerId, bucketName, jobControlPlane, publishJobEvent, publishPipelineEvent);
+const workerService = new WorkerService(gcpProjectId, workerId, bucketName, jobControlPlane, lockManager, publishJobEvent, publishPipelineEvent);
 
 const logContext: LogContext = {
     workerId,

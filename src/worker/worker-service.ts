@@ -17,6 +17,7 @@ import { ProjectRepository } from "../pipeline/project-repository";
 import { MediaController } from "../workflow/media-controller";
 import { AssetVersionManager } from "../workflow/asset-version-manager";
 import { logContextStore } from "../shared/format-loggers";
+import { DistributedLockManager } from "../pipeline/services/lock-manager";
 import { v7 as uuidv7 } from 'uuid';
 
 
@@ -36,6 +37,7 @@ export class WorkerService {
         private workerId: string,
         private bucketName: string,
         private jobControlPlane: JobControlPlane,
+        private lockManager: DistributedLockManager,
         private publishJobEvent: (event: JobEvent) => Promise<void>,
         private publishPipelineEvent: (event: PipelineEvent) => Promise<void>,
     ) { }

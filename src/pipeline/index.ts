@@ -106,7 +106,7 @@ async function main() {
 
             checkpointerManager.getCheckpointer();
         const projectRepository = new ProjectRepository();
-        const workflowOperator = new WorkflowOperator(checkpointerManager, jobControlPlane, publishPipelineEvent, projectRepository);
+            const workflowOperator = new WorkflowOperator(checkpointerManager, jobControlPlane, publishPipelineEvent, projectRepository, lockManager);
 
         const [ jobEventsTopic ] = await pubsub.topic(JOB_EVENTS_TOPIC_NAME).get({ autoCreate: true });
             console.log(`[Pipeline ${workerId}] Ensuring topic ${JOB_EVENTS_TOPIC_NAME} exists...`);

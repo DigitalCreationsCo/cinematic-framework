@@ -12,7 +12,7 @@ import { ProjectRepository } from "../project-repository";
 import { mergeParamsIntoState, getAllBestFromAssets } from "../../shared/utils/utils";
 import { imageModelName, qualityCheckModelName, textModelName, videoModelName } from "../../workflow/llm/google/models";
 import { AssetVersionManager } from "../../workflow/asset-version-manager";
-import { StatusError } from "@google-cloud/pubsub";
+import { DistributedLockManager } from "./lock-manager";
 
 
 
@@ -21,6 +21,7 @@ export class WorkflowOperator {
     private controlPlane: JobControlPlane;
     private publishEvent: (event: PipelineEvent) => Promise<void>;
     private projectRepository: ProjectRepository;
+    private lockManager: DistributedLockManager;
     private activeControllers: Map<string, AbortController> = new Map();
     private gcpProjectId: string;
     private bucketName: string;
@@ -30,6 +31,7 @@ export class WorkflowOperator {
         controlPlane: JobControlPlane,
         publishEvent: (event: PipelineEvent) => Promise<void>,
         projectRepository: ProjectRepository,
+        lockManager: DistributedLockManager,
         gcpProjectId?: string,
         bucketName?: string
     ) {
@@ -37,6 +39,7 @@ export class WorkflowOperator {
         this.controlPlane = controlPlane;
         this.publishEvent = publishEvent;
         this.projectRepository = projectRepository;
+        this.lockManager = lockManager;
 
         this.gcpProjectId = gcpProjectId || process.env.GCP_PROJECT_ID!;
         this.bucketName = bucketName || process.env.GCP_BUCKET_NAME!;
@@ -60,10 +63,29 @@ export class WorkflowOperator {
             projectId,
             bucketName: this.bucketName,
             jobControlPlane: this.controlPlane,
+            lockManager: this.lockManager,
             controller
         });
         workflow.publishEvent = this.publishEvent;
         return workflow;
+    }
+
+    private async withProjectLock<T>(projectId: string, action: () => Promise<T>): Promise<T> {
+        const lockAcquired = await this.lockManager.acquireLock(projectId, {
+            lockTTL: 60000,
+            heartbeatInterval: 20000,
+        });
+
+        if (!lockAcquired) {
+            console.error(`[WorkflowOperator] ❌ Failed to acquire lock for project ${projectId}. Another operation is likely in progress.`);
+            throw new Error(`Project ${projectId} is currently locked by another process.`);
+        }
+
+        try {
+            return await action();
+        } finally {
+            await this.lockManager.releaseLock(projectId);
+        }
     }
 
     private async getCompiledGraph(projectId: string, controller?: AbortController): Promise<CompiledStateGraph<WorkflowState, Partial<WorkflowState>, string>> {
@@ -96,133 +118,137 @@ export class WorkflowOperator {
     }
 
     async startPipeline(projectId: string, payload: Extract<PipelineCommand, { type: "START_PIPELINE"; }>[ 'payload' ]) {
+        return this.withProjectLock(projectId, async () => {
+            const initialProject = await this.buildInitialProject(projectId, payload);
 
-        const initialProject = await this.buildInitialProject(projectId, payload);
-
-        const inserted = await this.projectRepository.createProject(initialProject);
-        await this.publishEvent({
-            type: "WORKFLOW_STARTED",
-            projectId: inserted.id,
-            payload: { project: inserted },
-            timestamp: new Date().toISOString()
+            const inserted = await this.projectRepository.createProject(initialProject);
+            await this.publishEvent({
+                type: "WORKFLOW_STARTED",
+                projectId: inserted.id,
+                payload: { project: inserted },
+                timestamp: new Date().toISOString()
+            });
+            const config = this.getRunnableConfig(projectId);
+            const state: WorkflowState = {
+                id: inserted.id,
+                projectId: inserted.id,
+                initialProject,
+                project: null,
+                hasAudio: inserted.metadata.hasAudio,
+                nodeAttempts: {},
+                jobIds: {},
+                currentSceneIndex: inserted.currentSceneIndex,
+                errors: [],
+            };
+            const compiled = await this.getCompiledGraph(projectId, this.getAbortController(projectId));
+            await streamWithInterruptHandling(projectId, compiled, state, config, "startPipeline", this.publishEvent);
         });
-        const config = this.getRunnableConfig(projectId);
-        const state: WorkflowState = {
-            id: inserted.id,
-            projectId: inserted.id,
-            initialProject,
-            project: null,
-            hasAudio: inserted.metadata.hasAudio,
-            nodeAttempts: {},
-            jobIds: {},
-            currentSceneIndex: inserted.currentSceneIndex,
-            errors: [],
-        }; 
-        const compiled = await this.getCompiledGraph(projectId, this.getAbortController(projectId));
-        await streamWithInterruptHandling(projectId, compiled, state, config, "startPipeline", this.publishEvent);
     }
 
 
     async resumePipeline(projectId: string) {
-
-        const config = this.getRunnableConfig(projectId);
-        const existingCheckpoint = await this.checkpointerManager.loadCheckpoint(config);
-        if (!existingCheckpoint) {
-            console.warn(`[WorkflowOperator] No checkpoint found to resume for ${projectId}`);
-            await this.publishEvent({
-                type: "WORKFLOW_FAILED",
-                commandId: uuidv7(),
-                projectId: projectId,
-                payload: { error: "No existing pipeline found to resume." },
-                timestamp: new Date().toISOString(),
-            });
-            return;
-        }
-        // const command = new Command({ resume: updatedState });
-        const compiledGraph = await this.getCompiledGraph(projectId, this.getAbortController(projectId));
-        await streamWithInterruptHandling(projectId, compiledGraph, null, config, "resumePipeline", this.publishEvent);
+        return this.withProjectLock(projectId, async () => {
+            const config = this.getRunnableConfig(projectId);
+            const existingCheckpoint = await this.checkpointerManager.loadCheckpoint(config);
+            if (!existingCheckpoint) {
+                console.warn(`[WorkflowOperator] No checkpoint found to resume for ${projectId}`);
+                await this.publishEvent({
+                    type: "WORKFLOW_FAILED",
+                    commandId: uuidv7(),
+                    projectId: projectId,
+                    payload: { error: "No existing pipeline found to resume." },
+                    timestamp: new Date().toISOString(),
+                });
+                return;
+            }
+            // const command = new Command({ resume: updatedState });
+            const compiledGraph = await this.getCompiledGraph(projectId, this.getAbortController(projectId));
+            await streamWithInterruptHandling(projectId, compiledGraph, null, config, "resumePipeline", this.publishEvent);
+        });
     }
 
 
     async regenerateScene(projectId: string, { sceneId, promptModification, forceRegenerate }: Extract<PipelineCommand, { type: "REGENERATE_SCENE"; }>[ 'payload' ]) {
+        return this.withProjectLock(projectId, async () => {
+            const config = this.getRunnableConfig(projectId);
+            const existingCheckpoint = await this.checkpointerManager.loadCheckpoint(config);
+            if (!existingCheckpoint) {
+                console.warn(`[WorkflowOperator.regenerateScene] No checkpoint found to regenerate scene ${sceneId}`);
+                return;
+            }
 
-        const config = this.getRunnableConfig(projectId);
-        const existingCheckpoint = await this.checkpointerManager.loadCheckpoint(config);
-        if (!existingCheckpoint) {
-            console.warn(`[WorkflowOperator.regenerateScene] No checkpoint found to regenerate scene ${sceneId}`);
-            return;
-        }
+            const assetManager = new AssetVersionManager(this.projectRepository);
+            await assetManager.createVersionedAssets({ projectId, }, "scene_prompt", 'text', [ promptModification ], { model: textModelName });
+            const project = await this.projectRepository.getProject(projectId);
+            project.forceRegenerateSceneIds.push(sceneId);
 
-        const assetManager = new AssetVersionManager(this.projectRepository);
-        await assetManager.createVersionedAssets({ projectId, }, "scene_prompt", 'text', [ promptModification ], { model: textModelName });
-        const project = await this.projectRepository.getProject(projectId);
-        project.forceRegenerateSceneIds.push(sceneId);
-
-        const updated = await this.projectRepository.updateProject(projectId, project);
-        const compiled = await this.getCompiledGraph(projectId, this.getAbortController(projectId));
-        const command = new Command({
-            goto: "process_scene",
-            update: updated
+            const updated = await this.projectRepository.updateProject(projectId, project);
+            const compiled = await this.getCompiledGraph(projectId, this.getAbortController(projectId));
+            const command = new Command({
+                goto: "process_scene",
+                update: updated
+            });
+            await streamWithInterruptHandling(projectId, compiled, command, config, "regenerateScene", this.publishEvent);
         });
-        await streamWithInterruptHandling(projectId, compiled, command, config, "regenerateScene", this.publishEvent);
     }
 
 
     // TODO: FIX REVISEDPARAMS DESTINATION
     async resolveIntervention(projectId: string, { action, revisedParams }: Extract<PipelineCommand, { type: "RESOLVE_INTERVENTION"; }>[ 'payload' ]) {
+        return this.withProjectLock(projectId, async () => {
+            const config = this.getRunnableConfig(projectId);
+            const existingCheckpoint = await this.checkpointerManager.loadCheckpoint(config);
+            if (!existingCheckpoint) {
+                throw new Error(`No checkpoint found for ${projectId}`);
+            }
 
-        const config = this.getRunnableConfig(projectId);
-        const existingCheckpoint = await this.checkpointerManager.loadCheckpoint(config);
-        if (!existingCheckpoint) {
-            throw new Error(`No checkpoint found for ${projectId}`);
-        }
+            const state = existingCheckpoint.channel_values as WorkflowState;
+            const interrupt = state.__interrupt__?.[ 0 ]?.value;
+            if (!interrupt) {
+                console.warn(`[WorkflowOperator] No interrupt to resolve`);
+                return;
+            }
 
-        const state = existingCheckpoint.channel_values as WorkflowState;
-        const interrupt = state.__interrupt__?.[ 0 ]?.value;
-        if (!interrupt) {
-            console.warn(`[WorkflowOperator] No interrupt to resolve`);
-            return;
-        }
+            const compiled = await this.getCompiledGraph(projectId, this.getAbortController(projectId));
+            let command: Command;
+            if (action === 'abort') {
+                const updatedState = { __interrupt__: undefined, __interrupt_resolved__: true };
+                await this.checkpointerManager.saveCheckpoint(config, existingCheckpoint, updatedState);
 
-        const compiled = await this.getCompiledGraph(projectId, this.getAbortController(projectId));
-        let command: Command;
-        if (action === 'abort') {
-            const updatedState = { __interrupt__: undefined, __interrupt_resolved__: true };
-            await this.checkpointerManager.saveCheckpoint(config, existingCheckpoint, updatedState);
-
-            await this.publishEvent({
-                commandId: uuidv7(),
-                type: "WORKFLOW_FAILED",
-                projectId: projectId,
-                payload: { error: "Workflow canceled", nodeName: interrupt.nodeName },
-                timestamp: new Date().toISOString()
-            });
-            return;
-        } else if (action === 'skip') {
-            const updatedState = {
-                __interrupt__: undefined,
-                __interrupt_resolved__: true,
-                errors: [ ...(state.errors || []), {
-                    node: interrupt.nodeName,
-                    error: interrupt.error,
-                    skipped: true,
+                await this.publishEvent({
+                    commandId: uuidv7(),
+                    type: "WORKFLOW_FAILED",
+                    projectId: projectId,
+                    payload: { error: "Workflow canceled", nodeName: interrupt.nodeName },
                     timestamp: new Date().toISOString()
-                } ]
-            };
-            command = new Command({ resume: updatedState });
-        } else {
-            const paramsToUse = revisedParams
-                ? { ...(interrupt.params || {}), ...revisedParams }
-                : (interrupt.params || {});
+                });
+                return;
+            } else if (action === 'skip') {
+                const updatedState = {
+                    __interrupt__: undefined,
+                    __interrupt_resolved__: true,
+                    errors: [ ...(state.errors || []), {
+                        node: interrupt.nodeName,
+                        error: interrupt.error,
+                        skipped: true,
+                        timestamp: new Date().toISOString()
+                    } ]
+                };
+                command = new Command({ resume: updatedState });
+            } else {
+                const paramsToUse = revisedParams
+                    ? { ...(interrupt.params || {}), ...revisedParams }
+                    : (interrupt.params || {});
 
-            const updatedState = {
-                ...mergeParamsIntoState(state, paramsToUse),
-                __interrupt__: undefined,
-                __interrupt_resolved__: true,
-            };
-            command = new Command({ resume: updatedState });
-        }
-        await streamWithInterruptHandling(projectId, compiled, command, config, "resolveIntervention", this.publishEvent);
+                const updatedState = {
+                    ...mergeParamsIntoState(state, paramsToUse),
+                    __interrupt__: undefined,
+                    __interrupt_resolved__: true,
+                };
+                command = new Command({ resume: updatedState });
+            }
+            await streamWithInterruptHandling(projectId, compiled, command, config, "resolveIntervention", this.publishEvent);
+        });
     }
 
 

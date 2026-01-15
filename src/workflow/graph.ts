@@ -4,6 +4,7 @@ dotenv.config();
 import { StateGraph, END, START, NodeInterrupt, Command, interrupt } from "@langchain/langgraph";
 import { JobControlPlane } from "../pipeline/services/job-control-plane";
 import { PoolManager } from "../pipeline/services/pool-manager";
+import { DistributedLockManager } from "../pipeline/services/lock-manager";
 import { JobEvent, JobRecord, JobType } from "../shared/types/job.types";
 import {
   InitialProject,
@@ -55,6 +56,7 @@ export class CinematicVideoWorkflow {
   public graph: StateGraph<WorkflowState>;
   private storageManager: GCPStorageManager;
   private jobControlPlane: JobControlPlane;
+  private lockManager: DistributedLockManager;
   private projectRepository: ProjectRepository;
   private assetManager: AssetVersionManager;
 
@@ -79,6 +81,7 @@ export class CinematicVideoWorkflow {
       projectId,
       bucketName,
       jobControlPlane,
+      lockManager,
       controller,
       location = "us-east1",
     }:
@@ -87,6 +90,7 @@ export class CinematicVideoWorkflow {
         projectId: string;
         bucketName: string;
         jobControlPlane: JobControlPlane;
+        lockManager: DistributedLockManager;
         controller?: AbortController;
         location?: string;
       }
@@ -101,6 +105,7 @@ export class CinematicVideoWorkflow {
     this.controller = controller;
     this.storageManager = new GCPStorageManager(this.gcpProjectId, this.projectId, this.bucketName);
     this.jobControlPlane = jobControlPlane;
+    this.lockManager = lockManager;
     this.projectRepository = new ProjectRepository();
     this.assetManager = new AssetVersionManager(this.projectRepository);
 
@@ -442,7 +447,6 @@ export class CinematicVideoWorkflow {
         return {
           ...state,
           initialProject: updated,
-          nodeAttempts: { [ nodeName ]: currentAttempt },
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -502,7 +506,6 @@ export class CinematicVideoWorkflow {
         return {
           ...state,
           initialProject: updated,
-          nodeAttempts: { [ nodeName ]: currentAttempt },
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -576,7 +579,6 @@ export class CinematicVideoWorkflow {
         return {
           ...state,
           initialProject: updated,
-          nodeAttempts: { [ nodeName ]: currentAttempt },
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -649,7 +651,6 @@ export class CinematicVideoWorkflow {
         return {
           ...state,
           initialProject: updated,
-          nodeAttempts: { [ nodeName ]: currentAttempt },
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -702,7 +703,6 @@ export class CinematicVideoWorkflow {
           ...state,
           initialProject: updated,
           project: updated,
-          nodeAttempts: { [ nodeName ]: currentAttempt },
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -819,7 +819,6 @@ export class CinematicVideoWorkflow {
         return {
           ...state,
           project: updatedProject,
-          nodeAttempts: { [ nodeName ]: currentAttempt },
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -932,7 +931,6 @@ export class CinematicVideoWorkflow {
         return {
           ...state,
           project: updatedProject,
-          nodeAttempts: { [ nodeName ]: currentAttempt },
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -1008,7 +1006,6 @@ export class CinematicVideoWorkflow {
         return {
           ...state,
           project: updatedProject,
-          nodeAttempts: { [ nodeName ]: currentAttempt },
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -1086,7 +1083,6 @@ export class CinematicVideoWorkflow {
           return {
             ...state,
             project: updatedProject,
-            nodeAttempts: { [ nodeName ]: currentAttempt },
             __interrupt__: undefined,
             __interrupt_resolved__: false,
           };
@@ -1127,7 +1123,6 @@ export class CinematicVideoWorkflow {
           ...state,
           project: updatedProject,
           currentSceneIndex: index + 1,
-          nodeAttempts: { [ nodeName ]: currentAttempt },
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -1217,7 +1212,6 @@ export class CinematicVideoWorkflow {
           return {
             ...state,
             project: updatedProject,
-            nodeAttempts: { [ nodeName ]: currentAttempt },
             __interrupt__: undefined,
             __interrupt_resolved__: false,
           };
@@ -1285,7 +1279,6 @@ export class CinematicVideoWorkflow {
         console.log(`[${nodeName}]: Completed\n`);
         return {
           ...state,
-          nodeAttempts: { [ nodeName ]: currentAttempt },
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -1328,7 +1321,6 @@ export class CinematicVideoWorkflow {
       return {
         ...state,
         project,
-        nodeAttempts: { [ "finalize" ]: currentAttempt },
         __interrupt__: undefined,
         __interrupt_resolved__: false,
       };
@@ -1353,48 +1345,57 @@ export class CinematicVideoWorkflow {
     return workflow;
   }
 
-  async execute(localAudioPath: string | undefined, title: string, initialPrompt: string, postgresUrl: string): Promise<WorkflowState> {
+  async execute(audioPath: string | undefined, videoTitle: string, creativePrompt: string, postgresUrl: string): Promise<WorkflowState> {
+    
+    console.log(`\n--- Starting Workflow for Project: ${this.projectId} ---`);
 
-    console.log(`🚀 Executing Cinematic Video Generation Workflow for projectId: ${this.projectId}`);
-    console.log(` Text generation model: ${textModelName}`);
-    console.log(` Image generation model: ${imageModelName}`);
-    console.log(` Video generation model: ${videoModelName}`);
-    console.log(` Quality check model: ${qualityCheckModelName}`);
-
-    let audioGcsUri: string | undefined;
-    let audioPublicUri: string | undefined;
-    if (localAudioPath) {
-      console.log(" Uploading audio file...");
-      audioGcsUri = await this.storageManager.uploadAudioFile(localAudioPath);
-      audioPublicUri = audioGcsUri ? this.storageManager.getPublicUrl(audioGcsUri) : undefined;
-    } else {
-      console.log(" No audio file was provided. Videos will be generated in prompt-only mode.");
+    const lockAcquired = await this.lockManager.acquireLock(this.projectId, {
+      lockTTL: 60000, // 1 minute
+      heartbeatInterval: 20000, // 20 seconds
+    });
+    if (!lockAcquired) {
+      console.error(`[Cinematic-Canvas]: ❌ Execution Aborted: Project ${this.projectId} is already locked by another process.`);
+      throw new Error(`Project ${this.projectId} is locked`);
     }
-    const hasAudio = !!audioGcsUri;
 
     let result: WorkflowState;
-    const checkpointerManager = new CheckpointerManager(postgresUrl);
-    await checkpointerManager.init();
-    const checkpointer = checkpointerManager.getCheckpointer();
-    const config: RunnableConfig = {
-      configurable: { thread_id: this.projectId },
-    };
-    console.log("   Checkpointer enabled");
-    const existingCheckpoint = await checkpointerManager.loadCheckpoint(config);
+    try {
+      const checkpointerManager = new CheckpointerManager(postgresUrl);
+      const checkpointer = checkpointerManager.getCheckpointer();
+      console.log(` Image generation model: ${imageModelName}`);
+      console.log(` Video generation model: ${videoModelName}`);
+      console.log(` Quality check model: ${qualityCheckModelName}`);
 
-    let initialState: WorkflowState;
-    if (existingCheckpoint) {
-      console.log(" Resuming from existing checkpoint...");
-      const stateValues = existingCheckpoint.channel_values as WorkflowState;
-      const project = await this.projectRepository.getProjectFullState(this.projectId);
+      let audioGcsUri: string | undefined;
+      let audioPublicUri: string | undefined;
 
-      initialState = {
-        ...stateValues,
-        id: stateValues.id,
-        projectId: stateValues.projectId,
-        initialProject: project as any,
-        project: project as any,
-        localAudioPath,
+      if (audioPath) {
+        console.log(" Uploading audio file...");
+        audioGcsUri = await this.storageManager.uploadAudioFile(audioPath);
+        audioPublicUri = audioGcsUri ? this.storageManager.getPublicUrl(audioGcsUri) : undefined;
+      } else {
+        console.log(" No audio file was provided. Videos will be generated in prompt-only mode.");
+      }
+      const hasAudio = !!audioGcsUri;
+      const config: RunnableConfig = {
+        configurable: { thread_id: this.projectId },
+      };
+      console.log("   Checkpointer enabled");
+      const existingCheckpoint = await checkpointer.get(config);
+
+      let initialState: WorkflowState;
+      if (existingCheckpoint) {
+        console.log(" Resuming from existing checkpoint...");
+        const stateValues = existingCheckpoint.channel_values as WorkflowState;
+        const project = await this.projectRepository.getProjectFullState(this.projectId);
+
+        initialState = {
+          ...stateValues,
+          id: stateValues.id,
+          projectId: stateValues.projectId,
+          initialProject: project as any,
+          project: project as any,
+          localAudioPath: audioPath,
         hasAudio,
         nodeAttempts: stateValues.nodeAttempts || {},
         jobIds: stateValues.jobIds || {},
@@ -1412,7 +1413,7 @@ export class CinematicVideoWorkflow {
           projectId: this.projectId,
           initialProject: null,
           project: null,
-          localAudioPath,
+          localAudioPath: audioPath,
           hasAudio,
           nodeAttempts: {},
           jobIds: {},
@@ -1422,7 +1423,7 @@ export class CinematicVideoWorkflow {
 
         const metadata: InitialProject[ 'metadata' ] = {
           projectId: this.projectId,
-          title,
+          title: videoTitle,
           duration: 0,
           totalScenes: 0,
           style: "",
@@ -1431,7 +1432,7 @@ export class CinematicVideoWorkflow {
           tags: [],
           audioPublicUri,
           audioGcsUri,
-          initialPrompt,
+          initialPrompt: creativePrompt,
           hasAudio,
           models: {
             videoModel: videoModelName,
@@ -1474,6 +1475,9 @@ export class CinematicVideoWorkflow {
     }) as WorkflowState;
 
     return result;
+    } finally {
+      await this.lockManager.releaseLock(this.projectId);
+    }
   }
 }
 
@@ -1509,35 +1513,7 @@ async function main() {
   let jobEventsTopicPublisher: ReturnType<PubSub[ 'topic' ]>;
   let poolManager: PoolManager;
   let jobControlPlane: JobControlPlane;
-
-  try {
-    pubsub = new PubSub({
-      projectId: gcpProjectId,
-      apiEndpoint: process.env.PUBSUB_EMULATOR_HOST,
-    });
-    jobEventsTopicPublisher = pubsub.topic(JOB_EVENTS_TOPIC_NAME);
-    console.debug(`Initialized topic ${JOB_EVENTS_TOPIC_NAME}`);
-
-    const publishJobEvent = async (event: JobEvent) => {
-      console.log(`[Cinematic-Canvas] Publishing job event ${event.type} to ${JOB_EVENTS_TOPIC_NAME}`);
-      const dataBuffer = Buffer.from(JSON.stringify(event));
-      await jobEventsTopicPublisher.publishMessage({ data: dataBuffer });
-    };
-
-    poolManager = new PoolManager({
-      connectionString: postgresUrl,
-      max: 10,
-      min: 2,
-      idleTimeoutMillis: 30000,
-    });
-    jobControlPlane = new JobControlPlane(poolManager, publishJobEvent);
-  } catch (error) {
-    console.error(`[Workflow] FATAL: PubSub initialization failed:`, error);
-    console.error(`[Workflow] Service cannot start without PubSub. Shutting down...`);
-    process.exit(1);
-  }
-
-
+  let lockManager: DistributedLockManager;
 
   // parse command line args
   const argv = await yargs(hideBin(process.argv))
@@ -1570,7 +1546,38 @@ async function main() {
   const prompt = argv.prompt;
   if (!prompt) { throw new Error("A prompt is required to create videos"); }
 
-  const workflow = new CinematicVideoWorkflow({ gcpProjectId, projectId, bucketName, jobControlPlane, controller });
+
+  try {
+    pubsub = new PubSub({
+      projectId: gcpProjectId,
+      apiEndpoint: process.env.PUBSUB_EMULATOR_HOST,
+    });
+    jobEventsTopicPublisher = pubsub.topic(JOB_EVENTS_TOPIC_NAME);
+    console.debug(`Initialized topic ${JOB_EVENTS_TOPIC_NAME}`);
+
+    const publishJobEvent = async (event: JobEvent) => {
+      console.log(`[Cinematic-Canvas] Publishing job event ${event.type} to ${JOB_EVENTS_TOPIC_NAME}`);
+      const dataBuffer = Buffer.from(JSON.stringify(event));
+      await jobEventsTopicPublisher.publishMessage({ data: dataBuffer });
+    };
+
+    poolManager = new PoolManager({
+      connectionString: postgresUrl,
+      max: 10,
+      min: 2,
+      idleTimeoutMillis: 30000,
+    });
+    lockManager = new DistributedLockManager(poolManager, `workflow-cli-${projectId}`);
+    await lockManager.init();
+    jobControlPlane = new JobControlPlane(poolManager, publishJobEvent);
+  } catch (error) {
+    console.error(`[Workflow] FATAL: PubSub initialization failed:`, error);
+    console.error(`[Workflow] Service cannot start without PubSub. Shutting down...`);
+    process.exit(1);
+  }
+
+  
+  const workflow = new CinematicVideoWorkflow({ gcpProjectId, projectId, bucketName, jobControlPlane, lockManager, controller });
   try {
     const result = await workflow.execute(audioPath, projectTitle, prompt, postgresUrl);
     console.log("\n" + "=".repeat(60));
