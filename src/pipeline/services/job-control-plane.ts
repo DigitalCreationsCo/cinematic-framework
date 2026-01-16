@@ -1,7 +1,7 @@
 import { JobState, JobEvent, JobType, JobRecord } from "../../shared/types/job.types";
 import { PoolManager } from "./pool-manager";
 import { db, schema } from "../../shared/db";
-import { eq, and, sql, desc, count } from "drizzle-orm";
+import { eq, and, sql, desc, count, isNull } from "drizzle-orm";
 import { createHash } from 'crypto';
 import { jobs } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -65,18 +65,17 @@ export class JobControlPlane {
         return BigInt(`0x${hex64}`) - (BigInt(1) << BigInt(63));
     }
 
-    async createJob(job: Omit<JobRecord, "state" | "attempt" | "maxRetries" | "createdAt" | "updatedAt" | "result" | "error"> & { maxRetries?: number; attempt?: number; }) {
-        const attempt = job.attempt ?? 0;
-        const maxRetries = (job.maxRetries ?? 3) + attempt;
-
+    async createJob(job: Omit<JobRecord, "id" | "state" | "attempt" | "maxRetries" | "createdAt" | "updatedAt" | "result" | "error"> & { id?: string; maxRetries?: number; attempt?: number; uniqueKey?: string; }) {
         const [ newJob ] = await db.insert(jobs).values({
-            id: job.id,
+            id: job.id, // Primary Key - can still be deterministic for safety or random for audit trail
             type: job.type,
             projectId: job.projectId,
             state: "CREATED",
             payload: job.payload,
-            attempt: attempt,
-            maxRetries: maxRetries,
+            uniqueKey: job.uniqueKey,
+            assetKey: job.assetKey,
+            attempt: job.attempt,
+            maxRetries: job.maxRetries,
         }).returning();
 
         await this.publishJobEvent({
@@ -97,6 +96,37 @@ export class JobControlPlane {
         }
         return row as Extract<JobRecord, { type: T; }>;
     }
+
+    /**
+     * Fetches the latest job attempt for a given project and type.
+     * Scoped by uniqueKey for parallel/batch jobs.
+     */
+    async getLatestJob(projectId: string, type: JobType, uniqueKey?: string): Promise<JobRecord | null> {
+        const conditions = [
+            eq(jobs.projectId, projectId),
+            eq(jobs.type, type)
+        ];
+
+        if (uniqueKey) {
+            conditions.push(eq(jobs.uniqueKey, uniqueKey));
+        } else {
+            // For singleton jobs, ensure we aren't matching a batch job
+            conditions.push(sql`${jobs.uniqueKey} IS NULL`);
+        }
+
+        const [ row ] = await db.select()
+            .from(jobs)
+            .where(and(...conditions))
+            .orderBy(desc(jobs.createdAt)) // Matches optimized composite index
+            .limit(1);
+
+        if (!row) return null;
+        if (row.result) {
+            row.result = this.reviveDates(row.result);
+        }
+        return row as JobRecord;
+    }
+
 
     /**
      * Claims a job when only the jobId is known. 
@@ -240,9 +270,9 @@ export class JobControlPlane {
         await this.publishJobEvent({ type: "JOB_CANCELLED", jobId });
     }
 
-    jobId = (projectId: string, node: string, attempt: number, uniqueKey?: string): string => {
+    jobId = (projectId: string, node: string, uniqueKey?: string): string => {
         return uniqueKey
-            ? `${projectId}-${node}-${uniqueKey}-${attempt}`
-            : `${projectId}-${node}-${attempt}`;
+            ? `${projectId}-${node}-${uniqueKey}`
+            : `${projectId}-${node}`;
     };
 }

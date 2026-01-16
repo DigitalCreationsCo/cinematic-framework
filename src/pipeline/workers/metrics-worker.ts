@@ -49,14 +49,13 @@ export async function aggregateProjectPerformance(projectId: string) {
     : 0;
 
   const metrics: WorkflowMetrics = {
-    totalScenes,
-    completedScenes: Completed\nCount,
-    averageAttemptsPerScene: avgAttempts,
-    estimatedRemainingAttempts: predictedAttempts,
-    qualityTrendSlope: trend.slope,
-    totalDuration,
-    // Add other fields from WorkflowMetricsSchema if needed
-  };
+    // // totalScenes,
+    // completedScenes: completedCount,
+    // averageAttemptsPerScene: avgAttempts,
+    // estimatedRemainingAttempts: predictedAttempts,
+    // qualityTrendSlope: trend.slope,
+    // totalDuration,
+  } as any;
 
   await db.update(projects)
     .set({ metrics, updatedAt: new Date() })

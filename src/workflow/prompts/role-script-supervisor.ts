@@ -134,5 +134,5 @@ ${buildScriptSupervisorContinuityChecklist(scene, previousScene, characters, loc
 
 VERIFY ALL CHECKLIST ITEMS ABOVE.
 
-OUTPUT: Completed\n continuity checklist with all items verified.
+OUTPUT: Completed continuity checklist with all items verified.
 `;

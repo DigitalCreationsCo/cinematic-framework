@@ -1,19 +1,8 @@
 import { ProjectRepository } from "../pipeline/project-repository";
-import { AssetHistory, AssetRegistry, AssetType, AssetVersion, Project, Scene, Character, Location, AssetKey } from "../shared/types/workflow.types";
+import { AssetHistory, AssetRegistry, AssetType, AssetVersion, Project, Scene, Character, Location, AssetKey, Scope, CreateVersionedAssetsBaseArgs } from "../shared/types/workflow.types";
 import { mapDbProjectToDomain } from "../pipeline/helpers/domain/project-mappers";
 
-export type Scope = {
-    projectId: string;
-} | {
-    projectId: string;
-    sceneId: string;
-} | {
-    projectId: string;
-    characterIds: string[];
-} | {
-    projectId: string;
-    locationIds: string[];
-};
+
 
 export class AssetVersionManager {
     constructor(
@@ -34,51 +23,77 @@ export class AssetVersionManager {
      * @param setBest - Whether to automatically set this new version as "Best".
      */
     async createVersionedAssets(
-        scope: Scope,
-        assetKey: AssetKey,
-        type: AssetType,
-        dataList: string[],
-        metadata: AssetVersion[ 'metadata' ],
-        setBest = false,
+        ...[ scope, assetKey, type, dataList, metadata, setBest = false ]: CreateVersionedAssetsBaseArgs
     ): Promise<AssetVersion[]> {
 
         const histories = await this.getAssetHistories(scope, assetKey);
-        if (histories.length !== dataList.length) {
-            console.warn(`[AssetManager] Mismatch between scope entities (${histories.length}) and data items (${dataList.length}) for ${assetKey}.`);
-        }
+        const count = Math.min(histories.length, dataList.length);
 
         const newVersions: AssetVersion[] = [];
         const updatedHistories: AssetHistory[] = [];
 
-        // Iterate safely
-        const count = Math.min(histories.length, dataList.length);
         for (let i = 0; i < count; i++) {
             const history = histories[ i ];
             const data = dataList[ i ];
 
+            // --- Polymorphic Fallback Logic ---
+
+            // Resolve Type
+            let specificType: AssetType;
+            if (Array.isArray(type)) {
+                specificType = type[ i ];
+                if (specificType === undefined) {
+                    console.warn(`[AssetManager] 'type' array out of bounds at index ${i}. Falling back to type[0].`);
+                    specificType = type[ 0 ];
+                }
+            } else {
+                specificType = type;
+            }
+
+            // Resolve Metadata
+            let specificMetadata: AssetVersion[ 'metadata' ];
+            if (Array.isArray(metadata)) {
+                specificMetadata = metadata[ i ];
+                if (specificMetadata === undefined) {
+                    console.warn(`[AssetManager] 'metadata' array out of bounds at index ${i}. Falling back to metadata[0].`);
+                    specificMetadata = metadata[ 0 ];
+                }
+            } else {
+                specificMetadata = metadata;
+            }
+
+            // Resolve SetBest
+            let specificSetBest: boolean;
+            if (Array.isArray(setBest)) {
+                specificSetBest = setBest[ i ];
+                if (specificSetBest === undefined) {
+                    console.warn(`[AssetManager] 'setBest' array out of bounds at index ${i}. Defaulting to false.`);
+                    specificSetBest = false;
+                }
+            } else {
+                specificSetBest = setBest;
+            }
+
+            // --- Process Version ---
+
             const newVersionNum = history.head + 1;
             const newVersion: AssetVersion = {
                 version: newVersionNum,
-                type,
+                type: specificType,
                 data,
-                metadata,
+                metadata: specificMetadata,
                 createdAt: new Date().toISOString()
             };
 
-            // Update history object
             history.head = newVersionNum;
             history.versions.push(newVersion);
 
-            // Auto-set best if it's the first one, or if configured to auto-update
-            if (history.best === 0 || setBest) {
+            if (history.best === 0 || specificSetBest) {
                 history.best = newVersionNum;
             }
 
             newVersions.push(newVersion);
             updatedHistories.push(history);
-
-            const entityId = this.getEntityIdFromScope(scope, i);
-            console.log(`[AssetManager] Created v${newVersionNum} for ${assetKey} (Entity: ${entityId})`);
         }
 
         await this.saveAssetHistories(scope, assetKey, updatedHistories);
@@ -106,8 +121,21 @@ export class AssetVersionManager {
     }
 
     /**
+   * Update best version pointer (based on highest quality score)
+   */
+    setBestVersionFast(
+        registry: AssetRegistry,
+        key: AssetKey,
+        version: number
+    ): void {
+        if (registry[ key ] && version <= registry[ key ].head) {
+            registry[ key ].best = version;
+        }
+    }
+
+    /**
      * Updates which version is considered "Best" for each entity in scope.
-     * Expects `versions` array to match the order of entities.
+     * IMPORTANT: Expects `versions` array to match the order of entities.
      */
     async setBestVersion(scope: Scope, assetKey: AssetKey, versions: number[]): Promise<void> {
         const histories = await this.getAssetHistories(scope, assetKey);
@@ -142,38 +170,36 @@ export class AssetVersionManager {
         return assetsMap;
     }
 
-    // TODO implement compile error if required scope is missing
+    // TODO implement compile error if required scope key is missing
     private async getAssetHistories(scope: Scope, assetKey: AssetKey): Promise<AssetHistory[]> {
-        let assetsHistoryList: Record<string, AssetHistory>[] = [];
+        let assetsHistoryList: Partial<Record<AssetKey, AssetHistory>>[] = [];
 
         if ("sceneId" in scope) {
             const scene = await this.projectRepo.getScene(scope.sceneId);
             assetsHistoryList = [ scene.assets || {} ];
         } else if ("characterIds" in scope) {
             const characters = await this.projectRepo.getProjectCharacters(scope.projectId);
-            assetsHistoryList = assetsHistoryList = characters.reduce((chars, next) => {
-                if (scope.characterIds.includes(next.id)) {
-                    chars.push(next.assets);
-                }
-                return chars;
-            }, [] as any);
+            for (let i = 0; i < scope.characterIds.length; i++) {
+                assetsHistoryList.push(characters.find(c => c.id === scope.characterIds[ i ])?.assets || {});
+            }
         } else if ("locationIds" in scope) {
             const locations = await this.projectRepo.getProjectLocations(scope.projectId);
-            assetsHistoryList = locations.reduce((locs, next) => {
-                if (scope.locationIds.includes(next.id)) {
-                    locs.push(next.assets);
-                }
-                return locs;
-            }, [] as any);
+            for (let i = 0; i < scope.locationIds.length; i++) {
+                assetsHistoryList.push(locations.find(l => l.id === scope.locationIds[ i ])?.assets || {});
+            }
         }
         else {
             const project = await this.projectRepo.getProject(scope.projectId);
             assetsHistoryList = [ project.assets || {} ];
         }
 
-        return assetsHistoryList.map(assetsMap => assetsMap[ assetKey ] || { head: 0, best: 0, versions: {} });
+        return assetsHistoryList.map(assetsMap => assetsMap[ assetKey ] || { head: 0, best: 0, versions: [] });
     }
 
+    /**
+     * Updates asset history for each entity in scope.
+     * IMPORTANT: Expects `histories` array to match the order of entities.
+     */
     private async saveAssetHistories(scope: Scope, assetKey: AssetKey, histories: AssetHistory[]) {
         if ("sceneId" in scope) {
             if (histories.length !== 1) throw new Error("Expected single history for scene scope");
@@ -220,6 +246,21 @@ export class AssetVersionManager {
                     assets
                 }
             }));
+        }
+    }
+
+    /**
+  * Update version metadata (e.g., add evaluation result)
+  */
+    updateVersionMetadata(
+        registry: AssetRegistry,
+        key: AssetKey,
+        version: number,
+        metadata: Partial<AssetVersion[ 'metadata' ]>
+    ): void {
+        const versionObj = registry[ key ]?.versions.find(v => v.version === version);
+        if (versionObj) {
+            versionObj.metadata = { ...versionObj.metadata, ...metadata };
         }
     }
 

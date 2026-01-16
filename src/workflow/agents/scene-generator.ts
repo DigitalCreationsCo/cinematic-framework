@@ -1,6 +1,7 @@
 import { PersonGeneration, Video, Image, VideoGenerationReferenceType, Operation, GenerateVideosResponse } from "@google/genai";
 import { GCPStorageManager } from "../storage-manager";
-import { Character, Location, GeneratedScene, QualityEvaluationResult, Scene, SceneGenerationResult, AttemptMetric, AssetStatus } from "../../shared/types/workflow.types";
+import { Character, Location, GeneratedScene, QualityEvaluationResult, Scene, SceneGenerationResult } from "../../shared/types/workflow.types";
+import { OnCompleteCallback, OnProgressCallback } from "@shared/types/pipeline.types";
 import { RAIError } from "../../shared/utils/errors";
 import ffmpeg from "fluent-ffmpeg";
 import { buildVideoGenerationParams } from "../llm/google/google-llm-params";
@@ -12,7 +13,6 @@ import { QualityCheckAgent } from "./quality-check-agent";
 import { GraphInterrupt } from "@langchain/langgraph";
 import { AssetVersionManager } from "../asset-version-manager";
 import { videoModelName } from "../llm/google/models";
-import { OnCompleteCallback, OnProgressCallback } from "@shared/types/pipeline.types";
 
 
 

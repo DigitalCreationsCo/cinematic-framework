@@ -58,6 +58,8 @@ type JobRecordBase<T extends JobType, R extends Record<string, any>, P = undefin
     state: JobState;
     result?: R;
     error?: string;
+    uniqueKey?: string;
+    assetKey: string;
     attempt: number;
     maxRetries: number;
     createdAt: Date;
@@ -95,8 +97,7 @@ export type JobRecordGenerateStoryboard = JobRecordBase<
 export type JobRecordProcessAudioToScenes = JobRecordBase<
     "PROCESS_AUDIO_TO_SCENES",
     {
-        segments: AudioAnalysis[ 'segments' ];
-        totalDuration: number;
+        analysis: AudioAnalysis;
     },
     {
         audioPublicUri: string;

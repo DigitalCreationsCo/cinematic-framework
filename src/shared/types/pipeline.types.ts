@@ -1,5 +1,5 @@
 //shared/types/pipeline.types.ts
-import { Project, InitialProject, Scene, AssetStatus, AssetKey, AttemptMetric } from "./workflow.types.ts";
+import { Project, InitialProject, Scene, AssetStatus, AssetKey, VersionMetric, AssetVersion, AssetType, Scope } from "./workflow.types.ts";
 
 export type PubSubMessage<T extends string, P = undefined> = P extends undefined ? {
     type: T;
@@ -109,73 +109,27 @@ export type PipelineEvent =
 export type LogEvent = PubSubMessage<
     "LOG",
     {
-        level: "info" | "warning" | "error" | "success";
+        level: "info" | "warning" | "error" | "success"; 
         message: string;
         sceneId?: string;
     }
 >;
 
-export type WorkflowStartedEvent = PubSubMessage<
-    "WORKFLOW_STARTED",
-    {
-        project: InitialProject;
-    }
->;
+export type WorkflowStartedEvent = PubSubMessage<"WORKFLOW_STARTED", { project: InitialProject; }>;
 
-export type FullStateEvent = PubSubMessage<
-    "FULL_STATE",
-    {
-        project: Project | InitialProject;
-    }
->;
+export type FullStateEvent = PubSubMessage<"FULL_STATE", { project: Project | InitialProject; }>;
 
-export type SceneStartedEvent = PubSubMessage<
-    "SCENE_STARTED",
-    {
-        scene: Scene;
-        totalScenes: number;
-    }
->;
+export type SceneStartedEvent = PubSubMessage<"SCENE_STARTED", { scene: Scene; totalScenes: number; }>;
 
-export type SceneProgressEvent = PubSubMessage<
-    "SCENE_PROGRESS",
-    {
-        scene: Scene;
-        progress?: number;
-    }
->;
+export type SceneProgressEvent = PubSubMessage<"SCENE_PROGRESS", { scene: Scene; progress?: number; }>;
 
-export type SceneCompletedEvent = PubSubMessage<
-    "SCENE_COMPLETED",
-    {
-        scene: Scene;
-    }
-    >;
+export type SceneCompletedEvent = PubSubMessage<"SCENE_COMPLETED", { scene: Scene; }>;
 
-export type SceneSkippedEvent = PubSubMessage<
-    "SCENE_SKIPPED",
-    {
-        sceneId: string;
-        reason: string;
-        videoUrl?: string;
-    }
-    >;
+export type SceneSkippedEvent = PubSubMessage<"SCENE_SKIPPED", { sceneId: string; reason: string; videoUrl?: string; }>;
 
-export type WorkflowCompletedEvent = PubSubMessage<
-    "WORKFLOW_COMPLETED",
-    {
-        project: Project;
-        videoUrl: string;
-    }
-    >;
+export type WorkflowCompletedEvent = PubSubMessage<"WORKFLOW_COMPLETED", { project: Project; videoUrl: string; }>;
 
-export type WorkflowFailedEvent = PubSubMessage<
-    "WORKFLOW_FAILED",
-    {
-        error: string;
-        nodeName?: string;
-    }
-    >;
+export type WorkflowFailedEvent = PubSubMessage<"WORKFLOW_FAILED", { error: string; nodeName?: string; }>;
 
 export type LlmInterventionNeededEvent = PubSubMessage<
     "LLM_INTERVENTION_NEEDED",
@@ -207,8 +161,17 @@ export interface PipelineMessage {
 export type PipelineStatus = "ready" | "analyzing" | "generating" | "evaluating" | "complete" | "error" | "paused";
 export type StatusType = PipelineStatus | AssetStatus | "PASS" | "MINOR_ISSUES" | "MAJOR_ISSUES" | "FAIL" | "ACCEPT" | "ACCEPT_WITH_NOTES" | "REGENERATE_MINOR" | "REGENERATE_MAJOR";
 
+export type OnGenerateCallbackArgs = [
+    scope: Scope,
+    assetKey: AssetKey,
+    type: AssetType,
+    dataList: string[],
+    metadata: Omit<AssetVersion[ 'metadata' ], 'jobId'>,
+    setBest?: boolean,
+];
 
 export type OnProgressCallback<T> = (artifact: T) => void;
-export type OnCompleteCallback<T> = (artifact: T, attemptMetric?: Omit<AttemptMetric, 'sceneId'>) => void;
+export type OnGenerateCallback = (...args: OnGenerateCallbackArgs) => void;
+export type OnCompleteCallback<T> = (artifact: T, attemptMetric?: Omit<VersionMetric, 'sceneId'>) => void;
 
 export * from './workflow.types.ts';

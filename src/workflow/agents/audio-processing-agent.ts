@@ -36,7 +36,7 @@ export class AudioProcessingAgent {
             return {
                 bpm: 0,
                 keySignature: '',
-                totalDuration: 0,
+                duration: 0,
                 segments: [],
                 audioGcsUri: '',
             };

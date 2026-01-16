@@ -1,7 +1,7 @@
 //shared/types/pipeline.types.ts
 import { z } from "zod";
 import { CinematographySchema, LightingSchema, TransitionTypesSchema } from "./cinematography.types";
-import { WorkflowMetricsSchema } from "./workflow-metrics.types";
+import { AssetRegistrySchema, WorkflowMetricsSchema } from "./metrics.types";
 import { QualityEvaluationResult, QualityEvaluationResultSchema } from "./quality.types";
 
 
@@ -14,19 +14,6 @@ export const getJsonSchema = (schema: z.ZodType) => z.toJSONSchema(schema, { tar
 
 export const VALID_DURATIONS = [ 5, 6, 7, 8 ] as const;
 export type ValidDuration = typeof VALID_DURATIONS[ number ];
-
-
-export const GcsObjectTypeSchema = z.union([
-  z.literal('final_output'),
-  z.literal('character_image'),
-  z.literal('location_image'),
-  z.literal('scene_video'),
-  z.literal('scene_start_frame'),
-  z.literal('scene_end_frame'),
-  z.literal('render_video'),
-  z.literal('composite_frame'),
-]);
-export type GcsObjectType = z.infer<typeof GcsObjectTypeSchema>;
 
 
 // ============================================================================
@@ -57,11 +44,11 @@ export type AudioSegment = z.infer<typeof AudioSegmentSchema>;
 
 
 export const AudioAnalysisSchema = z.object({
+  duration: z.number().default(0).describe("Total duration in seconds"),
   bpm: z.number().describe("The detected beats per minute of the track."),
   keySignature: z.string().describe("The estimated musical key (e.g., C Minor, G Major)."),
-  totalDuration: z.number().describe("Total authoritative duration in seconds."),
   segments: z.array(AudioSegmentSchema).describe("List of segments covering 0.0 to totalDuration without gaps."),
-}).optional();
+});
 export type AudioAnalysis = z.infer<typeof AudioAnalysisSchema> & {
   audioGcsUri: string;
   audioPublicUri?: string;
@@ -75,64 +62,6 @@ export const TagSchema = z.object({
   updatedAt: z.date().default(new Date()),
 });
 export type Tag = z.infer<typeof TagSchema>;
-
-
-// ============================================================================
-// ASSET VERSIONING SCHEMA
-// ============================================================================
-
-// TODO REPLACE SCENE.BESTATTEMPT AND SCENE.REJECTEDATTEMPTS
-// REMOVE STORAGEMANAGER ATTEMPT ALOGIC
-// FINISH GRAPH.TS FULL IMPL
-// MAKE A PENULTIMATE COMMIT WITH COMMENTS AND OLD CODE
-// REMOVE COMMENTS
-
-export const AssetKeySchema = z.union([
-  GcsObjectTypeSchema,
-  z.literal('enhanced_prompt'),
-  z.literal('storyboard'),
-  z.literal('scenes'),
-  z.literal('character_description'),
-  z.literal('character_prompt'),
-  z.literal('location_description'),
-  z.literal('location_prompt'),
-  z.literal('scene_description'),
-  z.literal('scene_prompt'),
-  z.literal('start_frame_prompt'),
-  z.literal('end_frame_prompt'),
-  z.literal('scene_quality_evaluation'),
-  z.literal('frame_quality_evaluation'),
-]);
-export type AssetKey = z.infer<typeof AssetKeySchema>;
-
-
-export const AssetTypeSchema = z.enum([ 'video', 'image', 'audio', 'text', 'json' ]);
-export type AssetType = z.infer<typeof AssetTypeSchema>;
-
-
-export const AssetVersionSchema = z.object({
-  version: z.number(),
-  data: z.string().describe("The content (text) or URI (file)"),
-  type: AssetTypeSchema,
-  createdAt: z.string(),
-  metadata: z.object({
-    evaluation: QualityEvaluationResultSchema.optional().describe("Quality evaluation result").nullable(),
-    model: z.string().nonoptional().describe("AI model used for asset generation")
-  }).catchall(z.any()).describe("Flexible metadata for evaluations, models, etc."),
-});
-export type AssetVersion = z.infer<typeof AssetVersionSchema>;
-
-
-export const AssetHistorySchema = z.object({
-  head: z.number().default(0).describe("The highest version number created"),
-  best: z.number().default(0).describe("The version currently selected as active/best"),
-  versions: z.array(AssetVersionSchema).default([]),
-});
-export type AssetHistory = z.infer<typeof AssetHistorySchema>;
-
-
-export const AssetRegistrySchema = z.partialRecord(AssetKeySchema, AssetHistorySchema).describe("The core registry map to be used in Projects, Scenes, Locations, and Characters").default({});
-export type AssetRegistry = z.infer<typeof AssetRegistrySchema>;
 
 
 // ============================================================================
@@ -233,12 +162,13 @@ export interface VideoGenerationConfig {
 export const InitialProjectMetadataSchema = z.object({
   projectId: z.uuid({ version: "v7" }).nonempty().nonoptional().describe("Pipeline project id"),
   title: z.string().default("").describe("title of the video"),
-  duration: z.number().default(0).describe("total duration in seconds"),
   totalScenes: z.number().default(0).describe("total number of scenes"),
   style: z.string().default("").describe("inferred cinematic style"),
   mood: z.string().default("").describe("overall emotional arc"),
   colorPalette: z.array(z.string()).default([]).describe("dominant colors"),
   tags: z.array(z.string()).default([]).describe("descriptive tags"),
+
+  ...AudioAnalysisSchema.partial().omit({ segments: true }).shape,
 
   models: z.object({
     videoModel: z.string().optional().describe("AI model used for video generation"),
@@ -264,12 +194,13 @@ export type InitialProjectMetadata = z.infer<typeof InitialProjectMetadataSchema
 export const ProjectMetadataSchema = z.object({
   projectId: z.uuid({ version: "v7" }).nonempty().nonoptional().describe("Pipeline project id"),
   title: z.string().describe("title of the video"),
-  duration: z.number().describe("total duration in seconds"),
   totalScenes: z.number().describe("total number of scenes"),
   style: z.string().describe("inferred cinematic style"),
   mood: z.string().describe("overall emotional arc"),
   colorPalette: z.array(z.string()).describe("dominant colors"),
   tags: z.array(z.string()).describe("descriptive tags"),
+
+  ...AudioAnalysisSchema.partial().omit({ segments: true }).shape,
 
   models: z.object({
     videoModel: z.string().optional().describe("AI model used for video generation"),
@@ -506,25 +437,6 @@ export const SceneBatchSchema = z.object({
 
 
 /**
- * Default WorkflowMetrics factory for project creation.
- */
-export const createDefaultMetrics = (): z.infer<typeof WorkflowMetricsSchema> => ({
-  sceneMetrics: [],
-  attemptMetrics: [],
-  trendHistory: [],
-  regression: {
-    count: 0,
-    sumX: 0,
-    sumY_a: 0,
-    sumY_q: 0,
-    sumXY_a: 0,
-    sumXY_q: 0,
-    sumX2: 0,
-  },
-});
-
-
-/**
  * InitialProjectSchema: Minimal schema for DB insertion.
  * Uses loose metadata and storyboard schemas with defaults.
  * This is the type used before storyboard generation completes.
@@ -705,5 +617,5 @@ export interface LlmRetryInterruptValue {
 
 
 export * from "./cinematography.types";
-export * from "./workflow-metrics.types";
+export * from "./metrics.types";
 export * from "./quality.types";

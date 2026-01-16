@@ -1,12 +1,11 @@
 import {
   pgTable, uuid, text, timestamp, integer,
   jsonb, real, pgEnum,
-  index
+  index, uniqueIndex
 } from "drizzle-orm/pg-core";
 import {
   InitialProjectMetadata, AssetRegistry, Lighting, Cinematography,
   CharacterState, LocationState, PhysicalTraits, WorkflowMetrics,
-  AudioAnalysis,
   InitialStoryboard,
 } from "./types/workflow.types";
 import { v7 as uuidv7 } from "uuid"; 
@@ -48,8 +47,8 @@ export const projects = pgTable("projects", {
   generationRulesHistory: text("generation_rules_history").array().array().default([]).notNull(),
 
   metrics: jsonb("metrics").$type<WorkflowMetrics>().default({
-    sceneMetrics: [],
-    attemptMetrics: [],
+    sceneMetrics: {},
+    versionMetrics: {},
     trendHistory: [],
     regression: {
       count: 0,
@@ -61,7 +60,6 @@ export const projects = pgTable("projects", {
       sumX2: 0,
     },
   }).notNull(),
-  audioAnalysis: jsonb("audio_analysis").$type<AudioAnalysis>(),
 });
 
 export const characters = pgTable("characters", {
@@ -139,20 +137,40 @@ export const jobs = pgTable("jobs", {
   payload: jsonb("payload"),
   result: jsonb("result"),
   error: text("error"),
+  uniqueKey: text("unique_key"),
+  assetKey: text("asset_key"), 
   attempt: integer("attempt").default(1).notNull(),
-  maxRetries: integer("max_retries").default(3).notNull(),
+  maxRetries: integer("max_retries").default(4).notNull(), // Default (3) + 1st attempt
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
 
-  // Optimization: Fast counting of running jobs per project
-  // 'claimJob' concurrency check 
-  projectStateIdx: index("idx_project_running_jobs").on(table.projectId).where(sql`state = 'RUNNING'`),
+  // 1. Versioning & Reset Protection: Only one ACTIVE job per logical task.
+  // This allows "move through" failures by inserting a fresh record 
+  // once the old one is FAILED or CANCELLED, while preventing double-starts.
+  activeLogicalJobIdx: uniqueIndex("idx_active_logical_job")
+    .on(table.projectId, table.type, table.uniqueKey)
+    .where(sql`state IN ('CREATED', 'RUNNING')`),
 
-  // Composite index for general lookups
+  // 2. Maximum Performance: Fast 'Latest Job' lookup
+  // Supports Index-Only scans for the core business query
+  scopedLatestIdx: index("idx_scoped_latest_job").on(
+    table.projectId,
+    table.type,
+    table.uniqueKey,
+    table.createdAt.desc()
+  ),
+
+  // 2. Concurrency Optimization: Fast counting of running jobs per project
+  // Partial index ensures we only scan records that matter for 'claimJob'
+  projectStateIdx: index("idx_project_running_jobs")
+    .on(table.projectId)
+    .where(sql`state = 'RUNNING'`),
+
+  // 3. Operational: Composite index for general lookups
   projectCreatedIdx: index("idx_project_created").on(table.projectId, table.state),
 
-  // Fast recovery of stale jobs
+  // 4. Monitoring: Fast recovery of stale jobs
   stateIdx: index("idx_jobs_state_updated").on(table.state, table.updatedAt),
 }));

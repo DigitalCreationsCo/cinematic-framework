@@ -16,7 +16,7 @@ import { buildCharacterImagePrompt } from "../prompts/character-image-instructio
 import { buildLocationImagePrompt } from "../prompts/location-image-instruction";
 import { composeEnhancedSceneGenerationPromptMetav1, composeEnhancedSceneGenerationPromptMetav2, composeGenerationRules } from "../prompts/prompt-composer";
 import { TextModelController } from "../llm/text-model-controller";
-import { imageModelName } from "../llm/google/models";
+import { imageModelName, textModelName } from "../llm/google/models";
 import { ThinkingLevel } from "@google/genai";
 import { buildllmParams } from "../llm/google/google-llm-params";
 import { QualityCheckAgent } from "./quality-check-agent";
@@ -24,6 +24,7 @@ import { evolveCharacterState, evolveLocationState } from "./state-evolution";
 import { GraphInterrupt } from "@langchain/langgraph";
 import { cleanJsonOutput, getAllBestFromAssets } from "../../shared/utils/utils";
 import { AssetVersionManager } from "../asset-version-manager";
+import { OnGenerateCallback, OnProgressCallback } from "@shared/types/pipeline.types";
 
 
 
@@ -59,6 +60,7 @@ export class ContinuityManagerAgent {
         scene: Scene,
         state: Project,
         overridePrompt: boolean,
+        onGenerate: OnGenerateCallback,
     ): Promise<{
         enhancedPrompt: string;
         startFrame?: string;
@@ -137,12 +139,12 @@ export class ContinuityManagerAgent {
                 enhancedPrompt = cleanJsonOutput(response.text);
             }
             enhancedPrompt += composeGenerationRules(generationRules);
-            this.assetManager.createVersionedAssets(
+            onGenerate(
                 { projectId: scene.projectId, sceneId: scene.id },
                 'scene_prompt',
                 'text',
                 [ enhancedPrompt ],
-                { model: params.model }
+                { model: params.model, prompt: metaPrompt }
             );
             console.log(`   ✨ Generated Video Prompt:\n"${enhancedPrompt}"`);
         }
@@ -161,8 +163,9 @@ export class ContinuityManagerAgent {
 
     async generateCharacterAssets(
         characters: Character[],
-        generationRules?: string[],
-        onProgress?: (id: string, msg: string, status: AssetStatus, artifacts?: any) => Promise<void>,
+        generationRules: string[],
+        onGenerate: OnGenerateCallback,
+        onProgress?: OnProgressCallback<Scene>,
         onRetry?: (attempt: number) => Promise<number>,
     ): Promise<Character[]> {
 
@@ -185,26 +188,36 @@ export class ContinuityManagerAgent {
             for (const [ index, character ] of charactersToGenerate.entries()) {
                 const attempt = attempts[ index ];
 
+                const imagePrompt = buildCharacterImagePrompt(character, generationRules);
+                onGenerate(
+                    { projectId: character.projectId, characterIds: [ character.id ] },
+                    'character_prompt',
+                    'text',
+                    [ imagePrompt ],
+                    { model: textModelName },
+                    true
+                );
+
                 console.log(`\n🎨 Checking for existing reference images for ${characters.length} characters...`);
                 const imagePath = this.storageManager.getObjectPath({ type: "character_image", characterId: character.id, attempt });
                 const exists = await this.storageManager.fileExists(imagePath);
                 if (exists) {
                     console.log(`  → Found existing image for: ${character.name}`);
                     const imageUrl = this.storageManager.getGcsUrl(imagePath);
-                    // Register existing asset
-                    await this.assetManager.createVersionedAssets(
+
+                    onGenerate(
                         { projectId: character.projectId, characterIds: [ character.id ] },
                         'character_image',
                         'image',
                         [ imageUrl ],
-                        { model: "existing" },
+                        { model: imageModelName, prompt: imagePrompt },
                         true
                     );
+
                 } else {
                     console.log(`  → Generating: ${character.name}`);
-                    if (onProgress) { await onProgress(character.id, `Generating initial reference image...`, "generating"); }
+                    // if (onProgress) { await onProgress(character.id, `Generating initial reference image...`, "generating"); }
 
-                    const imagePrompt = buildCharacterImagePrompt(character, generationRules);
                     try {
                         const maxRetries = this.qualityAgent.qualityConfig.safetyRetries + attempt;
                         const outputMimeType = "image/png";
@@ -257,22 +270,22 @@ export class ContinuityManagerAgent {
                             outputMimeType,
                         );
 
-                        await this.assetManager.createVersionedAssets(
+                        onGenerate(
                             { projectId: character.projectId, characterIds: [ character.id ] },
                             'character_image',
                             'image',
                             [ imageUrl ],
-                            { model: imageModelName },
+                            { model: imageModelName, prompt: imagePrompt },
                             true
                         );
 
                         console.log(` ✓ Saved character image: ${this.storageManager.getPublicUrl(imageUrl)}`);
-                        if (onProgress) { await onProgress(character.id, `Reference image generation complete.`, "complete"); }
+                        // if (onProgress) { await onProgress(character.id, `Reference image generation complete.`, "complete"); }
 
                     } catch (error) {
                         console.error(`    ✗ Failed to generate image for ${character.name}:`, error);
                         if (error instanceof GraphInterrupt) throw error;
-                        if (onProgress) { await onProgress(character.id, `Reference image generation failed: ${(error as Error).message}`, "error"); }
+                        // if (onProgress) { await onProgress(character.id, `Reference image generation failed: ${(error as Error).message}`, "error"); }
                     }
                 }
             }
@@ -311,10 +324,12 @@ export class ContinuityManagerAgent {
 
     async generateSceneFramesBatch(
         project: Project,
-        onProgress?: (scene: Scene, progress?: number) => void,
+        assetKey: 'scene_start_frame' | 'scene_end_frame',
+        onGenerate: OnGenerateCallback,
+        onProgress?: OnProgressCallback<Scene>,
         onRetry?: (attempt: number) => Promise<number>,
     ): Promise<Scene[]> {
-        console.log(`\n🖼️ Generating start/end frames for ${project.scenes.length} scenes in batch...`);
+        console.log(`\n🖼️ Generating ${assetKey} for ${project.scenes.length} scenes in batch...`);
         const updatedScenes: Scene[] = [];
 
         for (const scene of project.scenes) {
@@ -328,46 +343,49 @@ export class ContinuityManagerAgent {
 
             // --- Generate Start Frame ---
             const currentAssets = getAllBestFromAssets(currentScene.assets);
-            const startFrame = currentAssets[ 'scene_start_frame' ]?.data;
-            if (!startFrame) {
-                const [ attempt ] = await this.assetManager.getNextVersionNumber({ projectId: project.id, sceneId: scene.id }, 'scene_start_frame');
-                const startFramePath = this.storageManager.getObjectPath({ type: "scene_start_frame", sceneId: scene.id, attempt });
-                const startFrameExists = await this.storageManager.fileExists(startFramePath);
+            const frame = currentAssets[ assetKey ]?.data;
+            if (!frame) {
+                const [ attempt ] = await this.assetManager.getNextVersionNumber({ projectId: project.id, sceneId: scene.id }, assetKey);
+                const framePath = this.storageManager.getObjectPath({ type: assetKey, sceneId: scene.id, attempt });
+                const frameExists = await this.storageManager.fileExists(framePath);
 
-                // Reconstruct the prompt for state consistency
-                const startFramePrompt = await this.frameComposer.generateFrameGenerationPrompt(
-                    "start",
-                    currentScene,
-                    sceneCharacters,
-                    sceneLocations,
-                    previousScene,
-                    project.generationRules
-                );
+                const promptKey = assetKey === "scene_start_frame" ? "start_frame_prompt" : "end_frame_prompt";
+                let framePrompt = currentAssets[ promptKey ]?.data;
+                if (!framePrompt) {
+                    console.warn(`No ${promptKey} found for Scene ${scene.id}`);
 
-                if (startFrameExists) {
-                    console.log(`  → Found existing START frame for Scene ${scene.id} in storage`);
-                    const url = this.storageManager.getGcsUrl(startFramePath);
-                    await this.assetManager.createVersionedAssets(
+                    // Reconstruct the prompt for state consistency
+                    framePrompt = await this.frameComposer.generateFrameGenerationPrompt(
+                        assetKey === "scene_start_frame" ? "start" : "end",
+                        currentScene,
+                        sceneCharacters,
+                        sceneLocations,
+                        previousScene,
+                        project.generationRules
+                    );
+                }
+
+                if (frameExists) {
+                    console.log(`  → Found existing ${assetKey} for Scene ${scene.id} in storage`);
+                    const url = this.storageManager.getGcsUrl(framePath);
+
+                    onGenerate(
                         { projectId: project.id, sceneId: scene.id },
-                        'scene_start_frame',
+                        assetKey,
                         'image',
                         [ url ],
-                        { model: "existing" },
-                        true
-                    );
-                    await this.assetManager.createVersionedAssets(
-                        { projectId: project.id, sceneId: scene.id },
-                        'start_frame_prompt',
-                        'text',
-                        [ currentScene.assets[ 'start_frame_prompt' ]?.versions[ currentScene.assets[ 'start_frame_prompt' ]!.best ]?.data || startFramePrompt ],
-                        { model: "existing" },
+                        { model: imageModelName, prompt: framePrompt },
                         true
                     );
 
+
                 } else {
-                    console.log(`  → Generating START frame for Scene ${scene.id}...`);
+                    console.log(`  → Generating ${assetKey} for Scene ${scene.id}...`);
                     const previousAssets = getAllBestFromAssets(previousScene?.assets);
-                    const prevEndFrame = previousAssets[ 'scene_end_frame' ]?.data;
+                    const prevEndFrameOrSceneStartFrame =
+                        assetKey === "scene_start_frame" ?
+                            previousAssets[ 'scene_end_frame' ]?.data :
+                            currentAssets[ 'scene_start_frame' ]?.data;
                     
                     const charImages = sceneCharacters.flatMap(c => {
                          const a = getAllBestFromAssets(c.assets);
@@ -378,125 +396,45 @@ export class ContinuityManagerAgent {
                          return a['location_image']?.data ? [a['location_image'].data] : [];
                     });
 
-                    const url = await this.frameComposer.generateImage(
+                    const frame = await this.frameComposer.generateImage(
                         currentScene,
-                        startFramePrompt,
-                        "start",
+                        framePrompt,
+                        assetKey === "scene_start_frame" ? "start" : "end",
                         sceneCharacters,
                         sceneLocations,
-                        prevEndFrame,
+                        prevEndFrameOrSceneStartFrame,
                         [ ...charImages, ...locImages ],
+                        undefined,
                         onProgress
                     );
                     
-                    await this.assetManager.createVersionedAssets(
+                    onGenerate(
                         { projectId: project.id, sceneId: scene.id },
-                        'scene_start_frame',
+                        assetKey,
                         'image',
-                        [ url ],
-                        { model: imageModelName },
+                        [ frame ],
+                        { model: imageModelName, prompt: framePrompt },
                         true
                     );
-                    await this.assetManager.createVersionedAssets(
+
+                    onGenerate(
                         { projectId: project.id, sceneId: scene.id },
-                        'start_frame_prompt',
+                        promptKey,
                         'text',
-                        [ startFramePrompt ],
-                        { model: "gemini-pro" },
+                        [ framePrompt ],
+                        { model: textModelName },
                         true
                     );
                 }
             } else {
-                console.log(`  → Found existing START frame for Scene ${scene.id} in state: ${startFrame}`);
-            }
-
-            // --- Generate End Frame ---
-            const endFrame = getAllBestFromAssets(currentScene.assets)[ 'scene_end_frame' ]?.data;
-            if (!endFrame) {
-                const [ attempt ] = await this.assetManager.getNextVersionNumber({ projectId: project.id, sceneId: scene.id }, 'scene_end_frame');
-                const endFramePath = this.storageManager.getObjectPath({ type: "scene_end_frame", sceneId: scene.id, attempt });
-                const endFrameExists = await this.storageManager.fileExists(endFramePath);
-
-                // Reconstruct the prompt for state consistency
-                const endFramePrompt = await this.frameComposer.generateFrameGenerationPrompt(
-                    "end",
-                    currentScene,
-                    sceneCharacters,
-                    sceneLocations,
-                    previousScene,
-                    project.generationRules
-                );
-
-                if (endFrameExists) {
-                    console.log(`  → Found existing END frame for Scene ${scene.id} in storage`);
-                    const url = this.storageManager.getGcsUrl(endFramePath);
-                    await this.assetManager.createVersionedAssets(
-                        { projectId: project.id, sceneId: scene.id },
-                        'scene_end_frame',
-                        'image',
-                        [ url ],
-                        { model: "existing" },
-                        true
-                    );
-                    await this.assetManager.createVersionedAssets(
-                        { projectId: project.id, sceneId: scene.id },
-                        'end_frame_prompt',
-                        'text',
-                        [ currentScene.assets[ 'end_frame_prompt' ]?.versions[ currentScene.assets[ 'end_frame_prompt' ]!.best ]?.data || endFramePrompt ],
-                        { model: "existing" },
-                        true
-                    );
-
-                } else {
-                    console.log(`  → Generating END frame for Scene ${scene.id}...`);
-                    const startFrame = getAllBestFromAssets(currentScene.assets)[ 'scene_start_frame' ]?.data;
-                    
-                    const charImages = sceneCharacters.flatMap(c => {
-                         const a = getAllBestFromAssets(c.assets);
-                         return a['character_image']?.data ? [a['character_image'].data] : [];
-                    });
-                    const locImages = sceneLocations.flatMap(l => {
-                         const a = getAllBestFromAssets(l.assets);
-                         return a['location_image']?.data ? [a['location_image'].data] : [];
-                    });
-
-                    const url = await this.frameComposer.generateImage(
-                        currentScene,
-                        endFramePrompt,
-                        "end",
-                        sceneCharacters,
-                        sceneLocations,
-                        startFrame,
-                        [ ...charImages, ...locImages ],
-                        onProgress
-                    );
-                    
-                    await this.assetManager.createVersionedAssets(
-                        { projectId: project.id, sceneId: scene.id },
-                        'scene_end_frame',
-                        'image',
-                        [ url ],
-                        { model: imageModelName },
-                        true
-                    );
-                    await this.assetManager.createVersionedAssets(
-                        { projectId: project.id, sceneId: scene.id },
-                        'end_frame_prompt',
-                        'text',
-                        [ endFramePrompt ],
-                        { model: "gemini-pro" },
-                        true
-                    );
-                }
-            } else {
-                console.log(`  → Found existing END frame for Scene ${scene.id} in state: ${endFrame}`);
+                console.log(`  → Found existing ${assetKey} for Scene ${scene.id} in state: ${this.storageManager.getPublicUrl(frame)}`);
             }
 
             currentScene.progressMessage =
-                `Saved START and END frame images`;
+                `Saved ${assetKey}`;
             currentScene.status =
                 "complete";
-            if (onProgress) onProgress(currentScene, 100);
+            if (onProgress) onProgress(currentScene);
 
             updatedScenes.push(currentScene);
         }
@@ -506,7 +444,8 @@ export class ContinuityManagerAgent {
     async generateLocationAssets(
         locations: Location[],
         generationRules: string[],
-        onProgress?: (id: string, msg: string, status: AssetStatus, artifacts?: any) => Promise<void>,
+        onGenerate: OnGenerateCallback,
+        onProgress?: OnProgressCallback<Scene>,
         onRetry?: (attempt: number) => Promise<number>,
     ): Promise<Location[]> {
 
@@ -536,17 +475,17 @@ export class ContinuityManagerAgent {
                 if (exists) {
                     console.log(`  → Found existing image for: ${location.name}`);
                     const imageUrl = this.storageManager.getGcsUrl(imagePath);
-                    await this.assetManager.createVersionedAssets(
+                    onGenerate(
                         { projectId: location.projectId, locationIds: [ location.id ] },
                         'location_image',
                         'image',
                         [ imageUrl ],
-                        { model: "existing" },
+                        { model: imageModelName },
                         true
                     );
                 } else {
                     console.log(`  → Generating: ${location.name}`);
-                    if (onProgress) { await onProgress(location.id, `Generating initial image for ${location.name}...`, "generating"); }
+                    // if (onProgress) { await onProgress(location.id, `Generating initial image for ${location.name}...`, "generating"); }
 
                     const imagePrompt = buildLocationImagePrompt(location, generationRules);
                     try {
@@ -603,21 +542,30 @@ export class ContinuityManagerAgent {
                             outputMimeType,
                         );
 
-                        await this.assetManager.createVersionedAssets(
+                        onGenerate(
                             { projectId: location.projectId, locationIds: [ location.id ] },
                             'location_image',
                             'image',
                             [ imageUrl ],
-                            { model: imageModelName },
+                            { model: imageModelName, prompt: imagePrompt },
+                            true
+                        );
+
+                        onGenerate(
+                            { projectId: location.projectId, locationIds: [ location.id ] },
+                            'location_prompt',
+                            'text',
+                            [ imagePrompt ],
+                            { model: textModelName },
                             true
                         );
                         console.log(`    ✓ Saved: ${this.storageManager.getPublicUrl(imageUrl)}`);
-                        if (onProgress) { await onProgress(location.id, `Reference image generation complete.`, "complete"); }
+                        // if (onProgress) { await onProgress(location.id, `Reference image generation complete.`, "complete"); }
 
                     } catch (error) {
                         console.error(`    ✗ Failed to generate image for ${location.name}:`, error);
                         if (error instanceof GraphInterrupt) throw Error;
-                        if (onProgress) { await onProgress(location.id, `Reference image generation failed: ${(error as Error).message}`, "error"); }
+                        // if (onProgress) { await onProgress(location.id, `Reference image generation failed: ${(error as Error).message}`, "error"); }
                     }
                 }
             }

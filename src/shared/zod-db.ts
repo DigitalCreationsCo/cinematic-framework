@@ -4,7 +4,6 @@ import * as dbSchema from "./schema";
 import {
   ProjectMetadataSchema,
   InitialProjectMetadataSchema,
-  AudioAnalysisSchema,
   WorkflowMetricsSchema,
   AssetRegistrySchema,
   CinematographySchema,
@@ -21,7 +20,6 @@ export const DbProjectSchema = createSelectSchema(dbSchema.projects);
 
 export const DbInsertProjectSchema = createInsertSchema(dbSchema.projects, {
   metadata: InitialProjectMetadataSchema,
-  audioAnalysis: AudioAnalysisSchema,
   metrics: WorkflowMetricsSchema,
   assets: AssetRegistrySchema,
 });

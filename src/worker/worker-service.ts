@@ -10,9 +10,9 @@ import { SemanticExpertAgent } from "../workflow/agents/semantic-expert-agent";
 import { FrameCompositionAgent } from "../workflow/agents/frame-composition-agent";
 import { SceneGeneratorAgent } from "../workflow/agents/scene-generator";
 import { ContinuityManagerAgent } from "../workflow/agents/continuity-manager";
-import { AttemptMetric, Project, Scene } from "../shared/types/workflow.types";
+import { VersionMetric, Project, Scene, AssetVersion } from "../shared/types/workflow.types";
 import { deleteBogusUrlsStoryboard } from "../shared/utils/utils";
-import { PipelineEvent } from "../shared/types/pipeline.types";
+import { OnGenerateCallback, OnProgressCallback, PipelineEvent } from "../shared/types/pipeline.types";
 import { ProjectRepository } from "../pipeline/project-repository";
 import { MediaController } from "../workflow/media-controller";
 import { AssetVersionManager } from "../workflow/asset-version-manager";
@@ -50,7 +50,7 @@ export class WorkerService {
      */
     private getAgents(projectId: string, signal?: AbortSignal) {
 
-        const assetVersionManager = new AssetVersionManager(this.projectRepository);
+        const assetManager = new AssetVersionManager(this.projectRepository);
         const storageManager = new GCPStorageManager(this.gcpProjectId, projectId, this.bucketName);
         const mediaController = new MediaController(storageManager);
         const agentOptions = { signal };
@@ -62,34 +62,34 @@ export class WorkerService {
             this.textModel,
             qualityAgent,
             storageManager,
-            assetVersionManager,
+            assetManager,
             agentOptions
         );
 
         return {
+            assetManager,
             storageManager,
             audioProcessingAgent: new AudioProcessingAgent(this.textModel, storageManager, mediaController, agentOptions),
-            compositionalAgent: new CompositionalAgent(this.textModel, storageManager, assetVersionManager, agentOptions),
+            compositionalAgent: new CompositionalAgent(this.textModel, storageManager, assetManager, agentOptions),
             semanticExpert: new SemanticExpertAgent(this.textModel),
             frameCompositionAgent,
-            sceneAgent: new SceneGeneratorAgent(this.videoModel, qualityAgent, storageManager, assetVersionManager, agentOptions),
+            sceneAgent: new SceneGeneratorAgent(this.videoModel, qualityAgent, storageManager, assetManager, agentOptions),
             continuityAgent: new ContinuityManagerAgent(
                 this.textModel,
                 this.textModel,
                 frameCompositionAgent,
                 qualityAgent,
                 storageManager,
-                assetVersionManager,
+                assetManager,
                 agentOptions
             )
         };
     }
 
     /**
-     * Processes a specific job by claiming it and executing the relevant agent logic.
+     * Processes a dispatched job by claiming it and executing the relevant agent logic.
      * Uses AsyncLocalStorage to ensure all logs and agent sub-tasks are traceable.
-     * * @param jobId - The ID of the job dispatched by the system.
-     * @param projectId - The project the job belongs to.
+     * @param jobId - The ID of the job dispatched by the system.
      */
     async processJob(jobId: string) {
 
@@ -99,12 +99,12 @@ export class WorkerService {
             return;
         }
 
-        const onProgress = async (scene: Scene, progress?: number) => {
+        const onProgress: OnProgressCallback<Scene> = async (scene) => {
             console.log(`[Job ${jobId}] Progress: ${scene.progressMessage}`);
             await this.publishPipelineEvent({
                 type: "SCENE_PROGRESS",
                 projectId: job.projectId,
-                payload: { scene, progress },
+                payload: { scene },
                 timestamp: new Date().toISOString(),
             });
         };
@@ -123,6 +123,18 @@ export class WorkerService {
 
                 const controller = new AbortController();
                 const agents = this.getAgents(job.projectId, controller.signal);
+
+                const onGenerate: OnGenerateCallback = async (...[ scope, assetKey, type, assets, metadata, setBest ]) => {
+                    agents.assetManager.createVersionedAssets(
+                        scope,
+                        assetKey,
+                        type,
+                        assets,
+                        { ...metadata, jobId } as AssetVersion[ 'metadata' ],
+                        setBest
+                    );
+                };
+
 
                 let result = {} as typeof job.result;
                 let payload;
@@ -149,11 +161,11 @@ export class WorkerService {
                     }
                     case "PROCESS_AUDIO_TO_SCENES": {
                         payload = job.payload;
-                        const { segments, totalDuration } = await agents.audioProcessingAgent.processAudioToScenes(
+                        const analysis = await agents.audioProcessingAgent.processAudioToScenes(
                             job.payload.audioPublicUri,
                             payload.enhancedPrompt,
                         );
-                        result = { segments, totalDuration };
+                        result = { analysis };
                         break;
                     }
                     case "ENHANCE_STORYBOARD": {
@@ -177,6 +189,8 @@ export class WorkerService {
                         const characters = await agents.continuityAgent.generateCharacterAssets(
                             payload.characters,
                             payload.generationRules,
+                            onGenerate,
+                            onProgress
                         );
                         result = { characters };
                         break;
@@ -187,7 +201,9 @@ export class WorkerService {
 
                         const updatedLocations = await agents.continuityAgent.generateLocationAssets(
                             locations,
-                            project.generationRules || []
+                            project.generationRules,
+                            onGenerate,
+                            onProgress
                         );
                         result = { locations: updatedLocations };
                         break;
@@ -199,6 +215,8 @@ export class WorkerService {
                         // TODO Check job end for write op, possibly impl a callback for writes
                         const updatedScenes = await agents.continuityAgent.generateSceneFramesBatch(
                             project,
+                            job.assetKey as 'scene_start_frame' | 'scene_end_frame',
+                            onGenerate,
                             onProgress
                         );
                         result = { updatedScenes };
@@ -220,10 +238,10 @@ export class WorkerService {
                             location,
                             previousScene,
                             generationRules,
-                        } = await agents.continuityAgent.prepareAndRefineSceneInputs(scene, project, false);
+                        } = await agents.continuityAgent.prepareAndRefineSceneInputs(scene, project, false, onGenerate);
 
-                        const onComplete = (_scene: Scene, _attemptMetric: Omit<AttemptMetric, 'sceneId'>) => {
-                            const attemptMetric: AttemptMetric = {
+                        const onComplete = (_scene: Scene, _attemptMetric: Omit<VersionMetric, 'sceneId'>) => {
+                            const attemptMetric: VersionMetric = {
                                 ..._attemptMetric,
                                 sceneId: _scene.id,
                             };
@@ -275,6 +293,7 @@ export class WorkerService {
                             payload.sceneLocations,
                             payload.previousFrame,
                             payload.referenceImages,
+                            onGenerate,
                             onProgress
                         );
                         result = { frame };

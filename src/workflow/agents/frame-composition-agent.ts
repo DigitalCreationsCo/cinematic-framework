@@ -12,6 +12,7 @@ import { composeFrameGenerationPromptMeta, composeGenerationRules } from "../pro
 import { cleanJsonOutput } from "../../shared/utils/utils";
 import { AssetVersionManager } from "../asset-version-manager";
 import { QualityRetryHandler } from "@shared/utils/quality-retry-handler";
+import { OnGenerateCallback } from "@shared/types/pipeline.types";
 
 type FrameImageObjectParams = Extract<GcsObjectPathParams, ({ type: "scene_start_frame"; } | { type: "scene_end_frame"; })>;
 
@@ -66,7 +67,9 @@ export class FrameCompositionAgent {
         sceneLocations: Location[],
         previousFrame: string | undefined,
         referenceImages: string[],
-        onProgress?: (scene: Scene, progress?: number) => void
+        onGenerate?: OnGenerateCallback,
+        onProgress?: (scene: Scene, progress?: number) => void,
+
     ): Promise<string> {
         if (!this.qualityAgent.qualityConfig.enabled && !!this.qualityAgent.evaluateFrameQuality) {
             const [ attempt ] = await this.assetManager.getNextVersionNumber(
@@ -82,7 +85,8 @@ export class FrameCompositionAgent {
                 referenceImages,
                 onProgress
             );
-            this.assetManager.createVersionedAssets(
+
+            onGenerate?.(
                 { projectId: scene.projectId },
                 framePosition === "start" ? "scene_start_frame" : "scene_end_frame",
                 'image',
@@ -92,10 +96,11 @@ export class FrameCompositionAgent {
                     evaluation: null
                 }
             );
+
             return frame;
         }
 
-        const result = await this.generateImageWithQualityRetry(scene, prompt, framePosition, sceneCharacters, sceneLocations, previousFrame, referenceImages, onProgress);
+        const result = await this.generateImageWithQualityRetry(scene, prompt, framePosition, sceneCharacters, sceneLocations, previousFrame, referenceImages, onGenerate, onProgress);
 
         if (result.evaluation) {
             console.log(`   📊 Final: ${(result.finalScore * 100).toFixed(1)}% after ${result.attempts} attempt(s)`);
@@ -117,7 +122,9 @@ export class FrameCompositionAgent {
         locations: Location[],
         previousFrame: string | undefined,
         referenceImages: string[] = [],
+        onGenerate?: OnGenerateCallback,
         onProgress?: (scene: Scene, progress?: number) => void
+        // onStep?: (scene: Scene, progress?: number) => void
     ): Promise<FrameGenerationResult> {
 
         let frame: string | null = null;
@@ -165,7 +172,7 @@ export class FrameCompositionAgent {
                     characters,
                     locations,
                 );
-                this.assetManager.createVersionedAssets(
+                onGenerate?.(
                     { projectId: scene.projectId },
                     framePosition === "start" ? "scene_start_frame" : "scene_end_frame",
                     'image',
