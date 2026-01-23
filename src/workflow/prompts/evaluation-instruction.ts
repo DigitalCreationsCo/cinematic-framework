@@ -1,7 +1,7 @@
 export const promptVersion = "3.0.0-quality-control";
 
-import { Character, Location, PromptCorrectionSchema, QualityIssueSchema, Scene, getJsonSchema } from "../../shared/types/workflow.types";
-import { formatCharacterSpecs, formatLocationSpecs, getAllBestFromAssets } from "../../shared/utils/utils";
+import { Character, Location, PromptCorrectionSchema, QualityIssueSchema, Scene } from "../../shared/types/workflow.types";
+import { formatCharacterSpecs, formatLocationSpecs, getAllBestFromAssets, getJSONSchema } from "../../shared/utils/utils";
 import { composeDepartmentSpecs } from "./prompt-composer";
 import { buildQualityControlVideoPrompt, buildQualityControlFramePrompt } from "./role-quality-control";
 
@@ -149,7 +149,7 @@ ISSUE IDENTIFICATION
 ========================================
 
 For EACH issue found, provide:
-${JSON.stringify(getJsonSchema(QualityIssueSchema))}
+${JSON.stringify(getJSONSchema(QualityIssueSchema))}
 
 Critical issues: Break immersion, make video unusable
 Major issues: Noticeable problems that hurt quality
@@ -160,7 +160,7 @@ PROMPT CORRECTIONS (if regeneration needed)
 ========================================
 
 If the video requires regeneration, provide specific prompt corrections:
-${JSON.stringify(getJsonSchema(PromptCorrectionSchema))}
+${JSON.stringify(getJSONSchema(PromptCorrectionSchema))}
 
 Examples of common issues and fixes:
 
@@ -383,7 +383,7 @@ ISSUE IDENTIFICATION
 ========================================
 
 For EACH issue found, provide:
-${JSON.stringify(getJsonSchema(QualityIssueSchema))}
+${JSON.stringify(getJSONSchema(QualityIssueSchema))}
 
 Severity definitions:
 - **Critical**: Makes the frame unusable as a keyframe anchor or breaks narrative/character continuity
@@ -395,7 +395,7 @@ PROMPT CORRECTIONS (if regeneration needed)
 ========================================
 
 If the frame requires regeneration, provide specific prompt corrections:
-${JSON.stringify(getJsonSchema(PromptCorrectionSchema))}
+${JSON.stringify(getJSONSchema(PromptCorrectionSchema))}
 
 Examples of common issues and fixes:
 

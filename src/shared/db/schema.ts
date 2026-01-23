@@ -4,10 +4,11 @@ import {
   index, uniqueIndex
 } from "drizzle-orm/pg-core";
 import {
-  InitialProjectMetadata, AssetRegistry, Lighting, Cinematography,
-  CharacterState, LocationState, PhysicalTraits, WorkflowMetrics,
-  InitialStoryboard,
+  ProjectMetadata, AssetRegistry, 
+  CharacterState, LocationState, 
   createDefaultMetrics,
+  Project,
+  Lighting, Cinematography, PhysicalTraits, WorkflowMetrics,
 } from "../types/workflow.types";
 import { v7 as uuidv7 } from "uuid";
 import { sql } from "drizzle-orm";
@@ -24,9 +25,6 @@ export const users = pgTable("users", {
   email: text("email").notNull(),
 });
 
-export type InsertUser = typeof users.$inferInsert;
-export type User = typeof users.$inferSelect;
-
 // --- TABLES ---
 
 export const projects = pgTable("projects", {
@@ -35,8 +33,8 @@ export const projects = pgTable("projects", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 
   // Core Data - uses loose types for insertion flexibility
-  storyboard: jsonb("storyboard").$type<InitialStoryboard>().notNull(),
-  metadata: jsonb("metadata").$type<InitialProjectMetadata>().notNull(),
+  storyboard: jsonb("storyboard").$type<Project["storyboard"]>().notNull(),
+  metadata: jsonb("metadata").$type<ProjectMetadata>().notNull(),
 
   // Workflow Control
   status: assetStatusEnum("status").default("pending").notNull(),
@@ -80,7 +78,7 @@ export const locations = pgTable("locations", {
   colorPalette: jsonb("color_palette").$type<string[]>().notNull(),
   mood: text("mood").notNull(),
 
-  architecture: text("architecture").notNull(),
+  architecture: text("architecture").array().notNull(),
   naturalElements: jsonb("natural_elements").$type<string[]>().notNull(),
   manMadeObjects: jsonb("man_made_objects").$type<string[]>().notNull(),
   groundSurface: text("ground_surface").notNull(),

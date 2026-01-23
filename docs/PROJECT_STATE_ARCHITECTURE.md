@@ -19,7 +19,7 @@ graph LR
 - **Schema**: `InitialProjectSchema`
 - **Characteristics**:
   - `metadata`: Uses `InitialProjectMetadataSchema` (allows optional fields like `enhancedPrompt`).
-  - `storyboard`: Uses `InitialStoryboardSchema` (allows empty arrays for characters/scenes).
+  - `storyboard`: Uses `InitialStoryboard` (allows empty arrays for characters/scenes).
   - Used strictly for **inputs** to the repository (creation).
 
 ### 2. Project (Runtime State)
@@ -28,7 +28,7 @@ graph LR
 - **Characteristics**:
   - **Strict**: No optional fields for core data.
   - `metadata`: Uses `ProjectMetadataSchema` (all fields required).
-  - `storyboard`: Uses `StoryboardSchema` (immutable snapshot, must be populated).
+  - `storyboard`: Uses `Storyboard` (immutable snapshot, must be populated).
   - `metrics`: Must be present (defaults provided if missing).
 - **Guarantee**: Application logic receiving a `Project` object can operate without defensive null checks for core properties.
 
@@ -54,9 +54,9 @@ const project = await repo.createProject(minimalInput);
 ```
 
 ### Updating Initial State (Pre-Storyboard)
-Use `updateInitialProject` to modify state before the full storyboard exists (e.g. updating metadata, status).
+Use `updateProject` to modify state before the full storyboard exists (e.g. updating metadata, status).
 ```typescript
-await repo.updateInitialProject(projectId, { 
+await repo.updateProject(projectId, { 
   status: "generating",
   metadata: { ... } 
 }); // Returns InitialProject (loose validation)

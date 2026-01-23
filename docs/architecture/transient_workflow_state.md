@@ -15,7 +15,7 @@ import {
 import { 
   ProjectMetadata, AssetRegistry, Lighting, Cinematography,
   CharacterState, LocationState, PhysicalTraits, WorkflowMetrics,
-  Composition, AudioAnalysis, QualityEvaluationResult
+  Composition, AudioAnalysisAttributes, QualityEvaluationResult
 } from "./types";
 
 // --- ENUMS ---
@@ -32,7 +32,7 @@ export const projects = pgTable("projects", {
   
   // Core Data
   metadata: jsonb("metadata").$type<ProjectMetadata>().notNull(),
-  audioAnalysis: jsonb("audio_analysis").$type<AudioAnalysis>(),
+  audioAnalysis: jsonb("audio_analysis").$type<AudioAnalysisAttributes>(),
   metrics: jsonb("metrics").$type<WorkflowMetrics>(),
   
   // Workflow Control
@@ -112,27 +112,27 @@ import * as dbSchema from "./schema";
 
 // --- Project ---
 export const DbProjectSchema = createSelectSchema(dbSchema.projects);
-export const DbInsertProjectSchema = createInsertSchema(dbSchema.projects);
+export const InsertProject = createInsertSchema(dbSchema.projects);
 export type DbProject = z.infer<typeof DbProjectSchema>;
 
 // --- Scene ---
 export const DbSceneSchema = createSelectSchema(dbSchema.scenes);
-export const DbInsertSceneSchema = createInsertSchema(dbSchema.scenes);
+export const InsertScene = createInsertSchema(dbSchema.scenes);
 export type DbScene = z.infer<typeof DbSceneSchema>;
 
 // --- Character ---
 export const DbCharacterSchema = createSelectSchema(dbSchema.characters);
-export const DbInsertCharacterSchema = createInsertSchema(dbSchema.characters);
+export const InsertCharacter = createInsertSchema(dbSchema.characters);
 export type DbCharacter = z.infer<typeof DbCharacterSchema>;
 
 // --- Location ---
 export const DbLocationSchema = createSelectSchema(dbSchema.locations);
-export const DbInsertLocationSchema = createInsertSchema(dbSchema.locations);
+export const InsertLocation = createInsertSchema(dbSchema.locations);
 export type DbLocation = z.infer<typeof DbLocationSchema>;
 
 // --- Job ---
 export const DbJobSchema = createSelectSchema(dbSchema.jobs);
-export const DbInsertJobSchema = createInsertSchema(dbSchema.jobs);
+export const InsertJob = createInsertSchema(dbSchema.jobs);
 export type DbJob = z.infer<typeof DbJobSchema>;
 
 // --- Application Layer Only (Excluded from Relational DB) ---
@@ -153,7 +153,7 @@ import { z } from "zod";
 import * as dbSchema from "./schema";
 import { 
   ProjectMetadataSchema, 
-  AudioAnalysisSchema, 
+  AudioAnalysisAttributesSchema, 
   WorkflowMetricsSchema, 
   AssetRegistrySchema,
   CinematographySchema,
@@ -166,14 +166,14 @@ import {
 // --- PROJECT HELPERS ---
 export const DbProjectSchema = createSelectSchema(dbSchema.projects, {
   metadata: ProjectMetadataSchema,
-  audioAnalysis: AudioAnalysisSchema,
+  audioAnalysis: AudioAnalysisAttributesSchema,
   metrics: WorkflowMetricsSchema,
   assets: AssetRegistrySchema,
 });
 
-export const DbInsertProjectSchema = createInsertSchema(dbSchema.projects, {
+export const InsertProject = createInsertSchema(dbSchema.projects, {
   metadata: ProjectMetadataSchema,
-  audioAnalysis: AudioAnalysisSchema,
+  audioAnalysis: AudioAnalysisAttributesSchema,
   metrics: WorkflowMetricsSchema,
   assets: AssetRegistrySchema,
 });
@@ -185,7 +185,7 @@ export const DbSceneSchema = createSelectSchema(dbSchema.scenes, {
   assets: AssetRegistrySchema,
 });
 
-export const DbInsertSceneSchema = createInsertSchema(dbSchema.scenes, {
+export const InsertScene = createInsertSchema(dbSchema.scenes, {
   cinematography: CinematographySchema,
   lighting: LightingSchema,
   assets: AssetRegistrySchema,

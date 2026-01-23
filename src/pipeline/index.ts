@@ -34,6 +34,7 @@ import { CinematicVideoWorkflow } from "../workflow/graph";
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { ensureSubscription, ensureTopic } from "@shared/utils/pubsub-utils";
+import { getPool, initializeDatabase } from "@shared/db";
 
 
 
@@ -46,18 +47,16 @@ if (!postgresUrl) throw Error("Postgres URL is required for CheckpointerManager 
 const bucketName = process.env.GCP_BUCKET_NAME!;
 if (!bucketName) throw new Error("GCP_BUCKET_NAME environment variable not set.");
 
+
+
+initializeDatabase(getPool());
+
 const workerId = uuidv7();
 
 const checkpointerManager = new CheckpointerManager(postgresUrl);
 await checkpointerManager.init();
 
-const poolManager = new PoolManager({
-    connectionString: postgresUrl,
-    max: 20,
-    min: 5,
-    enableMetrics: true,
-    metricsIntervalMs: 30000,
-});
+const poolManager = new PoolManager();
 
 const lockManager = new DistributedLockManager(poolManager, workerId);
 await lockManager.init();
@@ -129,14 +128,14 @@ async function main() {
                 const graphData = await compiled.getGraphAsync();
 
                 const mermaidText = graphData.drawMermaid();
-                const textPath = path.resolve('./docs/graph_structure.mmd');
+                const textPath = path.resolve('./website/contents/docs/graph_structure.mmd');
                 await fs.writeFile(textPath, mermaidText);
                 console.debug(`[Debug]: Graph definition saved: file://${textPath}`);
 
                 try {
                     const pngBlob = await graphData.drawMermaidPng();
                     const pngBuffer = Buffer.from(await pngBlob.arrayBuffer());
-                    const pngPath = path.resolve('./docs/graph_diagram.png');
+                    const pngPath = path.resolve('./website/contents/docs/graph_diagram.png');
                     await fs.writeFile(pngPath, pngBuffer);
                     console.debug(`[Debug]: Graph image saved: file://${pngPath}`);
                 } catch (e) {
@@ -319,38 +318,45 @@ async function main() {
                 }
             });
 
-
-            process.on("SIGINT", async () => {
-
-                console.log("Shutting down worker...");
-
-                jobLifecycleMonitor.stop();
-
-                [ workerEventsSubscription, cancellationSubscription, pipelineCommandsSubscription ].forEach((sub) => sub.close());
+            const handleShutdown = async () => {
+                console.log("Shutting down pipeline service...");
                 try {
-                    console.log("Deleting subscriptions ");
+                    console.log("Closing subscriptions ");
                     await Promise.all([
-                        workerEventsSubscription.delete(),
-                        cancellationSubscription.delete(),
-                        pipelineCommandsSubscription.delete()
+                        workerEventsSubscription.close(),
+                        pipelineCommandsSubscription.close(),
+                        // ONLY delete the temporary, instance-specific subscription
+                        cancellationSubscription.delete().catch(() => { })
                     ]);
-                    console.log("Deleted subscriptions");
+                    console.log("Closed subscriptions");
+                    
+                    jobLifecycleMonitor.stop();
+
+                    await lockManager.close();
+                    await poolManager.close();
+
+                    console.log("Closed lock manager and pool manager");
+                    console.log("Shut down successful.");
                 } catch (e) {
-                    console.error("Failed to delete subscription (it might have been deleted already or connection failed)", e);
+                    console.error("Failed to close subscription (it might have been closed already or connection failed)", e);
                 }
                 process.exit(0);
-            });
+            }
+
+            process.on("SIGINT", handleShutdown);
+            process.on("SIGTERM", handleShutdown);
 
             if ((import.meta as any).hot) {
-                (import.meta as any).hot.dispose(() => {
+                (import.meta as any).hot.dispose(async () => {
                     console.log("Closing pipeline subscription for HMR...");
                     workerEventsSubscription.close();
                     cancellationSubscription.close();
                     pipelineCommandsSubscription.close();
+                    await lockManager.close();
                 });
             }
         } catch (error) {
-            console.error(`[Pipeline ${workerId}] FATAL: PubSub initialization failed:`, error);
+            console.error({ error }, `FATAL: PubSub initialization failed.`);
             process.exit(1);
         }
     });

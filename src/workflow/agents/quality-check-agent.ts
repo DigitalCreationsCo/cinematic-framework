@@ -1,16 +1,17 @@
 
-import { Scene, Character, Location, QualityEvaluationResult, QualityConfig, QualityEvaluationSchema, getJsonSchema, AssetStatus } from "../../shared/types/workflow.types";
+import { Scene, Character, Location, QualityEvaluationResult, QualityConfig, QualityEvaluationSchema, AssetStatus } from "../../shared/types/workflow.types";
+import { getJSONSchema } from '../../shared/utils/utils';
 import { GCPStorageManager, GcsObjectPathParams } from "../storage-manager";
 import { buildFrameEvaluationPrompt, buildSceneVideoEvaluationPrompt } from "../prompts/evaluation-instruction";
 import { buildllmParams } from "../llm/google/google-llm-params";
 import { buildCorrectionPrompt } from "../prompts/prompt-correction-instruction";
 import { TextModelController } from "../llm/text-model-controller";
-import { z } from "zod";
 import { FileData } from "@google/genai";
 import { buildSafetyGuidelinesPrompt } from "../prompts/safety-instructions";
 import { detectRelevantDomainRules, getProactiveRules } from "../prompts/generation-rules-presets";
 import { qualityCheckModelName } from "../llm/google/models";
 import { UpdateSceneCallback } from "@shared/types/pipeline.types";
+import { z } from "zod";
 
 
 
@@ -155,7 +156,7 @@ export class QualityCheckAgent {
       ],
       config: {
         abortSignal: this.options?.signal,
-        responseJsonSchema: getJsonSchema(QualityEvaluationSchema),
+        responseJsonSchema: getJSONSchema(QualityEvaluationSchema),
         temperature: 0.3,
       }
     }));
@@ -234,7 +235,7 @@ export class QualityCheckAgent {
       ],
       config: {
         abortSignal: this.options?.signal,
-        responseJsonSchema: getJsonSchema(QualityEvaluationSchema),
+        responseJsonSchema: getJSONSchema(QualityEvaluationSchema),
         temperature: 0.3,
       }
     }));

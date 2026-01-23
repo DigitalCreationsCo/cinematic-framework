@@ -1,5 +1,6 @@
 import { TextModelController } from "../llm/text-model-controller";
-import { Storyboard, getJsonSchema } from "../../shared/types/workflow.types";
+import { Storyboard } from "../../shared/types/workflow.types";
+import { getJSONSchema } from '../../shared/utils/utils';
 import { buildSemanticRulesPrompt } from "../prompts/semantic-rules-instruction";
 import { buildllmParams } from "../llm/google/google-llm-params";
 import { z } from "zod";
@@ -40,7 +41,7 @@ export class SemanticExpertAgent {
                 model: qualityCheckModelName,
                 contents: [ { role: "user", parts: [ { text: prompt } ] } ],
                 config: {
-                    responseJsonSchema: getJsonSchema(SemanticRulesResponseSchema),
+                    responseJsonSchema: getJSONSchema(SemanticRulesResponseSchema),
                     temperature: 0.4
                 }
             }));

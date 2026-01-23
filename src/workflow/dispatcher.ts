@@ -35,7 +35,7 @@ export class Dispatcher {
         // payload: Extract<JobRecord, { type: T; }>[ 'payload' ],
         assetKey: AssetKey,
         ...payloadArg: JobPayload<T>
-    ): Promise<{ jobId: string; } & Extract<JobRecord, { type: T; }>[ 'result' ] | undefined> {
+    ): Promise<Extract<JobRecord, { type: T; }> | undefined> {
 
         const [ payload ] = payloadArg;
         // 1. Fetch the latest job for this project + type + logic scoping
@@ -73,11 +73,7 @@ export class Dispatcher {
 
         // 4. Handle existing job states
         if (job?.state === 'COMPLETED') {
-            const result = job.result as any;
-            if (!result) {
-                throw new Error(`Job ${job.id} complete but no result was returned.`);
-            }
-            return { ...result, jobId: job.id };
+            return job as Extract<JobRecord, { type: T; }>;
         }
 
         if (job?.state === 'FAILED') {
@@ -99,9 +95,8 @@ export class Dispatcher {
     async ensureBatchJobs<T extends JobType>(
         nodeName: string,
         jobs: BatchJobs<T>,
-    ): Promise<NonNullable<{ jobId: string; } & Extract<JobRecord, { type: T; }>[ 'result' ]>[]> {
-
-        const results: NonNullable<{ jobId: string; } & Extract<JobRecord, { type: T; }>[ 'result' ]>[] = [];
+    ): Promise<Extract<JobRecord, { type: T; }>[]> {
+        let completedJobs: Extract<JobRecord, { type: T; }>[] = [];
         const missingJobs: typeof jobs = [];
         const failedJobs: { id: string; attempt: number; error: string; }[] = [];
         let runningCount = 0;
@@ -114,8 +109,7 @@ export class Dispatcher {
             if (!job) {
                 missingJobs.push(jobRequest);
             } else if (job.state === 'COMPLETED') {
-                if (!job.result) throw new Error(`Job ${job.id} has no result object`);
-                results.push(job.result as any);
+                completedJobs.push(job as Extract<JobRecord, { type: T; }>);
             } else if (job.state === 'FAILED') {
                 failedJobs.push({ id: job.id, attempt: job.attempt, error: job.error || "Unknown error" });
             } else {
@@ -169,10 +163,10 @@ export class Dispatcher {
         }
 
         // 4. Wait if any are running or if we still have missing jobs (queued)
-        const notCompletedCount = jobs.length - results.length;
+        const notCompletedCount = missingJobs.length;
 
         if (notCompletedCount > 0) {
-            console.log(`[${nodeName}] Waiting for ${notCompletedCount} jobs (${runningCount} running, ${jobs.length - results.length - runningCount} pending start)...`);
+            console.log(`[${nodeName}] Waiting for ${notCompletedCount} jobs (${runningCount} running, ${jobs.length - completedJobs.length - runningCount} pending start)...`);
             const interruptValue: LlmRetryInterruptValue = {
                 type: "waiting_for_batch",
                 error: `Waiting for ${notCompletedCount} batch jobs to complete`,
@@ -186,6 +180,6 @@ export class Dispatcher {
             interrupt(interruptValue);
         }
 
-        return results as any;
+        return completedJobs;
     }
 }

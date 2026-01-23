@@ -5,7 +5,7 @@
  * at various generation points in the workflow.
  */
 
-import { Scene, Character, Location, QualityEvaluationResult } from "../../shared/types/workflow.types";
+import { Scene, Character, Location, QualityEvaluationResult, CharacterAttributes, LocationAttributes } from "../../shared/types/workflow.types";
 import { buildDirectorSceneBeatPrompt } from "./role-director";
 import { buildCinematographerGuidelines, buildCinematographerFrameComposition, buildCinematographerNarrative } from "./role-cinematographer";
 import { buildGafferGuidelines, buildGafferLightingSpec } from "./role-gaffer";
@@ -133,8 +133,8 @@ export const formatLocationTemporalState = (location: Location): string => {
  */
 export const composeStoryboardEnrichmentPrompt = (
   enhancedPrompt: string,
-  characters: Character[],
-  locations: Location[],
+  characters: CharacterAttributes[],
+  locations: LocationAttributes[],
   schema: string,
   audioContext?: string
 ) => `
@@ -429,10 +429,6 @@ Reference: ${location.assets[ 'location_image' ]?.versions[ location.assets[ 'lo
 };
 
 export function composeGenerationRules(generationRules?: string[]) {
-  // const rules = generationRules && generationRules.length > 0
-  //   ? `\nGENERATION RULES:\n${generationRules.map((rule) => `- ${rule}`).join("\n")}`
-  //   : "";
-
   const rules = generationRules && generationRules.length > 0 ? `
   The following rules are MANDATORY constraints. Any violation is a CRITICAL FAILURE.
   Must explicitly check the asset against each GENERATION RULE.

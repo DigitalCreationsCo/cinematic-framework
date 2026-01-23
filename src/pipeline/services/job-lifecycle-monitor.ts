@@ -21,7 +21,7 @@ export class JobLifecycleMonitor {
     }
 
     public start(frequencyMs: number = 60000) {
-        console.log("[Monitor] Starting...");
+        console.log({ functionName: this.start.name }, `Starting monitor...`);
         if (this.isRunning) return;
         this.isRunning = true;
         this.interval = setInterval(() => this.maintenanceCycle(), frequencyMs);
@@ -29,14 +29,14 @@ export class JobLifecycleMonitor {
 
     private async maintenanceCycle() {
 
-        console.log("[Monitor] Cycle");
+        console.log({ functionName: this.maintenanceCycle.name, isRunning: this.isRunning }, `Cycle`);
         try {
             await Promise.all([
                 this.processStaleJobs(),
                 this.processRetryableJobs()
             ]);
         } catch (error) {
-            console.error("[Monitor] Cycle failed:", error);
+            console.error({ functionName: this.maintenanceCycle.name, isRunning: this.isRunning, error }, "Cycle failed");
         }
     }
 
@@ -45,7 +45,7 @@ export class JobLifecycleMonitor {
      */
     private async processStaleJobs() {
 
-        console.log("[Monitor] processStale");
+        console.log({ functionName: this.processStaleJobs.name }, `Processing Stale Jobs`);
         const staleJobs = await db.select({ id: jobs.id, attempt: jobs.attempt })
             .from(jobs)
             .where(and(
@@ -64,7 +64,7 @@ export class JobLifecycleMonitor {
      */
     private async processRetryableJobs() {
 
-        console.log("[Monitor] processRetryable");
+        console.log({ functionName: this.processRetryableJobs.name }, `Processing Retryable Jobs`);
         const retryableJobs = await db.select({ id: jobs.id, attempt: jobs.attempt })
             .from(jobs)
             .where(and(
@@ -79,7 +79,7 @@ export class JobLifecycleMonitor {
     }
 
     public stop() {
-        console.log("[Monitor] Stopping...");
+        console.log({ functionName: this.stop.name }, `Stopping...`);
         if (this.interval) clearInterval(this.interval!);
         this.isRunning = false;
     }

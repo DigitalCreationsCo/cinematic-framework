@@ -2,61 +2,60 @@ import { createSelectSchema, createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import * as dbSchema from "./schema";
 import {
-  ProjectMetadataSchema,
-  InitialProjectMetadataSchema,
-  WorkflowMetricsSchema,
-  AssetRegistrySchema,
-  CinematographySchema,
-  LightingSchema,
-  PhysicalTraitsSchema,
-  CharacterStateSchema,
-  LocationStateSchema,
-  InitialProjectSchema,
-  LocationSchema
+  ProjectMetadata,
+  WorkflowMetrics,
+  AssetRegistry,
+  Cinematography,
+  Lighting,
+  PhysicalTraits,
+  CharacterState,
+  LocationState,
+  Location,
+  Scene
 } from "../types/workflow.types";
 
 // --- PROJECT HELPERS ---
 export const DbProjectSchema = createSelectSchema(dbSchema.projects);
 
-export const DbInsertProjectSchema = createInsertSchema(dbSchema.projects, {
-  metadata: InitialProjectMetadataSchema,
-  metrics: WorkflowMetricsSchema,
-  assets: AssetRegistrySchema,
+export const InsertProject = createInsertSchema(dbSchema.projects, {
+  metadata: ProjectMetadata,
+  metrics: WorkflowMetrics,
+  assets: AssetRegistry,
 });
 
 // --- SCENE HELPERS ---
 export const DbSceneSchema = createSelectSchema(dbSchema.scenes, {
-  cinematography: CinematographySchema,
-  lighting: LightingSchema,
-  assets: AssetRegistrySchema,
+  cinematography: Cinematography,
+  lighting: Lighting,
+  assets: AssetRegistry,
 });
 
-export const DbInsertSceneSchema = createInsertSchema(dbSchema.scenes, {
-  cinematography: CinematographySchema,
-  lighting: LightingSchema,
-  assets: AssetRegistrySchema,
+export const InsertScene = createInsertSchema(dbSchema.scenes, {
+  cinematography: Cinematography,
+  lighting: Lighting,
+  assets: AssetRegistry,
 });
 
 // --- CHARACTER & LOCATION HELPERS ---
 export const DbCharacterSchema = createSelectSchema(dbSchema.characters);
 
-export const DbInsertCharacterSchema = createInsertSchema(dbSchema.characters, {
-  physicalTraits: PhysicalTraitsSchema,
-  state: CharacterStateSchema,
-  assets: AssetRegistrySchema,
+export const InsertCharacter = createInsertSchema(dbSchema.characters, {
+  physicalTraits: PhysicalTraits,
+  state: CharacterState,
+  assets: AssetRegistry,
 });
 
 export const DbLocationSchema = createSelectSchema(dbSchema.locations);
 
-export const DbInsertLocationSchema = createInsertSchema(dbSchema.locations, {
-  lightingConditions: LightingSchema,
-  state: LocationStateSchema,
-  assets: AssetRegistrySchema,
+export const InsertLocation = createInsertSchema(dbSchema.locations, {
+  lightingConditions: Lighting,
+  state: LocationState,
+  assets: AssetRegistry,
 });
 
 // --- JOB HELPERS ---
 export const DbJobSchema = createSelectSchema(dbSchema.jobs);
-export const DbInsertJobSchema = createInsertSchema(dbSchema.jobs);
+export const InsertJob = createInsertSchema(dbSchema.jobs);
 
 // --- Derived Types ---
 export type ProjectEntity = z.infer<typeof DbProjectSchema>;

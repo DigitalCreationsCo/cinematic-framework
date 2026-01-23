@@ -43,7 +43,7 @@ SceneGenerationLegacyAssetsSchema = z.object({
 **Composed SceneSchema**:
 ```typescript
 SceneSchema = z.intersection(
-  AudioSegmentSchema,              // From Director: musical timing
+  AudioAnalysisAttributesSchema,              // From Director: musical timing
   z.intersection(
     z.object({ id: number }),      // Scene identifier
     z.intersection(

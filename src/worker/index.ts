@@ -17,11 +17,10 @@ import { DistributedLockManager } from "../pipeline/services/lock-manager";
 import * as dotenv from "dotenv";
 import { initLogger, LogContext } from "../shared/logger/init-logger";
 import { ensureSubscription, ensureTopic } from "@shared/utils/pubsub-utils";
+import { getPool, initializeDatabase } from "@shared/db";
 dotenv.config();
 
-const logContextStore = new AsyncLocalStorage<LogContext>();
 
-const workerId = uuidv7();
 
 const gcpProjectId = process.env.GCP_PROJECT_ID;
 if (!gcpProjectId) throw Error("A GCP projectId was not provided");
@@ -32,11 +31,15 @@ if (!bucketName) throw Error("A bucket name was not provided");
 const postgresUrl = process.env.POSTGRES_URL;
 if (!postgresUrl) throw Error("Postgres URL is required");
 
-const poolManager = new PoolManager({
-    connectionString: postgresUrl,
-    max: 10,
-    min: 2,
-});
+
+
+initializeDatabase(getPool());
+
+const logContextStore = new AsyncLocalStorage<LogContext>();
+
+const workerId = uuidv7();
+
+const poolManager = new PoolManager();
 
 const lockManager = new DistributedLockManager(poolManager, workerId);
 await lockManager.init();
@@ -50,7 +53,7 @@ const jobEventsTopicPublisher = pubsub.topic(JOB_EVENTS_TOPIC_NAME);
 const videoEventsTopicPublisher = pubsub.topic(PIPELINE_EVENTS_TOPIC_NAME);
 
 async function publishJobEvent(event: JobEvent) {
-    console.log(`[Worker] Publishing job event ${event.type} to ${JOB_EVENTS_TOPIC_NAME}`, { event });
+    console.log({ event }, `Publishing job event to ${JOB_EVENTS_TOPIC_NAME}`);
     const dataBuffer = Buffer.from(JSON.stringify(event));
     await jobEventsTopicPublisher.publishMessage({
         data: dataBuffer,
@@ -59,6 +62,7 @@ async function publishJobEvent(event: JobEvent) {
 }
 
 export async function publishPipelineEvent(event: PipelineEvent) {
+    console.log({ event }, `Publishing pipeline event to ${PIPELINE_EVENTS_TOPIC_NAME}`);
     const dataBuffer = Buffer.from(JSON.stringify(event));
     await videoEventsTopicPublisher.publishMessage({
         data: dataBuffer,
@@ -92,7 +96,7 @@ async function main() {
 
             // 2. Setup Consumer
             const subscription = pubsub.subscription(WORKER_JOB_EVENTS_SUBSCRIPTION);
-            console.log(`[Worker ${workerId}] Listening on ${WORKER_JOB_EVENTS_SUBSCRIPTION}`);
+            console.log(`Listening on ${WORKER_JOB_EVENTS_SUBSCRIPTION}`);
 
             subscription.on("message", async (message) => {
                 try {
@@ -107,26 +111,32 @@ async function main() {
 
                     if (event && event.type === "JOB_DISPATCHED") {
                         await logContextStore.run({ ...logContext, jobId: event.jobId, shouldPublishLog: false }, async () => {
-                            console.log(`[Worker ${workerId}] Received JOB_DISPATCHED for ${event.jobId}`);
+                            console.log({ event }, `Received JOB_DISPATCHED event.`);
                             await workerService.processJob(event.jobId);
                         });
                     }
                     await message.ackWithResponse(); 
                 } catch (error) {
-                    console.error(`[Worker ${workerId}] Error processing message:`, error);
+                    console.error({ error }, `Error processing message`);
                     message.nack();
                 }
             });
 
             // Handle shutdown
-            process.on("SIGINT", async () => {
-                console.log("Shutting down worker");
+            const handleShutdown = async () => {
+                console.log("Shutting down worker service...");
                 subscription.close();
+                await lockManager.close();
                 await poolManager.close();
+                console.log("Shut down successful.");
                 process.exit(0);
-            });
+            };
+
+            process.on("SIGINT", handleShutdown);
+            process.on("SIGTERM", handleShutdown);
+
         } catch (error) {
-            console.error(`[Worker ${workerId}] FATAL: PubSub initialization failed:`, error);
+            console.error({ error }, `FATAL: PubSub initialization failed.`);
             process.exit(1);
         }
     });

@@ -90,6 +90,10 @@ export class DistributedLockManager {
             lockTTL = 30000,
         } = options;
 
+        if (heartbeatInterval >= lockTTL) {
+            throw new Error("heartbeatInterval must be significantly less than lockTTL");
+        }
+        
         // Check circuit breaker state first
         if (this.poolManager.getCircuitState() === 'open') {
             console.warn('[LockManager] Cannot acquire lock - circuit breaker is open');
@@ -371,14 +375,20 @@ export class DistributedLockManager {
      * Close and cleanup
      */
     async close() {
-        console.log('[LockManager] Closing...');
+        console.log('[LockManager] Initiating graceful shutdown...');
 
-        // Release all locks first
-        await this.releaseAllLocks();
+        // 1. Stop all local heartbeats immediately to prevent renewal
+        for (const projectId of this.activeLocks.keys()) {
+            this.stopHeartbeat(projectId);
+        }
 
-        // Close pool manager
-        await this.poolManager.close();
+        // 2. Release all locks in the DB (needs the pool to be alive!)
+        try {
+            await this.releaseAllLocks();
+        } catch (error) {
+            console.error('[LockManager] Failed to release locks during close:', error);
+        }
 
-        console.log('[LockManager] Closed successfully');
+        console.log('[LockManager] Lock cleanup complete.');
     }
 }

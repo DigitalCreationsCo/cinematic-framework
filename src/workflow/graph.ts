@@ -10,11 +10,11 @@ import {
   AssetKey,
   AssetType,
   AssetVersion,
-  InitialProject,
-  InitialProjectSchema,
   LlmRetryInterruptValue,
   Project,
+  ProjectMetadata,
   Scene,
+  Storyboard,
   WorkflowState,
 } from "../shared/types/workflow.types";
 import { PipelineEvent } from "../shared/types/pipeline.types";
@@ -115,7 +115,7 @@ export class CinematicVideoWorkflow {
 
   public publishEvent: (event: PipelineEvent) => Promise<void> = async () => { };
 
-  private async publishStateUpdate(project: Project | InitialProject, nodeName: string) {
+  private async publishStateUpdate(project: Project, nodeName: string) {
     this.publishEvent({
       type: "FULL_STATE",
       projectId: this.projectId,
@@ -130,10 +130,8 @@ export class CinematicVideoWorkflow {
       channels: {
         id: null,
         projectId: null,
-        initialProject: null,
-        project: null,
-        hasAudio: null,
         localAudioPath: null,
+        hasAudio: null,
         currentSceneIndex: null,
         nodeAttempts: {
           reducer: (x, y) => ({ ...x, ...y }),
@@ -221,25 +219,14 @@ export class CinematicVideoWorkflow {
     workflow.addNode("expand_creative_prompt", async (state: WorkflowState) => {
       const nodeName = "expand_creative_prompt";
       console.log(`[${nodeName}]: Started`);
-      const project = await this.projectRepository.getProject(state.projectId);
-      if (!project.metadata.initialPrompt) throw new Error("No user prompt provided");
-
       try {
 
-        const result = await this.dispatcher.ensureJob(
+        await this.dispatcher.ensureJob(
           nodeName,
           "EXPAND_CREATIVE_PROMPT",
           'enhanced_prompt',
-          {
-            initialPrompt: project.metadata.initialPrompt,
-            title: project.metadata.title,
-          },
         );
-        const { expandedPrompt } = result!;
 
-        console.log(` Expanded prompt: ${project.metadata.initialPrompt.length} to ${expandedPrompt.length} characters of cinematic detail`);
-
-        this.publishStateUpdate(project, nodeName);
         console.log(`[${this.projectId}-${nodeName}]: Completed\n`);
 
         if (state.hasAudio) {
@@ -247,7 +234,6 @@ export class CinematicVideoWorkflow {
           return new Command({
             goto: "create_scenes_from_audio",
             update: {
-              initialProject: project,
               __interrupt__: undefined,
               __interrupt_resolved__: false,
             }
@@ -257,7 +243,6 @@ export class CinematicVideoWorkflow {
         return new Command({
           goto: "generate_storyboard_exclusively_from_prompt", 
           update: {
-            initialProject: project,
             __interrupt__: undefined,
             __interrupt_resolved__: false,
           }
@@ -274,26 +259,18 @@ export class CinematicVideoWorkflow {
     workflow.addNode("generate_storyboard_exclusively_from_prompt", async (state: WorkflowState) => {
       const nodeName = "generate_storyboard_exclusively_from_prompt";
       console.log(`[${nodeName}]: Started`);
-      const project = state.initialProject;
-      if (!project?.metadata.enhancedPrompt) throw new Error("No enhanced prompt available");
 
       try {
         await this.dispatcher.ensureJob(
           nodeName,
           "GENERATE_STORYBOARD",
-          "storyboard",
-          {
-            title: project?.metadata.title,
-            enhancedPrompt: project?.metadata.enhancedPrompt
-          },
+          "storyboard"
         );
 
-        this.publishStateUpdate(project, nodeName);
         console.log(`[${nodeName}]: Completed\n`);
 
         return {
           ...state,
-          initialProject: project,
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -308,28 +285,18 @@ export class CinematicVideoWorkflow {
     workflow.addNode("create_scenes_from_audio", async (state: WorkflowState) => {
       const nodeName = "create_scenes_from_audio";
       console.log(`[${nodeName}]: Started`);
-      const project = state.initialProject;
-      if (!project?.metadata.enhancedPrompt) throw new Error("No enhanced prompt available");
-      if (!project?.metadata.audioPublicUri) throw new Error("No audio public url available");
 
-      const currentAttempt = (state.nodeAttempts?.[ nodeName ] || 0) + 1;
       console.log(" Creating Timed Scenes from Audio...");
       try {
         await this.dispatcher.ensureJob(
           nodeName,
           "PROCESS_AUDIO_TO_SCENES",
-          "audio_analysis",
-          {
-            audioPublicUri: project?.metadata.audioPublicUri,
-            enhancedPrompt: project?.metadata.enhancedPrompt,
-          },
+          "audio_analysis"
         );
 
-        this.publishStateUpdate(project, nodeName);
         console.log(`[${nodeName}]: Completed\n`);
         return {
           ...state,
-          initialProject: project,
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -344,11 +311,7 @@ export class CinematicVideoWorkflow {
     workflow.addNode("enrich_storyboard_and_scenes", async (state: WorkflowState) => {  
       const nodeName = "enrich_storyboard_and_scenes";
       console.log(`[${nodeName}]: Started`);
-      const project = state.initialProject;
-      if (!project?.storyboard || !project.storyboard.scenes) throw new Error("No scenes available.");
-      if (!project?.metadata.enhancedPrompt) throw new Error("No enhanced prompt available.");
 
-      const currentAttempt = (state.nodeAttempts?.[ nodeName ] || 0) + 1;
       console.log(" Enhancing storyboard...");
       try {
 
@@ -356,18 +319,11 @@ export class CinematicVideoWorkflow {
           nodeName,
           "ENHANCE_STORYBOARD",
           "storyboard",
-          {
-            storyboard: project.storyboard as any,
-            enhancedPrompt: project.metadata.enhancedPrompt
-          },
         );
 
-        this.publishStateUpdate(project, nodeName);
         console.log(`[${nodeName}]: Completed\n`);
         return {
           ...state,
-          initialProject: project,
-          project: project,
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -382,10 +338,7 @@ export class CinematicVideoWorkflow {
     workflow.addNode("semantic_analysis", async (state: WorkflowState) => {
       const nodeName = "semantic_analysis";
       console.log(`[${nodeName}]: Started`);
-      const project = state.project;
-      if (!project?.storyboard) throw new Error("No storyboard available.");
 
-      console.log(" Semantic Rule Analysis ");
       try {
         await this.dispatcher.ensureJob(
           nodeName,
@@ -393,13 +346,9 @@ export class CinematicVideoWorkflow {
           "generation_rules",
         );
 
-        this.publishStateUpdate(project, nodeName);
-
         console.log(`[${nodeName}]: Completed\n`);
         return {
           ...state,
-          initialProject: project,
-          project: project,
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -414,43 +363,26 @@ export class CinematicVideoWorkflow {
     workflow.addNode("generate_character_assets", async (state: WorkflowState) => {
       const nodeName = "generate_character_assets";
       console.log(`[${nodeName}]: Started`);
-      let project = state.project;
-      if (!project?.storyboard) throw new Error("No project storyboard available");
 
       console.log(` Generating Character References `);
       try {
         const executionMode = process.env.EXECUTION_MODE || 'SEQUENTIAL';
         console.log(`[${nodeName}]: Executing in ${executionMode.toLowerCase()} mode.`);
 
-        const characters = project.storyboard.characters;
-
-        let updatedProject: Project;
         if (executionMode === 'SEQUENTIAL') {
           await this.dispatcher.ensureJob(
             nodeName,
             "GENERATE_CHARACTER_ASSETS",
-            "character_image",
-            {
-              characters: characters,
-              generationRules: project.generationRules,
-            },
+            "character_image"
           );
-
-          this.publishStateUpdate(project, nodeName);
 
         } else {
 
           await this.dispatcher.ensureJob(
             nodeName,
             "GENERATE_CHARACTER_ASSETS",
-            "character_image",
-            {
-              characters: characters,
-              generationRules: project.generationRules,
-            },
+            "character_image"
           );
-
-          this.publishStateUpdate(project, nodeName);
 
           // Parallel logic (fan-out)
           // const characterIds = characters.map(c => c.id);
@@ -508,7 +440,6 @@ export class CinematicVideoWorkflow {
         console.log(`[${nodeName}]: Completed\n`);
         return {
           ...state,
-          project,
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -523,40 +454,26 @@ export class CinematicVideoWorkflow {
     workflow.addNode("generate_location_assets", async (state: WorkflowState) => {
       const nodeName = "generate_location_assets";
       console.log(`[${nodeName}]: Started`);
-      let project = state.project;
-      if (!project?.storyboard) throw new Error("No project storyboard available");
 
       console.log(` Generating Location References `);
       try {
         const executionMode = process.env.EXECUTION_MODE || 'SEQUENTIAL';
         console.log(`[${nodeName}]: Executing in ${executionMode.toLowerCase()} mode.`);
-        const locations = project.storyboard.locations;
 
         if (executionMode === 'SEQUENTIAL') {
           await this.dispatcher.ensureJob(
             nodeName,
             "GENERATE_LOCATION_ASSETS",
-            "location_image",
-            {
-              locations: locations,
-              generationRules: project.generationRules,
-            },
+            "location_image"
           );
 
-          this.publishStateUpdate(project, nodeName);
         } else {
 
           await this.dispatcher.ensureJob(
             nodeName,
             "GENERATE_LOCATION_ASSETS",
-            "location_image",
-            {
-              locations: locations,
-              generationRules: project.generationRules,
-            },
+            "location_image"
           );
-
-          this.publishStateUpdate(project, nodeName);
 
           // const jobs: BatchJobs<"GENERATE_LOCATION_ASSETS"> = locations.map((loc, index) => ({
           //   id: this.jobControlPlane.jobId(this.projectId, nodeName, `loc-${loc.id}`),
@@ -598,7 +515,6 @@ export class CinematicVideoWorkflow {
         console.log(`[${nodeName}]: Completed\n`);
         return {
           ...state,
-          project,
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -613,8 +529,6 @@ export class CinematicVideoWorkflow {
     workflow.addNode("generate_scene_assets", async (state: WorkflowState) => {
       const nodeName = "generate_scene_assets";
       console.log(`[${nodeName}]: Started`);
-      let project = state.project;
-      if (!project?.storyboard) throw new Error("No project storyboard available");
 
       const currentAttempt = (state.nodeAttempts?.[ nodeName ] || 0) + 1;
       console.log(` Generating Scene Reference Images...Attempt ${currentAttempt}`);
@@ -627,21 +541,13 @@ export class CinematicVideoWorkflow {
         await this.dispatcher.ensureJob(
               nodeName,
               "GENERATE_SCENE_FRAMES",
-              "scene_start_frame",
-              {
-                sceneId: "",
-                sceneIndex: 0,
-              },
+          "scene_start_frame"
             );
 
         await this.dispatcher.ensureJob(
               nodeName,
               "GENERATE_SCENE_FRAMES",
-              "scene_end_frame",
-              {
-                sceneId: "",
-                sceneIndex: 0,
-              },
+          "scene_end_frame"
             );
         // } else {
 
@@ -665,11 +571,9 @@ export class CinematicVideoWorkflow {
         // await this.projectRepository.updateScenes(allUpdatedScenes);
         // }
 
-        this.publishStateUpdate(project, nodeName);
         console.log(`[${nodeName}]: Completed\n`);
         return {
           ...state,
-          project,
           __interrupt__: undefined,
           __interrupt_resolved__: false,
         };
@@ -685,9 +589,9 @@ export class CinematicVideoWorkflow {
 
       const nodeName = "process_scene";
       const executionMode = process.env.EXECUTION_MODE || 'SEQUENTIAL';
-      const currentAttempt = (state.nodeAttempts?.[ nodeName ] || 0) + 1;
-      console.log(`[${nodeName}]: Processing Scene ${state.currentSceneIndex}. Executing in ${executionMode.toLowerCase()} mode. Attempt ${currentAttempt}`);
-      let project = state.project;
+
+      console.log(`[${nodeName}]: Processing Scene ${state.currentSceneIndex}. Executing in ${executionMode.toLowerCase()} mode.`);
+      let project = await this.projectRepository.getProjectFullState(state.projectId);
       if (!project) throw new Error("No project state available");
 
       const { scenes } = project;
@@ -749,12 +653,9 @@ export class CinematicVideoWorkflow {
             );
           }
 
-          this.publishStateUpdate(project, "process_scene");
-
           console.log(`[${nodeName}]: Completed (Skipped)\n`);
           return {
             ...state,
-            project,
             __interrupt__: undefined,
             __interrupt_resolved__: false,
           };
@@ -774,12 +675,9 @@ export class CinematicVideoWorkflow {
           },
         );
 
-        this.publishStateUpdate(project, nodeName);
-
         console.log(`[${nodeName}]: Completed\n`);
         return {
           ...state,
-          project,
           currentSceneIndex: index + 1,
           __interrupt__: undefined,
           __interrupt_resolved__: false,
@@ -826,11 +724,9 @@ export class CinematicVideoWorkflow {
             console.log(`[${nodeName}]: All scenes skipped (already exist and not forced).`);
           }
 
-          this.publishStateUpdate(project, nodeName);
           console.log(`[${nodeName}]: Completed\n`);
           return {
             ...state,
-            project,
             __interrupt__: undefined,
             __interrupt_resolved__: false,
           };
@@ -846,13 +742,13 @@ export class CinematicVideoWorkflow {
     workflow.addNode("render_video", async (state: WorkflowState) => {
 
       const nodeName = "render_video";
+      let project = await this.projectRepository.getProjectFullState(state.projectId);
+      if (!project) {
+        throw new Error("Project not found");
+      }
       const currentAttempt = (state.nodeAttempts?.[ nodeName ] || 0) + 1;
       console.log(`\n[${nodeName}]: Rendering Final Video...Attempt ${currentAttempt}`);
       try {
-        const project = state.project;
-        if (!project) {
-          throw new Error("Project not found");
-        }
 
         const scenes = project.scenes;
         const videoPaths = scenes.map(s => {
@@ -864,8 +760,7 @@ export class CinematicVideoWorkflow {
           return state;
         }
 
-        const [ version ] = await this.assetManager.getNextVersionNumber({ projectId: this.projectId }, 'render_video');
-        const result = await this.dispatcher.ensureJob(
+        await this.dispatcher.ensureJob(
           nodeName,
           "RENDER_VIDEO",
           "render_video",
@@ -873,15 +768,6 @@ export class CinematicVideoWorkflow {
             videoPaths,
             audioGcsUri: project.metadata.audioGcsUri,
           },
-        );
-
-        await this.assetManager.createVersionedAssets(
-          { projectId: this.projectId },
-          'render_video',
-          'video',
-          [ result!.renderedVideo ],
-          { model: videoModelName, jobId: result!.jobId },
-          true
         );
 
         console.log(`[${nodeName}]: Completed\n`);
@@ -902,7 +788,7 @@ export class CinematicVideoWorkflow {
       const nodeName = "finalize";
       console.log(`[${nodeName}]: Started`);
       console.log(`\n✅ [finalize]: Finalizing...`);
-      const currentAttempt = (state.nodeAttempts?.[ "finalize" ] || 0) + 1;
+
       const project = await this.projectRepository.updateProject(state.projectId, { status: "complete" });
       const [ attempt ] = await this.assetManager.createVersionedAssets({ projectId: this.projectId }, 'final_output', 'text', [ JSON.stringify(project) ], {
         model: textModelName,
@@ -986,79 +872,43 @@ export class CinematicVideoWorkflow {
       if (existingCheckpoint) {
         console.log(" Resuming from existing checkpoint...");
         const stateValues = existingCheckpoint.channel_values as WorkflowState;
-        const project = await this.projectRepository.getProjectFullState(this.projectId);
 
-        initialState = {
+        initialState = WorkflowState.parse({
           ...stateValues,
-          id: stateValues.id,
-          projectId: stateValues.projectId,
-          initialProject: project as any,
-          project: project as any,
-          localAudioPath: audioPath,
-        hasAudio,
-        nodeAttempts: stateValues.nodeAttempts || {},
-        jobIds: stateValues.jobIds || {},
-        currentSceneIndex: stateValues.currentSceneIndex || 0,
-        errors: stateValues.errors || [],
-      };
-
-      console.log("   Checkpoint found previous project.");
-
-    } else {
-      console.log(" No existing checkpoint found. Starting new workflow.");
-      try {
-        initialState = {
-          id: this.projectId,
-          projectId: this.projectId,
-          initialProject: null,
-          project: null,
           localAudioPath: audioPath,
           hasAudio,
-          nodeAttempts: {},
-          jobIds: {},
-          currentSceneIndex: 0,
-          errors: [],
-        };
+        });
 
-        const metadata: InitialProject[ 'metadata' ] = {
+        console.log("   Checkpoint found previous project.");
+      } else {
+      console.log(" No existing checkpoint found. Starting new workflow.");
+        try {
+
+          initialState = WorkflowState.parse({
+          id: this.projectId,
+            projectId: this.projectId,
+          localAudioPath: audioPath,
+          hasAudio,
+          });
+
+          const metadata = ProjectMetadata.parse({
           projectId: this.projectId,
-          title: videoTitle,
-          duration: 0,
-          totalScenes: 0,
-          style: "",
-          mood: "",
-          colorPalette: [],
-          tags: [],
+            title: videoTitle,
           audioPublicUri,
           audioGcsUri,
           initialPrompt: creativePrompt,
           hasAudio,
-          models: {
-            videoModel: videoModelName,
-            imageModel: imageModelName,
-            textModel: textModelName,
-            qaModel: qualityCheckModelName,
-          },
-        };
+          });
 
-        await this.projectRepository.createProject({
-          id: this.projectId,
-          status: "pending",
-          metadata: metadata,
-          currentSceneIndex: 0,
-          forceRegenerateSceneIds: [],
-          assets: {},
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          storyboard: {
+          const storyboard = Storyboard.parse({ metadata });
+
+          const newProject = Project.parse({
+            id: this.projectId,
             metadata: metadata,
-            characters: [],
-            scenes: [],
-            locations: [],
-          },
-          generationRules: [],
-          generationRulesHistory: [],
-        });
+            storyboard: storyboard,
+          });
+
+          await this.projectRepository.createProject(newProject);
       } catch (error) {
         console.error(" ! Error creating project in database.", error);
         throw error;

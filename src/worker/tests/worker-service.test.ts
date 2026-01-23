@@ -24,7 +24,7 @@ vi.mock('../../workflow/agents/compositional-agent', () => {
     return {
         CompositionalAgent: vi.fn().mockImplementation(() => ({
             expandCreativePrompt: mockExpandCreativePrompt,
-            generateStoryboardFromPrompt: vi.fn(),
+            generateStoryboardExclusivelyFromPrompt: vi.fn(),
             generateFullStoryboard: vi.fn()
         }))
     };

@@ -1,9 +1,8 @@
 import {
-    Scene, Character, Location, Project, ProjectSchema, createDefaultMetrics,
-    InitialProjectSchema,
-    InitialProject,
+    Scene, Character, Location, Project
 } from "../../../shared/types/workflow.types";
 import {
+    InsertProject,
     ProjectEntity
 } from "../../../shared/db/zod-db";
 
@@ -12,58 +11,16 @@ interface MapDBProjectToDomainProps {
     scenes?: Scene[],
     characters?: Character[],
     locations?: Location[],
-    validate?: Boolean;
 }
 
 /**
  * Maps a DB ProjectEntity + hydrated relations to a strict Project domain object.
  * Enforces ProjectSchema validation - throws if project is not fully hydrated.
- * Should only be called after storyboard generation completes.
  */
-export function mapDbProjectToDomain({
-    project,
-    scenes,
-    characters,
-    locations,
-    validate,
-}: MapDBProjectToDomainProps & { validate?: true; }
-): Project;
-export function mapDbProjectToDomain({
-    project,
-    scenes,
-    characters,
-    locations,
-    validate,
-}: MapDBProjectToDomainProps & { validate?: false; }
-): InitialProject;
-export function mapDbProjectToDomain(
-    { project: entity, scenes = [], characters = [], locations = [], validate = true }: MapDBProjectToDomainProps): Project | InitialProject {
-    const rawProject = {
-        id: entity.id,
-        projectId: entity.id,
-        createdAt: entity.createdAt,
-        updatedAt: entity.updatedAt,
-        metadata: entity.metadata,
-        metrics: entity.metrics || createDefaultMetrics(),
-        status: entity.status,
-        currentSceneIndex: entity.currentSceneIndex,
-        forceRegenerateSceneIds: entity.forceRegenerateSceneIds,
-        generationRules: entity.generationRules,
-        generationRulesHistory: entity.generationRulesHistory,
-        assets: entity.assets,
-        storyboard: {
-            metadata: entity.metadata,
-            scenes: scenes,
-            characters: characters,
-            locations: locations,
-        },
-        scenes,
-        characters: characters,
-        locations: locations
-    };
+export function mapDbProjectToDomain({ project: entity, scenes = [], characters = [], locations = [] }: MapDBProjectToDomainProps): Project {
+    return Project.parse({ ...entity, scenes, characters, locations });
+}
 
-    if (validate) {
-        return ProjectSchema.parse(rawProject) as Project;
-    }
-    return rawProject;
+export function mapDomainProjectToDb(project: Project) {
+    return InsertProject.parse(project);
 }

@@ -1,6 +1,7 @@
 export const promptVersion = "3.0.0-cinematographer";
 
-import { cameraAnglesWithDescriptions, cameraMovementsWithDescriptions, CompositionSchema, getJsonSchema, Scene, shotTypesWithDescriptions, TransitionTypesSchema } from "../../shared/types/workflow.types";
+import { cameraAnglesWithDescriptions, cameraMovementsWithDescriptions, CompositionSchema, Scene, shotTypesWithDescriptions, TransitionTypesSchema } from "../../shared/types/workflow.types";
+import { getJSONSchema } from '../../shared/utils/utils';
 
 /**
  * CINEMATOGRAPHER - Shot Composition & Framing
@@ -32,7 +33,7 @@ ${JSON.stringify(cameraMovementsWithDescriptions)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 COMPOSITION (specify all):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${JSON.stringify(getJsonSchema(CompositionSchema))}
+${JSON.stringify(getJSONSchema(CompositionSchema))}
 `;
 
 export const buildCinematographerFrameComposition = (
@@ -56,7 +57,7 @@ Camera Movement: ${scene.cameraMovement || JSON.stringify(cameraMovementsWithDes
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 COMPOSITION:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${JSON.stringify(getJsonSchema(CompositionSchema))}
+${JSON.stringify(getJSONSchema(CompositionSchema))}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${framePosition === "start" ? "START FRAME" : "END FRAME"} SPECIFIC:

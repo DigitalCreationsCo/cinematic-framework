@@ -1,5 +1,5 @@
 import { PipelineCommand, PipelineEvent } from "../../shared/types/pipeline.types";
-import { InitialProject, Project, WorkflowState, InitialProjectMetadata, InitialStoryboard } from "../../shared/types/workflow.types";
+import { Project, ProjectMetadata, Storyboard, WorkflowState } from "../../shared/types/workflow.types";
 import { CinematicVideoWorkflow } from "../../workflow/graph";
 import { CheckpointerManager } from "../../workflow/checkpointer-manager";
 import { RunnableConfig } from "@langchain/core/runnables";
@@ -127,17 +127,13 @@ export class WorkflowOperator {
                 timestamp: new Date().toISOString()
             });
             const config = this.getRunnableConfig(projectId);
-            const state: WorkflowState = {
+            const state = WorkflowState.parse({
                 id: inserted.id,
                 projectId: inserted.id,
-                initialProject,
                 project: null,
                 hasAudio: inserted.metadata.hasAudio,
-                nodeAttempts: {},
-                jobIds: {},
                 currentSceneIndex: inserted.currentSceneIndex,
-                errors: [],
-            };
+            });
             const compiled = await this.getCompiledGraph(projectId, this.getAbortController(projectId));
             await streamWithInterruptHandling(projectId, compiled, state, config, "startPipeline", this.publishEvent);
         });
@@ -189,7 +185,7 @@ export class WorkflowOperator {
                 throw new Error(`No checkpoint found for ${projectId}`);
             }
 
-            const state = existingCheckpoint.channel_values as WorkflowState;
+            const state = WorkflowState.parse(existingCheckpoint.channel_values as WorkflowState);
             const interrupt = state.__interrupt__?.[ 0 ]?.value;
             if (!interrupt) {
                 console.warn(`[WorkflowOperator] No interrupt to resolve`);
@@ -214,10 +210,11 @@ export class WorkflowOperator {
                 const updatedState = {
                     __interrupt__: undefined,
                     __interrupt_resolved__: true,
-                    errors: [ ...(state.errors || []), {
+                    errors: [ {
+                        projectId, 
                         node: interrupt.nodeName,
                         error: interrupt.error,
-                        skipped: true,
+                        shouldRetry: false,
                         timestamp: new Date().toISOString()
                     } ]
                 };
@@ -306,8 +303,6 @@ export class WorkflowOperator {
             return;
         }
 
-        const controller = this.getAbortController(projectId);
-        const options = { signal: controller.signal };
         const sceneCharacterImages = sceneCharacters.flatMap(c => {
             const assets = getAllBestFromAssets(c.assets);
             return assets[ 'character_image' ]?.data ? [ assets[ 'character_image' ].data ] : [];
@@ -348,150 +343,54 @@ export class WorkflowOperator {
 
     async getProjectState(projectId: string) {
 
-        const scenes = await this.projectRepository.getProjectScenes(projectId);
-        const characters = await this.projectRepository.getProjectCharacters(projectId);
-        const locations = await this.projectRepository.getProjectLocations(projectId);
-        const project = await this.projectRepository.getProject(projectId);
-
+        const project = await this.projectRepository.getProjectFullState(projectId);
         await this.publishEvent({
             type: "FULL_STATE",
             commandId: uuidv7(),
             projectId,
             payload: {
-                project: {
-                    ...project,
-                    characters,
-                    locations,
-                    scenes,
-                }
+                project
             },
             timestamp: new Date().toISOString(),
         });
         return;
-
-        //     const sm = new GCPStorageManager(this.gcpProjectId, projectId, this.bucketName);
-
-        //     const statePath = await sm.getObjectPath({ type: "state" });
-        //     const state = await sm.downloadJSON<Project>(statePath);
-        //     console.log("   Found persistent state backup in storage.");
-
-        //     await this.publishEvent({
-        //         type: "FULL_STATE",
-        //         projectId,
-        //         payload: { state },
-        //         timestamp: new Date().toISOString(),
-        //     });
-        // } catch(stateError) {
-        //     try {
-        //         const storyboardPath = `${projectId}/scenes/storyboard.json`;
-        //         const storyboard = await sm.downloadJSON<any>(storyboardPath);
-
-        //         console.log("   Found existing storyboard in storage.");
-        //         const state = {
-        //             localAudioPath: "",
-        //             enhancedPrompt: storyboard.metadata?.enhancedPrompt || "",
-        //             hasAudio: false,
-        //             storyboard,
-        //             storyboardState: storyboard,
-        //             currentSceneIndex: 0,
-        //             audioGcsUri: "",
-        //             errors: [],
-        //             generationRules: [],
-        //             refinedRules: [],
-        //             versions: {},
-        //         } as Project;
-
-        //         await this.publishEvent({
-        //             type: "FULL_STATE",
-        //             projectId,
-        //             payload: { state },
-        //             timestamp: new Date().toISOString(),
-        //         });
-        // }
     }
 
-    private async buildInitialProject(projectId: string, payload: Extract<PipelineCommand, { type: "START_PIPELINE"; }>[ 'payload' ]): Promise<InitialProject> {
+    private async buildInitialProject(projectId: string, payload: Extract<PipelineCommand, { type: "START_PIPELINE"; }>[ 'payload' ]): Promise<Project> {
 
-        // 1. Try to load existing project from DB
         try {
             console.log(`[WorkflowOperator] Building initial state from DB for ${projectId}`);
             const project = await this.projectRepository.getProject(projectId);
 
             if (project) {
-                const metadata = project.metadata as InitialProjectMetadata;
-                const storyboard = project.storyboard as InitialStoryboard;
-
-                return {
-                    id: project.id,
-                    createdAt: project.createdAt,
-                    updatedAt: project.updatedAt,
-                    status: project.status,
-                    currentSceneIndex: project.currentSceneIndex,
-                    forceRegenerateSceneIds: project.forceRegenerateSceneIds,
-                    assets: project.assets,
-                    generationRules: project.generationRules,
-                    generationRulesHistory: project.generationRulesHistory,
-                    metadata: metadata,
-                    storyboard: storyboard,
-                    metrics: project.metrics || undefined,
-                    characters: [],
-                    locations: [],
-                    scenes: [],
-                };
+                return Project.parse(project);
             }
         } catch (error) {
             console.warn("No existing project found in DB. Starting fresh workflow.");
         }
 
-        // 2. Create fresh InitialProject for new workflow
         const sm = new GCPStorageManager(this.gcpProjectId, projectId, this.bucketName);
         let audioPublicUri;
         if (payload.audioGcsUri) {
             audioPublicUri = sm.getPublicUrl(payload.audioGcsUri);
         }
 
-        const newProjectMetadata: InitialProjectMetadata = {
+        const metadata = ProjectMetadata.parse({
             projectId: projectId,
-            title: payload.title || "",
-            duration: 0,
-            totalScenes: 0,
-            style: "",
-            mood: "",
-            colorPalette: [],
-            tags: [],
+            title: payload.title,
             initialPrompt: payload.initialPrompt,
             audioGcsUri: payload.audioGcsUri,
             audioPublicUri: audioPublicUri,
             hasAudio: !!payload.audioGcsUri,
-            models: {
-                videoModel: videoModelName,
-                imageModel: imageModelName,
-                textModel: textModelName,
-                qaModel: qualityCheckModelName,
-            }
-        };
+        });
 
-        return {
+        const storyboard = Storyboard.parse({ metadata });
+
+        return Project.parse({
             id: projectId,
-            status: "pending",
-            currentSceneIndex: 0,
-            forceRegenerateSceneIds: [],
-            assets: {},
-            generationRules: [],
-            generationRulesHistory: [],
-            metadata: newProjectMetadata,
-            storyboard: {
-                metadata: newProjectMetadata,
-                characters: [],
-                locations: [],
-                scenes: []
-            },
-            characters: [],
-            locations: [],
-            scenes: [],
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
+            metadata,
+            storyboard,
+        });
     }
 
 }

@@ -1,14 +1,16 @@
-import { Character, Location, WorkflowMetrics, Trend, RegressionState, ValidDuration, VALID_DURATIONS, Storyboard, Project, WorkflowState, AssetRegistry, AssetKey, AssetType, AssetHistory, AssetVersion, VersionMetric } from "../types/workflow.types";
+import { Character, Location, WorkflowMetrics, Trend, RegressionState, ValidDuration, VALID_DURATIONS, Storyboard, Project, WorkflowState, AssetRegistry, AssetKey, AssetType, AssetHistory, AssetVersion, VersionMetric, StoryboardAttributes, CharacterAttributes, LocationAttributes } from "../types/workflow.types";
+import { z } from "zod";
 
 /**
- * Sanitizes the storyboard by removing any potentially hallucinated asset URLs.
- * This ensures that planning nodes do not accidentally introduce fake assets.
+ * Depracated - Sanitized the storyboard by removing any potentially hallucinated asset URLs.
+ * This ensured that planning nodes do not accidentally introduce fake assets.
+ * Currently returns the same object, as asset have been moved to dedicated `assets` object.
  *
  * @param storyboard - The storyboard to sanitize.
  * @returns A deep copy of the storyboard with asset fields removed.
  */
-export function deleteBogusUrlsStoryboard(storyboard: Pick<Project, "metadata" | "characters" | "locations" | "scenes">): Storyboard {
-  const clean: Project = JSON.parse(JSON.stringify(storyboard));
+export function deleteBogusUrlsStoryboard(storyboard: StoryboardAttributes): StoryboardAttributes {
+  const clean: StoryboardAttributes = JSON.parse(JSON.stringify(storyboard));
 
   if (clean.scenes) {
     clean.scenes = clean.scenes.map((s) => {
@@ -81,30 +83,39 @@ export function roundToValidDuration(duration: number): ValidDuration {
 
 /**
  * Format character specifications for prompt
+ * TODO MAKE MORE DESCRIPTIVE
  */
-export function formatCharacterSpecs(characters: Character[]): string {
+export function formatCharacterSpecs<C extends Character | CharacterAttributes>(characters: C[]): string {
   return characters
     .map(char => {
-      return `Name:${char.name} ID:${char.id}:
+      const assets = ('assets' in char) && char.assets;
+      const reference = assets
+        ? char.assets[ 'character_image' ]?.versions[ char.assets[ 'character_image' ]?.best ].data
+        : "None";
+      return `Name:${char.name} Reference ID:${char.referenceId}:
   - Hair: ${char.physicalTraits.hair}
   - Clothing: ${char.physicalTraits.clothing}
   - Accessories: ${char.physicalTraits.accessories.join(", ")}
-  - Reference: ${char.assets[ 'character_image' ]?.versions[ char.assets[ 'character_image' ]?.best ].data || "None"}`;
+  - Reference: ${reference}`;
     })
     .join("\n\n");
 }
 
 /**
  * Format location specifications for prompt
+ * TODO MAKE MORE DESCRIPTIVE
  */
-export function formatLocationSpecs(locations: Location[]): string {
+export function formatLocationSpecs<L extends Location | LocationAttributes>(locations: L[]): string {
   return locations
     .map(location => {
-      return `Name:${location.name} ID:${location.id}:
-  - Description: ${location.assets[ 'location_image' ]?.versions[ location.assets[ 'location_image' ]?.best ].data || "None"}
+      const assets = ('assets' in location) && location.assets;
+      const description = assets ? assets[ 'location_description' ]?.versions[ assets[ 'location_description' ]?.best ].data : location.type;
+      const reference = assets ? assets[ 'location_image' ]?.versions[ assets[ 'location_image' ]?.best ].data : "None";
+      return `Name:${location.name} Reference ID:${location.referenceId}:
+  - Description: ${description}
   - Lighting: ${JSON.stringify(location.lightingConditions)}
   - Time of Day: ${location.timeOfDay}
-  - Reference: ${location.assets[ 'location_image' ]?.versions[ location.assets[ 'location_image' ]?.best ].data || "None"}`;
+  - Reference: ${reference}`;
     })
     .join("\n\n");
 }
@@ -172,6 +183,46 @@ export function calculateLearningTrends(
   };
 }
 
+
+/**
+ * Converts a Zod schema to a Draft 2020-12 JSON Schema compatible with Vertex AI.
+ * * @remarks
+ * This function includes specific overrides to prevent the "Too many states for serving" 
+ * error in Vertex AI by:
+ * 1. Mapping `z.date()` to simple ISO-8601 strings.
+ * 2. Stripping complex Regex patterns from UUIDs to simplify the Finite State Machine (FSM).
+ * 3. Providing a hook to simplify or omit high-complexity objects like `assets` or `evaluation`.
+ * * @param {z.ZodType} schema - The Zod schema to be converted.
+ * @returns {Record<string, any>} An OpenAPI/Vertex AI compatible JSON Schema object.
+ * * @example
+ * ```typescript
+ * const schema = z.object({ id: z.string().uuid() });
+ * const jsonSchema = getJSONSchema(schema);
+ * ```
+ */
+export const getJSONSchema = (schema: z.ZodType) => {
+  return z.toJSONSchema(schema, {
+    // Switching to openapi3 reduces meta-schema bloat
+    target: "openapi3",
+    unrepresentable: "any",
+    override: (ctx) => {
+      const zodSchema = ctx.zodSchema;
+
+      // Force Dates to simple strings
+      if (zodSchema instanceof z.ZodDate) {
+        return { type: "string", description: "ISO 8601 date-time" };
+      }
+
+      // Force UUIDs to simple strings (Strips the complex Regex)
+      if (zodSchema instanceof z.ZodUUID) {
+        return { type: "string", description: "UUID format" };
+      }
+
+      return undefined;
+    }
+  });
+};
+
 export function mergeParamsIntoState(
   currentState: WorkflowState,
   params: Partial<WorkflowState>
@@ -237,3 +288,4 @@ export function getAllBestFromAssets(assets: AssetRegistry | undefined | null, a
   bestAssetsCache.set(assets, result);
   return result;
 };
+

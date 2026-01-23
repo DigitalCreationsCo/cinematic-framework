@@ -2,7 +2,7 @@
 export const promptVersion = "3.0.0";
 
 import { z } from "zod";
-import { SceneSchema, StoryboardSchema } from "../../shared/types/workflow.types";
+import { SceneSchema, Storyboard } from "../../shared/types/workflow.types";
 import { buildDirectorSceneBeatPrompt } from "./role-director";
 import { buildCinematographerGuidelines } from "./role-cinematographer";
 import { buildGafferGuidelines } from "./role-gaffer";

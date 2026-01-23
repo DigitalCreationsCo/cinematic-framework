@@ -4,7 +4,7 @@ import { z } from "zod";
 // CINEMATOGRAPHY SCHEMAS (Cinematographer)
 // ============================================================================
 
-export const TransitionTypesSchema = z.enum([
+export const TransitionTypes = z.enum([
     "Cut",
     "Hard Cut",
     "Jump Cut",
@@ -20,11 +20,10 @@ export const TransitionTypesSchema = z.enum([
     "Slide",
     "none"
 ]);
-export type TransitionType = z.infer<typeof TransitionTypesSchema.options[ number ]>;
+export type TransitionType = z.infer<typeof TransitionTypes.options[ number ]>;
 
 
-// Cinematographer shot type menu (aligned with role-cinematographer.ts)
-export const ShotTypesSchema = z.union([
+export const ShotTypes = z.union([
     z.literal("Extreme Close-Up").describe("Eyes, hands, small object details"),
     z.literal("Close-Up").describe("Head and shoulders only"),
     z.literal("Medium Close-Up").describe("Chest up"),
@@ -33,15 +32,14 @@ export const ShotTypesSchema = z.union([
     z.literal("Wide Shot").describe("Full body head-to-toe visible"),
     z.literal("Very Wide/Establishing").describe("Environment dominates, characters small in frame"),
 ]);
-export const shotTypesWithDescriptions = ShotTypesSchema.options.map(option => ({
+export const shotTypesWithDescriptions = ShotTypes.options.map(option => ({
     value: option.value,
     description: option.description
 }));
-export type ShotType = z.Infer<typeof ShotTypesSchema.options[ number ]>;
+export type ShotType = z.Infer<typeof ShotTypes.options[ number ]>;
 
 
-// Cinematographer camera movement menu (aligned with role-cinematographer.ts)
-export const CameraMovementsSchema = z.union([
+export const CameraMovements = z.union([
     z.literal("Static").describe("No movement [use for: stable moments, observation]"),
     z.literal("Pan Left").describe("Horizontal rotation [use for: following action, revealing space]"),
     z.literal("Pan Right").describe("Horizontal rotation [use for: following action, revealing space]"),
@@ -65,29 +63,28 @@ export const CameraMovementsSchema = z.union([
     z.literal("Zoom In").describe(""),
     z.literal("Zoom Out").describe(""),
 ]);
-export const cameraMovementsWithDescriptions = CameraMovementsSchema.options.map(option => ({
+export const cameraMovementsWithDescriptions = CameraMovements.options.map(option => ({
     value: option.value,
     description: option.description
 }));
-export type CameraMovement = z.infer<typeof CameraMovementsSchema.options[ number ]>;
+export type CameraMovement = z.infer<typeof CameraMovements.options[ number ]>;
 
 
-// Cinematographer camera angle menu (aligned with role-cinematographer.ts)
-export const CameraAnglesSchema = z.union([
+export const CameraAngles = z.union([
     z.literal("Eye Level").describe("Neutral, relatable perspective"),
     z.literal("High Angle").describe("15-45° looking down (subject appears smaller/vulnerable)"),
     z.literal("Low Angle").describe("15-45° looking up (subject appears larger/powerful)"),
     z.literal("Bird's Eye").describe("90° directly overhead"),
     z.literal("Dutch Angle").describe("Tilted horizon (creates psychological unease)"),
 ]);
-export const cameraAnglesWithDescriptions = CameraAnglesSchema.options.map(option => ({
+export const cameraAnglesWithDescriptions = CameraAngles.options.map(option => ({
     value: option.value,
     description: option.description
 }));
-export type CameraAngle = z.infer<typeof CameraAnglesSchema.options[ number ]>;
+export type CameraAngle = z.infer<typeof CameraAngles.options[ number ]>;
 
 
-export const CompositionSchema = z.object({
+export const Composition = z.object({
     "Subject Placement": z.string().describe("e.g., Left third, Center, Right third"),
     "Focal Point": z.string().describe("What draws the eye first"),
     "Depth Layers": z.string().describe("Foreground: X, Midground: Y, Background: Z"),
@@ -95,43 +92,42 @@ export const CompositionSchema = z.object({
     "Headroom": z.string().describe("Space above a subject's head. e.g., Tight, Standard, Generous"),
     "Look Room": z.string().describe("negative intentional space between a subject's face and the edge of the frame in the direction they are looking"),
 });
-export type Composition = z.infer<typeof CompositionSchema>;
+export type Composition = z.infer<typeof Composition>;
 
 
 // ============================================================================
 // LIGHTING SCHEMAS (Gaffer)
 // ============================================================================
 
-
-export const LightingSchema = z.object({
+export const Lighting = z.object({
     quality: z.object({
-        Hardness: z.string().optional().describe("e.g. Soft (diffused, gentle shadows), Hard (sharp, defined shadows)"),
-        colorTemperature: z.string().optional().describe("Warm (2700-3500K), Neutral (4000-5000K), Cool (5500-7000K)"),
-        intensity: z.string().optional().describe("e.g., Low (dim, moody), Medium (balanced), High (bright, energetic)"),
+        Hardness: z.string().describe("e.g. Soft (diffused, gentle shadows), Hard (sharp, defined shadows)"),
+        colorTemperature: z.string().describe("Warm (2700-3500K), Neutral (4000-5000K), Cool (5500-7000K)"),
+        intensity: z.string().describe("e.g., Low (dim, moody), Medium (balanced), High (bright, energetic)"),
     }).describe("Lighting quality specification, "),
     motivatedSources: z.object({
-        "Primary Light": z.string().optional().describe("e.g., Sun through window, street lamp, overhead ceiling, firelight, etc"),
-        "Fill Light": z.string().optional().describe("e.g., Ambient skylight, reflected surfaces, secondary practicals"),
+        "Primary Light": z.string().describe("e.g., Sun through window, street lamp, overhead ceiling, firelight, etc"),
+        "Fill Light": z.string().describe("e.g., Ambient skylight, reflected surfaces, secondary practicals"),
         "Practical Lights": z.string().describe("List visible light sources in frame: lamps, candles, screens"),
-        "Accent Light": z.string().optional().describe("e.g., Rim light from behind, side window, bounce from ground"),
+        "Accent Light": z.string().describe("e.g., Rim light from behind, side window, bounce from ground"),
         "Light Beams": z.string().describe("e.g., Visible shafts, rays, None"),
     }).describe("Light sources"),
     direction: z.object({
-        "Key Light Position": z.string().optional().describe("e.g., Front - left, right 45°, Side 90°, Back 135 - 180°, Top-down, etc"),
-        "Shadow Direction": z.string().optional().describe("e.g, Falling left, right, forward, behind subject, etc"),
-        "Contrast Ratio": z.string().optional().describe("e.g., Low(1: 2) flat, Medium(1: 4) standard, High(1: 8 +) dramatic, etc"),
+        "Key Light Position": z.string().describe("e.g., Front - left, right 45°, Side 90°, Back 135 - 180°, Top-down, etc"),
+        "Shadow Direction": z.string().describe("e.g, Falling left, right, forward, behind subject, etc"),
+        "Contrast Ratio": z.string().describe("e.g., Low(1: 2) flat, Medium(1: 4) standard, High(1: 8 +) dramatic, etc"),
     }).describe("Key light position, shadow direction"),
     atmosphere: z.object({
         "Haze": z.string().describe("e.g., None, Light mist, Dense fog"),
     }).describe("Atmospheric lighting effects")
 });
-export type Lighting = z.infer<typeof LightingSchema>;
+export type Lighting = z.infer<typeof Lighting>;
 
 
-export const CinematographySchema = z.object({
-    shotType: ShotTypesSchema,
-    cameraAngle: CameraAnglesSchema,
-    cameraMovement: CameraMovementsSchema,
-    composition: CompositionSchema,
+export const Cinematography = z.object({
+    shotType: ShotTypes,
+    cameraAngle: CameraAngles,
+    cameraMovement: CameraMovements,
+    composition: Composition,
 });
-export type Cinematography = z.infer<typeof CinematographySchema>;
+export type Cinematography = z.infer<typeof Cinematography>;

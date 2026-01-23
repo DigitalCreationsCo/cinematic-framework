@@ -3,9 +3,9 @@
 // ============================================================================
 
 import { GCPStorageManager } from "../storage-manager";
-import { AudioAnalysis, AudioAnalysisSchema, AudioSegment, Scene, TransitionType, VALID_DURATIONS, getJsonSchema } from "../../shared/types/workflow.types";
+import { AudioAnalysis, AudioAnalysisAttributes, VALID_DURATIONS } from "../../shared/types/workflow.types";
 import { FileData, GenerateContentResponse, GoogleGenAI, PartMediaResolution, PartMediaResolutionLevel, ThinkingLevel } from "@google/genai";
-import { cleanJsonOutput, formatTime, roundToValidDuration } from "../../shared/utils/utils";
+import { cleanJsonOutput, formatTime, roundToValidDuration, getJSONSchema } from "../../shared/utils/utils";
 import { buildAudioProcessingInstruction } from "../prompts/audio-processing-instruction";
 import { TextModelController } from "../llm/text-model-controller";
 import { buildllmParams } from "../llm/google/google-llm-params";
@@ -74,12 +74,10 @@ export class AudioProcessingAgent {
             mimeType: "audio/mp3",
         };
 
-        const jsonSchema = getJsonSchema(AudioAnalysisSchema);
-
         const systemPrompt = buildAudioProcessingInstruction(
             durationSeconds,
             VALID_DURATIONS,
-            JSON.stringify(jsonSchema)
+            JSON.stringify(getJSONSchema(AudioAnalysisAttributes))
         );
 
         const audioCountToken = await this.llm.countTokens({
@@ -123,7 +121,7 @@ export class AudioProcessingAgent {
             ],
             config: {
                 abortSignal: this.options?.signal,
-                responseJsonSchema: jsonSchema,
+                responseJsonSchema: getJSONSchema(AudioAnalysisAttributes),
                 thinkingConfig: {
                     thinkingLevel: ThinkingLevel.HIGH
                 }
@@ -135,17 +133,13 @@ export class AudioProcessingAgent {
         }
 
         const rawText = cleanJsonOutput(response.candidates[ 0 ].content.parts[ 0 ].text);
-        const analysis: AudioAnalysis = JSON.parse(rawText);
+        const analysis = AudioAnalysis.parse(JSON.parse(rawText));
 
         analysis.audioGcsUri = audioGcsUri;
         analysis.audioPublicUri = audioPublicUri;
-
-        // Initialize startFrame and endFrame for each scene
         analysis.segments = analysis.segments.map((segment, index) => ({
             ...segment,
-            sceneIndex: index, // Ensure 0-based sequential IDs
-            startFrame: undefined,
-            endFrame: undefined,
+            sceneIndex: index,
         }));
         console.log(` ✓ Scene template generated with ${analysis.segments.length} scenes spanning ${analysis.duration} seconds.`);
 

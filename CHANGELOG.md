@@ -222,8 +222,8 @@ This comprehensive update represents the culmination of intensive work from Dece
 
 #### Project State Management
 **Commits**:
-- `e6bdf019` - *feat: add updateInitialProject for partial state updates*
-  - Added `updateInitialProject` for modifying `InitialProject` state without strict validation
+- `e6bdf019` - *feat: add updateProject for partial state updates*
+  - Added `updateProject` for modifying `InitialProject` state without strict validation
   - Expanded `updateProject` to support additional fields (assets, generationRules, storyboard)
   - Updated `PROJECT_STATE_ARCHITECTURE.md` documentation
 

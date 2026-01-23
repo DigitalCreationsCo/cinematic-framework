@@ -1,6 +1,7 @@
 export const promptVersion = "3.0.0-gaffer";
 
-import { Scene, Location, getJsonSchema, LightingSchema } from "../../shared/types/workflow.types";
+import { Scene, Location, LightingSchema } from "../../shared/types/workflow.types";
+import { getJSONSchema } from '../../shared/utils/utils';
 
 export const buildGafferPrompt = (scene: Scene, location: Location, timeOfDay: string) => `
 As the GAFFER, design lighting for Scene ${scene.id}.
@@ -27,16 +28,16 @@ GAFFER LIGHTING SPECIFICATIONS:
 For each scene, specify:
 
 LIGHT QUALITY:
-${JSON.stringify(getJsonSchema(LightingSchema.shape.quality))}
+${JSON.stringify(getJSONSchema(LightingSchema.shape.quality))}
 
 MOTIVATED SOURCES (where does light come from?):
-${JSON.stringify(getJsonSchema(LightingSchema.shape.motivatedSources))}
+${JSON.stringify(getJSONSchema(LightingSchema.shape.motivatedSources))}
 
 LIGHTING DIRECTION:
-${JSON.stringify(getJsonSchema(LightingSchema.shape.direction))}
+${JSON.stringify(getJSONSchema(LightingSchema.shape.direction))}
 
 ATMOSPHERE:
-${JSON.stringify(getJsonSchema(LightingSchema.shape.atmosphere))}
+${JSON.stringify(getJSONSchema(LightingSchema.shape.atmosphere))}
 
 CONSTRAINT: All lighting must be MOTIVATED (justified by visible source or environment).
 `;

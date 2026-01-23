@@ -6,7 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import merge from 'lodash.merge';
 import { CheckpointerManager } from "../src/workflow/checkpointer-manager";
 import { GCPStorageManager } from "../src/workflow/storage-manager";
-import { Storyboard, StoryboardSchema } from "../src/shared/types/pipeline.types";
+import { Storyboard, Storyboard } from "../src/shared/types/pipeline.types";
 
 // Dynamic imports to ensure env vars are set first
 const { db } = await import("../src/shared/db");
@@ -199,7 +199,7 @@ async function migrateThread(threadId: string) {
     console.log("Transforming data to match new schema...");
     const [ transformedStoryboard, strictlyTransformedStoryboard ] = transformStoryboard(storyboardData);
 
-    // const parseResult = StoryboardSchema.safeParse(strictlyTransformedStoryboard);
+    // const parseResult = Storyboard.safeParse(strictlyTransformedStoryboard);
     // if (!parseResult.success) {
     //     console.error(`❌ Storyboard validation failed for ${threadId}:`, JSON.stringify(parseResult.error, null, 2));
     //     return;

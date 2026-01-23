@@ -26,15 +26,15 @@ export const RatingEnum = z.enum([ "PASS", "MINOR_ISSUES", "MAJOR_ISSUES", "FAIL
 export type Rating = z.infer<typeof RatingEnum>;
 
 
-export const QualityScoreSchema = z.object({
+export const QualityScore = z.object({
     rating: RatingEnum,
     weight: z.number().min(0).max(1),
     details: z.string().describe("Detailed explanation"),
 });
-export type QualityScore = z.infer<typeof QualityScoreSchema>;
+export type QualityScore = z.infer<typeof QualityScore>;
 
 
-export const QualityIssueSchema = z.object({
+export const QualityIssue = z.object({
     department: DepartmentEnum.describe("Which department's specs were not met"),
     category: z.string().describe("Issue category (narrative, composition, lighting, continuity, appearance)"),
     severity: SeverityEnum,
@@ -43,41 +43,39 @@ export const QualityIssueSchema = z.object({
     locationInFrame: z.string().optional().describe("Location in frame for image issues"),
     suggestedFix: z.string().describe("How the department should revise specs"),
 });
-export type QualityIssue = z.infer<typeof QualityIssueSchema>;
+export type QualityIssue = z.infer<typeof QualityIssue>;
 
 
-export const PromptCorrectionSchema = z.object({
+export const PromptCorrection = z.object({
     department: DepartmentEnum,
     issueType: z.string(),
     originalPromptSection: z.string(),
     correctedPromptSection: z.string(),
     reasoning: z.string(),
 });
-export type PromptCorrection = z.infer<typeof PromptCorrectionSchema>;
+export type PromptCorrection = z.infer<typeof PromptCorrection>;
 
 
-export const QualityEvaluationSchema = z.object({
+export const QualityEvaluation = z.object({
     scores: z.object({
-        narrativeFidelity: QualityScoreSchema,
-        characterConsistency: QualityScoreSchema,
-        technicalQuality: QualityScoreSchema,
-        emotionalAuthenticity: QualityScoreSchema,
-        continuity: QualityScoreSchema,
+        narrativeFidelity: QualityScore,
+        characterConsistency: QualityScore,
+        technicalQuality: QualityScore,
+        emotionalAuthenticity: QualityScore,
+        continuity: QualityScore,
     }),
-    issues: z.array(QualityIssueSchema),
+    issues: z.array(QualityIssue),
     feedback: z.string().describe("Overall summary of quality assessment"),
-    promptCorrections: z.array(PromptCorrectionSchema).optional(),
+    promptCorrections: z.array(PromptCorrection).optional(),
     ruleSuggestion: z.string().optional().describe("A new global rule to prevent future systemic issues"),
 });
 
 
-export const QualityEvaluationResultSchema = QualityEvaluationSchema.extend(
-    z.object({
-        grade: z.enum([ "ACCEPT", "ACCEPT_WITH_NOTES", "REGENERATE_MINOR", "REGENERATE_MAJOR", "FAIL" ]),
-        score: z.number().describe("Final quality score"),
-    }).shape
-);
-export type QualityEvaluationResult = z.infer<typeof QualityEvaluationResultSchema>;
+export const QualityEvaluationResult = QualityEvaluation.extend({
+    grade: z.enum([ "ACCEPT", "ACCEPT_WITH_NOTES", "REGENERATE_MINOR", "REGENERATE_MAJOR", "FAIL" ]),
+    score: z.number().describe("Final quality score"),
+});
+export type QualityEvaluationResult = z.infer<typeof QualityEvaluationResult>;
 
 
 export interface QualityConfig {

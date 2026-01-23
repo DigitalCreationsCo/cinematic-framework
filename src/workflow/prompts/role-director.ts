@@ -1,6 +1,6 @@
 export const promptVersion = "3.0.0-director";
 
-import { AudioSegment } from "../../shared/types/workflow.types";
+import { AudioAnalysisAttributes, SceneAttributes } from "../../shared/types/workflow.types";
 import { buildSafetyGuidelinesPrompt } from "./safety-instructions";
 
 /**
@@ -12,7 +12,7 @@ export const buildDirectorVisionPrompt = (
   title: string,
   userPrompt: string,
   schema?: string,
-  audioSegments?: AudioSegment[],
+  audioSegments?: SceneAttributes[],
   totalDuration?: number,
 ) => {
   const audioContext = audioSegments

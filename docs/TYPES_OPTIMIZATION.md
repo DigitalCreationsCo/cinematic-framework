@@ -33,7 +33,7 @@ The `SceneSchema` is now a composition reflecting inputs from multiple roles and
 ```typescript
 // Simplified Composition Structure
 SceneSchema = z.intersection(
-  AudioSegmentSchema, // From AudioProcessingAgent
+  AudioAnalysisAttributesSchema, // From AudioProcessingAgent
   z.intersection(
     z.object({ id: number }),
     z.intersection(
@@ -150,7 +150,7 @@ VideoMetadataSchema = {
 To support better client-side media handling, `audioPublicUri` has been added to relevant schemas, ensuring the frontend can play back audio directly from public storage urls if needed.
 
 ```typescript
-export type AudioAnalysis = z.infer<typeof AudioAnalysisSchema> & {
+export type AudioAnalysisAttributes = z.infer<typeof AudioAnalysisAttributesSchema> & {
   audioGcsUri: string;
   audioPublicUri?: string; // NEW: Publicly accessible URL for client playback
 };

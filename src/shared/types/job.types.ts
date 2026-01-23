@@ -1,5 +1,5 @@
 //shared/job.types.ts
-import { AssetKey, AudioAnalysis, Character, Location, Project, QualityEvaluationResult, Scene, SceneGenerationResult, Storyboard } from "./workflow.types";
+import { AssetKey, AudioAnalysis, AudioAnalysisAttributes, Character, Location, Project, QualityEvaluationResult, Scene, SceneGenerationResult, Storyboard, StoryboardAttributes } from "./workflow.types";
 
 
 
@@ -37,7 +37,7 @@ export type JobRecord =
     | JobRecordStitchVideo
     | JobRecordFrameRender;
 
-type JobRecordBase<T extends JobType, R, P = undefined> = R extends undefined ? {
+type JobRecordBase<T extends JobType, R = undefined, P = undefined> = R extends undefined ? {
     id: string;
     projectId: string;
     type: T;
@@ -64,100 +64,99 @@ type JobRecordBase<T extends JobType, R, P = undefined> = R extends undefined ? 
     createdAt: Date;
     updatedAt: Date;
     payload: P;
+    };
+
+export type GenerativeResultEnvelope<T> = {
+    data: T;
+    metadata: {
+        model: string;
+        evaluation?: QualityEvaluationResult;
+        attempts: number;
+        acceptedAttempt: number;
+        warning?: string;
+    };
 };
 
+export type GenerativeResultExpandCreativePrompt = GenerativeResultEnvelope<{
+    expandedPrompt: string;
+}>;
+
+export type GenerativeResultGenerateStoryboard = GenerativeResultEnvelope<{
+    storyboard: StoryboardAttributes;
+}>;
+
+export type GenerativeResultProcessAudioToScenes = GenerativeResultEnvelope<{
+    analysis: AudioAnalysis;
+}>;
+
+export type GenerativeResultEnhanceStoryboard = GenerativeResultEnvelope<{
+    storyboard: Storyboard;
+}>;
+
+export type GenerativeResultSemanticAnalysis = GenerativeResultEnvelope<{
+    dynamicRules: string[];
+}>;
+
+export type GenerativeResultGenerateCharacterAssets = GenerativeResultEnvelope<{
+    characters: Character[];
+}>;
+
+export type GenerativeResultGenerateLocationAssets = GenerativeResultEnvelope<{
+    locations: Location[];
+}>;
+
+export type GenerativeResultGenerateSceneFrames = GenerativeResultEnvelope<{
+    updatedScenes: Scene[];
+}>;
+
+export type GenerativeResultGenerateSceneVideo = GenerativeResultEnvelope<{
+    sceneGenerationResult: SceneGenerationResult;
+}>;
+
+export type GenerativeResultStitchVideo = GenerativeResultEnvelope<{
+    renderedVideo: string;
+}>;
+
+export type GenerativeResultFrameRender = GenerativeResultEnvelope<{
+    scene: Scene;
+    image: string;
+}>;
+
 export type JobRecordExpandCreativePrompt = JobRecordBase<
-    "EXPAND_CREATIVE_PROMPT",
-    {
-        expandedPrompt: string;
-    },
-    {
-        title: string;
-        initialPrompt: string;
-    }
+    "EXPAND_CREATIVE_PROMPT"
 >;
 
 export type JobRecordGenerateStoryboard = JobRecordBase<
-    "GENERATE_STORYBOARD",
-    {
-        storyboard: {
-            metadata: Project[ 'metadata' ],
-            characters: Character[],
-            locations: Location[],
-            scenes: Scene[],
-        };
-    },
-    {
-        title: string;
-        enhancedPrompt: string;
-    }
+    "GENERATE_STORYBOARD"
 >;
 
 export type JobRecordProcessAudioToScenes = JobRecordBase<
-    "PROCESS_AUDIO_TO_SCENES",
-    {
-        analysis: AudioAnalysis;
-    },
-    {
-        audioPublicUri: string;
-        enhancedPrompt: string;
-    }
+    "PROCESS_AUDIO_TO_SCENES"
 >;
 
 export type JobRecordEnhanceStoryboard = JobRecordBase<
-    "ENHANCE_STORYBOARD",
-    {
-        storyboard: Storyboard;
-    },
-    {
-        storyboard: Storyboard;
-        enhancedPrompt: string;
-    }
+    "ENHANCE_STORYBOARD"
 >;
 
 export type JobRecordSemanticAnalysis = JobRecordBase<
-    "SEMANTIC_ANALYSIS",
-    {
-        dynamicRules: string[];
-    }
+    "SEMANTIC_ANALYSIS"
 >;
 
 export type JobRecordGenerateCharacterAssets = JobRecordBase<
-    "GENERATE_CHARACTER_ASSETS",
-    {
-        characters: Character[];
-    },
-    {
-        characters: Character[];
-        generationRules: string[];
-    }
+    "GENERATE_CHARACTER_ASSETS"
 >;
 
 export type JobRecordGenerateLocationAssets = JobRecordBase<
-    "GENERATE_LOCATION_ASSETS",
-    {
-        locations: Location[];
-    },
-    {
-        locations: Location[];
-        generationRules: string[];
-    }
+    "GENERATE_LOCATION_ASSETS"
 >;
 
 export type JobRecordGenerateSceneFrames = JobRecordBase<
-    "GENERATE_SCENE_FRAMES",
-    {
-        updatedScenes: Scene[];
-    },
-    {
-        sceneId: string;
-        sceneIndex: number;
-    }
+    "GENERATE_SCENE_FRAMES"
 >;
 
 export type JobRecordGenerateSceneVideo = JobRecordBase<
     "GENERATE_SCENE_VIDEO",
-    SceneGenerationResult,
+    undefined,
     {
         sceneId: string;
         sceneIndex: number;
@@ -168,9 +167,7 @@ export type JobRecordGenerateSceneVideo = JobRecordBase<
 
 export type JobRecordStitchVideo = JobRecordBase<
     "RENDER_VIDEO",
-    {
-        renderedVideo: string;
-    },
+    undefined,
     {
         videoPaths: string[];
         audioGcsUri?: string;
@@ -179,10 +176,7 @@ export type JobRecordStitchVideo = JobRecordBase<
 
 export type JobRecordFrameRender = JobRecordBase<
     "FRAME_RENDER",
-    {
-        scene: Scene;
-        image: string;
-    },
+    undefined,
     {
         scene: Scene;
         prompt: string;
@@ -196,19 +190,8 @@ export type JobRecordFrameRender = JobRecordBase<
 
 
 export type JobEvent =
-    | { type: "JOB_DISPATCHED"; jobId: string; }
+    | { type: "JOB_DISPATCHED"; jobId: string; projectId: string; }
     | { type: "JOB_STARTED"; jobId: string; }
-    | { type: "JOB_COMPLETED"; jobId: string; }
+    | { type: "JOB_COMPLETED"; jobId: string; projectId: string; }
     | { type: "JOB_FAILED"; jobId: string; error: string; }
     | { type: "JOB_CANCELLED"; jobId: string; };
-
-export type GenerativeResultEnvelope<T> = {
-    data: T;
-    metadata: {
-        model: string;
-        evaluation?: QualityEvaluationResult;
-        attempts: number;
-        acceptedAttempt: number;
-        warning?: string;
-    };
-};

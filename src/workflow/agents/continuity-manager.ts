@@ -181,10 +181,9 @@ export class ContinuityManagerAgent {
         }
 
         console.log(`\n🎨 Generating reference images for ${charactersToGenerate.length} characters...`);
-        const attempts = await this.assetManager.getNextVersionNumber({ projectId: characters[ 0 ].projectId, characterIds: charactersToGenerateIds }, 'character_image');
         if (charactersToGenerate.length > 0) {
             for (const [ index, character ] of charactersToGenerate.entries()) {
-                const attempt = attempts[ index ];
+                const [attempt] = await this.assetManager.getNextVersionNumber({ projectId: character.projectId, characterIds: [ character.id ] }, 'character_image');
 
                 const imagePrompt = buildCharacterImagePrompt(character, generationRules);
                 saveAssets(
@@ -463,10 +462,9 @@ export class ContinuityManagerAgent {
         }
 
         console.log(`\n🎨 Generating reference images for ${locationsToGenerate.length} locations...`);
-        const attempts = await this.assetManager.getNextVersionNumber({ projectId: locations[ 0 ].projectId, locationIds: locationsToGenerateIds }, 'location_image');
         if (locationsToGenerate.length > 0) {
             for (const [ index, location ] of locationsToGenerate.entries()) {
-                const attempt = attempts[ index ];
+                const [attempt] = await this.assetManager.getNextVersionNumber({ projectId: location.projectId, locationIds: [ location.id ] }, 'location_image');
 
                 console.log(`\n🎨 Checking for existing reference images for ${locations.length} locations...`);
                 const imagePath = this.storageManager.getObjectPath({ type: "location_image", locationId: location.id, attempt });

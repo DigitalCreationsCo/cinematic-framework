@@ -1,5 +1,6 @@
 import { Pool, PoolClient, PoolConfig } from 'pg';
 import { EventEmitter } from 'events';
+import { getPool, IS_DEBUG_MODE, IS_DEV, poolConfig } from '@shared/db';
 
 
 
@@ -27,12 +28,9 @@ interface PoolManagerConfig extends PoolConfig {
     maxConnectionAge?: number;
 
     // Leak detection
-    connectionTimeoutMs?: number;
     warnOnSlowQueries?: boolean;
     slowQueryThresholdMs?: number;
 }
-
-const IS_DEBUG_MODE = process.env.DISABLE_DB_CIRCUIT_BREAKER === 'true';
 
 /*
 * Comprehensive connection pool management with monitoring and error handling
@@ -67,43 +65,27 @@ export class PoolManager extends EventEmitter {
     private healthCheckInterval?: NodeJS.Timeout;
     private leakCheckInterval?: NodeJS.Timeout;
 
-    constructor(config: PoolManagerConfig) {
+    constructor(config: PoolManagerConfig = {}) {
         super();
 
-        const IS_DEV = process.env.NODE_ENV !== 'production' || IS_DEBUG_MODE;
-        const defaultTimeout = IS_DEV ? 0 : 30000; // infinite in dev, 30s in prod
-
-        // Sensible defaults
+        this.pool = getPool();
         this.config = {
-            max: IS_DEBUG_MODE ? 20 : 10,
-            min: IS_DEBUG_MODE ? 2 : 2,
-
-            connectionTimeoutMillis: IS_DEV ? 0 : 2000,
-            idleTimeoutMillis: defaultTimeout,
-
-            statement_timeout: defaultTimeout, 
-            query_timeout: defaultTimeout,
-
             // Circuit breaker 
             resetTimeoutMs: 60000,
             errorThreshold: IS_DEBUG_MODE ? 100 : 20,
-
             // Monitoring
             enableMetrics: true,
             metricsIntervalMs: 10000,
-
             // Health checks
             healthCheckIntervalMs: 30000,
             maxConnectionAge: 3600000, // 1 hour
-
             // Leak detection
             warnOnSlowQueries: true,
-            slowQueryThresholdMs: IS_DEV ? 10000 : 5000,
-
+            slowQueryThresholdMs: IS_DEV ? 15000 : 5000,
+            ...poolConfig, // access pool config
             ...config,
         };
 
-        this.pool = new Pool(this.config);
         this.setupPoolEventHandlers();
 
         if (this.config.enableMetrics) {
@@ -121,23 +103,23 @@ export class PoolManager extends EventEmitter {
         // Connection acquired
         this.pool.on('connect', (client: PoolClient) => {
             this.metrics.totalConnections++;
-            console.log('[Pool] new conn', { totalConnections: this.metrics.totalConnections });
+            console.debug({ totalConnections: this.metrics.totalConnections }, '[Pool] new connection',);
         });
 
         // Connection released back to pool
         this.pool.on('acquire', (client: PoolClient) => {
-            console.log('[Pool] conn acquired');
+            console.debug({ totalConnections: this.metrics.totalConnections }, '[Pool] acquired connection');
         });
 
         // Connection removed from pool
         this.pool.on('remove', (client: PoolClient) => {
             this.metrics.totalConnections--;
-            console.log('[Pool] conn removed', { totalConnections: this.metrics.totalConnections });
+            console.debug({ totalConnections: this.metrics.totalConnections }, `[Pool] connection removed`);
         });
 
         // Error occurred
         this.pool.on('error', (err: Error, client: PoolClient) => {
-            console.error('[Pool] idle error:', err);
+            console.error({ error: err }, '[Pool] error');
             this.handlePoolError(err);
         });
     }
@@ -151,7 +133,6 @@ export class PoolManager extends EventEmitter {
             this.metrics.lastErrorTime = new Date();
             this.errorCount++;
 
-            this.errorCount++;
             if (this.errorCount >= 20) this.openCircuit();
         }
         this.emit('error', err);
@@ -161,9 +142,9 @@ export class PoolManager extends EventEmitter {
 
         if (this.circuitState === 'open') return;
 
-        console.error('[Pool] Breaker OPENED - too many errors');
         this.circuitState = 'open';
         this.emit('circuit-open');
+        console.error({ circuitState: this.circuitState, errorCount: this.errorCount, totalConnections: this.metrics.totalConnections }, '[Pool] Breaker opened - too many errors');
 
 
         if (this.circuitResetTimer) {
@@ -171,17 +152,17 @@ export class PoolManager extends EventEmitter {
         }
 
         this.circuitResetTimer = setTimeout(() => {
-            console.log('[Pool] Breaker entering HALF-OPEN state');
             this.circuitState = 'half-open';
             this.errorCount = 0;
             this.emit('circuit-half-open');
+            console.debug({ circuitState: this.circuitState, errorCount: this.errorCount, totalConnections: this.metrics.totalConnections }, '[Pool] Breaker entered HALF-OPEN state');
         }, this.config.resetTimeoutMs || 60000);
     }
 
     private closeCircuit() {
         if (this.circuitState === 'closed') return;
 
-        console.log('[Pool] Breaker CLOSED - system recovered');
+        console.debug({ circuitState: this.circuitState, errorCount: this.errorCount, totalConnections: this.metrics.totalConnections }, '[Pool] Breaker closed - system recovered');
         this.circuitState = 'closed';
         this.errorCount = 0;
         this.emit('circuit-closed');
@@ -204,13 +185,16 @@ export class PoolManager extends EventEmitter {
             this.metrics.acquisitionTimeMs = acquisitionTime;
 
             if (acquisitionTime > 1000) {
-                console.warn("Slow conn acquisition", { acquisitionTime, total: this.metrics.totalConnections })
+                console.warn({ acquisitionTime, totalConnections: this.metrics.totalConnections }, "[Pool] Slow conn acquisition")
             }
 
             this.trackConnection(client);
 
             const originalRelease = client.release.bind(client);
+            let released = false;
             client.release = (err?: Error | boolean) => {
+                if (released) return;
+                released = true;
                 this.untrackConnection(client);
                 return originalRelease(err);
             };
@@ -222,7 +206,7 @@ export class PoolManager extends EventEmitter {
             return client;
 
         } catch (error: any) {
-            console.error('[Pool] Failed to acquire conn:', error.message);
+            console.error({ error }, '[Pool] Failed to acquire conn');
             this.handlePoolError(error);
             throw error;
         }
@@ -240,7 +224,7 @@ export class PoolManager extends EventEmitter {
 
             const queryTime = Date.now() - startTime;
             if (this.config.warnOnSlowQueries && queryTime > (this.config.slowQueryThresholdMs || 5000)) {
-                console.warn(`[Pool] Slow query detected (${queryTime}ms):`, text.slice(0, 100));
+                console.warn({ queryTimeMs: queryTime, query: text.slice(0, 100) }, `[Pool] Slow query detected`); 
             }
 
             return result;
@@ -298,9 +282,9 @@ export class PoolManager extends EventEmitter {
         this.healthCheckInterval = setInterval(async () => {
             try {
                 await this.query('SELECT 1');
-                console.log('[Pool] HC');
+                console.debug('[Pool] HC');
             } catch (error: any) {
-                console.error('[Pool] Health check failed:', error.message);
+                console.error({ error }, '[Pool] Health check failed');
                 this.handlePoolError(error);
             }
         }, this.config.healthCheckIntervalMs || 30000);
@@ -316,8 +300,8 @@ export class PoolManager extends EventEmitter {
                 // Warn if connection held too long
                 if (age > 30000) {
                     console.warn(
-                        `[Pool] Conn leak detected! Held for ${Math.round(age / 1000)}s\n` +
-                        `Acquisition stack:\n${info.stack}`
+                        { age, stack: info.stack },
+                        `[Pool] Conn leak detected`
                     );
 
                     // Emit event for monitoring
@@ -361,19 +345,19 @@ export class PoolManager extends EventEmitter {
      * Drain pool connections (for testing or shutdown)
      */
     async drain(): Promise<void> {
-        console.log('[Pool] Draining conn pool...');
+        console.info('[Pool] Draining conn pool');
 
         // Wait for active connections to finish (with timeout)
         const timeout = 30000;
         const startTime = Date.now();
 
         while (this.activeConnections.size > 0 && Date.now() - startTime < timeout) {
-            console.log(`[Pool] Waiting for ${this.activeConnections.size} active conns...`);
+            console.info({ activeConnections: this.activeConnections.size }, `[Pool] Waiting for active conns...`);
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
         if (this.activeConnections.size > 0) {
-            console.warn(`[Pool] Forcing closure with ${this.activeConnections.size} active conns`);
+            console.warn(`[Pool] Forcing closure with active conns`);
         }
     }
 
@@ -381,18 +365,26 @@ export class PoolManager extends EventEmitter {
      * Close pool and cleanup
      */
     async close(): Promise<void> {
-        console.log('[Pool] Closing conn pool...');
+        console.info('[Pool] Closing connection pool...');
 
-        // Stop all intervals
+        // 1. Stop all background monitoring tasks
         if (this.metricsInterval) clearInterval(this.metricsInterval);
         if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
         if (this.leakCheckInterval) clearInterval(this.leakCheckInterval);
         if (this.circuitResetTimer) clearTimeout(this.circuitResetTimer);
 
-        // Drain and close
+        // 2. Remove listeners to prevent "Zombie Listeners" on the shared pool
+        this.pool.removeAllListeners('connect');
+        this.pool.removeAllListeners('acquire');
+        this.pool.removeAllListeners('remove');
+        this.pool.removeAllListeners('error');
+
+        // 3. Drain: Wait for active business queries (e.g. JobControlPlane updates) to finish
         await this.drain();
+
+        // 4. Finally, terminate the actual TCP connections
         await this.pool.end();
 
-        console.log('[Pool] Pool closed');
+        console.info('[Pool] Connections destroyed. Shutdown complete.');
     }
 }

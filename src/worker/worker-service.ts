@@ -10,7 +10,7 @@ import { SemanticExpertAgent } from "../workflow/agents/semantic-expert-agent";
 import { FrameCompositionAgent } from "../workflow/agents/frame-composition-agent";
 import { SceneGeneratorAgent } from "../workflow/agents/scene-generator";
 import { ContinuityManagerAgent } from "../workflow/agents/continuity-manager";
-import { VersionMetric, AssetVersion, Scene, Project } from "../shared/types/workflow.types";
+import { VersionMetric, AssetVersion, Scene, Project, Character, Location, Storyboard } from "../shared/types/workflow.types";
 import { SaveAssetsCallback, PipelineEvent, UpdateSceneCallback, GetAttemptMetricCallback, OnAttemptCallback } from "../shared/types/pipeline.types";
 import { ProjectRepository } from "../pipeline/project-repository";
 import { MediaController } from "../workflow/media-controller";
@@ -19,7 +19,8 @@ import { logContextStore } from "../shared/logger";
 import { DistributedLockManager } from "../pipeline/services/lock-manager";
 import { v7 as uuidv7 } from 'uuid';
 import { videoModelName } from "../workflow/llm/google/models";
-import { extractGenerationRules } from "src/workflow/prompts/prompt-composer";
+import { extractGenerationRules } from "../workflow/prompts/prompt-composer";
+import { mapDbProjectToDomain } from "../pipeline/helpers/domain/project-mappers"
 
 
 
@@ -42,6 +43,15 @@ export class WorkerService {
         private publishJobEvent: (event: JobEvent) => Promise<void>,
         private publishPipelineEvent: (event: PipelineEvent) => Promise<void>,
     ) { }
+
+    private async publishStateUpdate(project: Project) {
+        this.publishPipelineEvent({
+            type: "FULL_STATE",
+            projectId: project.id,
+            payload: { project },
+            timestamp: new Date().toISOString(),
+        });
+    }
 
     /**
      * Retrieve agents with tenant-hydrated functionality
@@ -109,7 +119,7 @@ export class WorkerService {
             projectId: job.projectId,
             w_id: this.workerId,
             correlationId: uuidv7(),
-            shouldPublishLog: false
+            shouldPublishLog: true
         }, async () => {
             try {
 
@@ -160,51 +170,59 @@ export class WorkerService {
                     );
                 };
 
-                type JobResultType<T extends JobType> = Extract<JobRecord, { type: T; }>[ 'result' ];
-
-                let data!: JobResultType<typeof job.type>;
-                let metadata: GenerativeResultEnvelope<typeof job.result>[ 'metadata' ];
-
                 switch (job.type) {
                     case "EXPAND_CREATIVE_PROMPT": {
 
                         let project = await this.projectRepository.getProject(job.projectId);
+                        if (!project.metadata.initialPrompt) throw new Error("No user prompt provided");
 
-                        ({ data, metadata } = await agents.compositionalAgent.expandCreativePrompt(
-                            job.payload.title,
-                            job.payload.initialPrompt,
+                        let { data, metadata } = await agents.compositionalAgent.expandCreativePrompt(
+                            project.metadata.title,
+                            project.metadata.initialPrompt,
                             { maxRetries: 3, attempt: 1, initialDelay: 1000, projectId: job.projectId }
-                        ));
+                        );
 
-                             await this.projectRepository.updateInitialProject(project.id, {
+                        const updated = await this.projectRepository.updateProject(project.id, {
                             ...project,
                             metadata: {
                                 ...project.metadata, enhancedPrompt: data.expandedPrompt,
                             }
                         });
 
-                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED", result: data });
+                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
+                        this.publishStateUpdate(updated);
 
                         break;
                     }
                     case "GENERATE_STORYBOARD": {
 
                         let project = await this.projectRepository.getProject(job.projectId);
+                        if (!project.metadata.enhancedPrompt) throw new Error("No enhanced prompt available");
 
-                        ({ data, metadata } = await agents.compositionalAgent.generateStoryboardFromPrompt(
-                            job.payload.title,
-                            job.payload.enhancedPrompt,
+                        let { data, metadata } = await agents.compositionalAgent.generateStoryboardExclusivelyFromPrompt(
+                            project.metadata.title,
+                            project.metadata.enhancedPrompt,
                             { attempt: job.attempt, maxRetries: job.maxRetries, projectId: job.projectId },
-                            saveAssets
-                        ));
+                        );
 
-                        await this.projectRepository.createScenes(project.id, data.storyboard.scenes);
-                        await this.projectRepository.createCharacters(project.id, data.storyboard.characters);
-                        await this.projectRepository.createLocations(project.id, data.storyboard.locations);
+                        saveAssets(
+                            { projectId: project.id },
+                            'storyboard',
+                            'text',
+                            [ JSON.stringify(project.storyboard) ],
+                            { model: metadata.model }
+                        );
 
-                        await this.projectRepository.updateInitialProject(project.id, { storyboard: data.storyboard });
+                        const scenes = await this.projectRepository.createScenes(project.id, data.storyboard.scenes);
+                        const characters = await this.projectRepository.createCharacters(project.id, data.storyboard.characters);
+                        const locations = await this.projectRepository.createLocations(project.id, data.storyboard.locations);
 
-                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED", result: data });
+                        const storyboard = Storyboard.parse(data.storyboard);
+                        project = mapDbProjectToDomain({ project: { ...project, storyboard }, scenes, characters, locations });
+                        const updated = await this.projectRepository.updateProject(project.id, project);
+
+                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
+                        this.publishStateUpdate(updated);
 
                         break;
                     }
@@ -212,16 +230,17 @@ export class WorkerService {
                     case "PROCESS_AUDIO_TO_SCENES": {
 
                         let project = await this.projectRepository.getProject(job.projectId);
+                        if (!project?.metadata.enhancedPrompt) throw new Error("No enhanced prompt available");
+                        if (!project?.metadata.audioPublicUri) throw new Error("No audio public url available");
 
-                        ({ data, metadata } = await agents.audioProcessingAgent.processAudioToScenes(
-                            job.payload.audioPublicUri,
-                            job.payload.enhancedPrompt,
-                        ));
+                        let { data, metadata } = await agents.audioProcessingAgent.processAudioToScenes(
+                            project.metadata.audioPublicUri,
+                            project.metadata.enhancedPrompt,
+                        );
 
                         const { segments, ...analysisData } = data.analysis;
 
-
-                        const projetMetadata = {
+                        const projectMetadata = {
                             ...project.metadata,
                             ...analysisData,
                         };
@@ -229,34 +248,37 @@ export class WorkerService {
                         project = {
                             ...project,
                             status: "pending",
-                            metadata: projetMetadata,
+                            metadata: projectMetadata,
                             scenes: segments as Scene[],
                             characters: [],
                             locations: [],
                             storyboard: {
-                                metadata: projetMetadata,
+                                metadata: projectMetadata,
                                 scenes: segments as Scene[],
                                 characters: [],
                                 locations: [],
                             },
                         } as Project;
 
-                        await this.projectRepository.updateInitialProject(job.projectId, project);
+                        const updated = await this.projectRepository.updateProject(job.projectId, project);
 
-                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED", result: data });
+                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
+                        this.publishStateUpdate(updated);
 
                         break;
                     }
                     case "ENHANCE_STORYBOARD": {
 
                         let project = await this.projectRepository.getProject(job.projectId);
+                        if (!project?.storyboard || !project.storyboard.scenes) throw new Error("No scenes available.");
+                        if (!project?.metadata.enhancedPrompt) throw new Error("No enhanced prompt available.");
 
-                        ({ data, metadata } = await agents.compositionalAgent.generateFullStoryboard(
-                            job.payload.storyboard,
-                            job.payload.enhancedPrompt,
+                        let { data, metadata } = await agents.compositionalAgent.generateFullStoryboard(
+                            project.storyboard,
+                            project.metadata.enhancedPrompt,
                             { initialDelay: 30000, attempt: job.attempt, maxRetries: job.maxRetries, projectId: job.projectId },
                             saveAssets,
-                        ));
+                        );
 
                         await this.projectRepository.createScenes(project.id, data.storyboard.scenes);
                         await this.projectRepository.createCharacters(project.id, data.storyboard.characters);
@@ -272,16 +294,19 @@ export class WorkerService {
                             locations: data.storyboard.locations,
                         } as Project;
 
-                        await this.projectRepository.updateProject(job.projectId, project);
+                        const updated = await this.projectRepository.updateProject(job.projectId, project);
 
-                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED", result: data });
+                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
+                        this.publishStateUpdate(updated);
 
                         break;
                     }
                     case "SEMANTIC_ANALYSIS": {
-                        const project = await this.projectRepository.getProjectFullState(job.projectId);
 
-                        ({ data, metadata } = await agents.semanticExpert.generateRules(project.storyboard));
+                        const project = await this.projectRepository.getProjectFullState(job.projectId);
+                        if (!project?.storyboard) throw new Error("No storyboard available.");
+
+                        let { data, metadata } = await agents.semanticExpert.generateRules(project.storyboard);
 
                         const proactiveRules = (await import("../workflow/prompts/generation-rules-presets")).getProactiveRules();
                         const uniqueRules = Array.from(new Set([ ...proactiveRules, ...data.dynamicRules ]));
@@ -289,59 +314,70 @@ export class WorkerService {
                         project.generationRules = uniqueRules;
                         project.generationRulesHistory.push(uniqueRules);
 
-                        await this.projectRepository.updateProject(job.projectId, project);
+                        const updated = await this.projectRepository.updateProject(job.projectId, project);
 
-                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED", result: data });
+                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
+                        this.publishStateUpdate(updated);
 
                         break;
                     }
                     case "GENERATE_CHARACTER_ASSETS": {
 
-                        ({ data, metadata } = await agents.continuityAgent.generateCharacterAssets(
-                            job.payload.characters,
-                            job.payload.generationRules,
+                        const project = await this.projectRepository.getProjectFullState(job.projectId);
+                        if (!project?.storyboard) throw new Error("No project storyboard available");
+
+                        let { data, metadata } = await agents.continuityAgent.generateCharacterAssets(
+                            project.storyboard.characters,
+                            project.generationRules,
                             saveAssets,
                             createIncrementer(jobId),
-                        ));
+                        );
 
-                        await this.projectRepository.updateCharacters(data.characters);
+                        const updated = await this.projectRepository.updateProject(job.projectId, { characters: data.characters });
 
-                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED", result: data });
+                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
+                        this.publishStateUpdate(updated);
 
                         break;
                     }
 
                     case "GENERATE_LOCATION_ASSETS": {
-                        const locations = await this.projectRepository.getProjectLocations(job.projectId);
 
-                        ({ data, metadata } = await agents.continuityAgent.generateLocationAssets(
-                            locations,
-                            job.payload.generationRules,
+                        const project = await this.projectRepository.getProjectFullState(job.projectId);
+                        if (!project?.storyboard) throw new Error("No project storyboard available");
+
+                        let { data, metadata } = await agents.continuityAgent.generateLocationAssets(
+                            project.storyboard.locations,
+                            project.generationRules,
                             saveAssets,
                             createIncrementer(jobId),
-                        ));
+                        );
 
-                        await this.projectRepository.updateLocations(data.locations);
+                        const updated = await this.projectRepository.updateProject(job.projectId, { locations: data.locations });
 
-                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED", result: data });
+                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
+                        this.publishStateUpdate(updated);
 
                         break;
                     }
 
                     case "GENERATE_SCENE_FRAMES": {
-                        const project = await this.projectRepository.getProjectFullState(job.projectId);
 
-                        ({ data, metadata } = await agents.continuityAgent.generateSceneFramesBatch(
+                        const project = await this.projectRepository.getProjectFullState(job.projectId);
+                        if (!project?.storyboard) throw new Error("No project storyboard available");
+
+                        let { data, metadata } = await agents.continuityAgent.generateSceneFramesBatch(
                             project,
                             job.assetKey as 'scene_start_frame' | 'scene_end_frame',
                             saveAssets,
                             updateScene,
                             createIncrementer(jobId),
-                        ));
+                        );
 
-                        await this.projectRepository.updateProject(job.projectId, project);
+                        const updated = await this.projectRepository.updateProject(job.projectId, project);
 
-                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED", result: data });
+                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
+                        this.publishStateUpdate(updated);
 
                         break;
                     }
@@ -349,6 +385,8 @@ export class WorkerService {
                     case "GENERATE_SCENE_VIDEO": {
 
                         const project = await this.projectRepository.getProjectFullState(job.projectId);
+                        if (!project.scenes[ job.payload.sceneIndex ]) throw new Error("No scene available");
+
                         const scene = project.scenes[ job.payload.sceneIndex ];
                         const generateAudio = project.metadata.hasAudio;
 
@@ -366,7 +404,7 @@ export class WorkerService {
                         const startFrame = assets[ 'scene_start_frame' ]!.versions[ assets[ 'scene_start_frame' ]!.best ].data;
                         const endFrame = assets[ 'scene_end_frame' ]!.versions[ assets[ 'scene_end_frame' ]!.best ].data;
 
-                        const { data, metadata } = await agents.sceneAgent.generateSceneWithQualityCheck({
+                        let { data, metadata } = await agents.sceneAgent.generateSceneWithQualityCheck({
                             scene,
                             enhancedPrompt,
                             sceneCharacters,
@@ -394,14 +432,16 @@ export class WorkerService {
                         const forceRegenerateIndex = project?.forceRegenerateSceneIds.findIndex(id => id === scene.id);
                         updatedProject.forceRegenerateSceneIds = project.forceRegenerateSceneIds.slice(0, forceRegenerateIndex).concat(project.forceRegenerateSceneIds.slice(forceRegenerateIndex + 1));
 
-                        await this.projectRepository.updateProject(job.projectId, updatedProject);
+                        const updated = await this.projectRepository.updateProject(job.projectId, updatedProject);
 
-                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED", result: data });
+                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
+                        this.publishStateUpdate(updated);
 
                         break;
                     }
 
                     case "RENDER_VIDEO": {
+
                         let renderedVideo;
                         if (job.payload.audioGcsUri) {
                             renderedVideo = await agents.audioProcessingAgent.mediaController.stitchScenes(job.payload.videoPaths, job.projectId, job.attempt, job.payload.audioGcsUri);
@@ -409,8 +449,8 @@ export class WorkerService {
                             renderedVideo = await agents.audioProcessingAgent.mediaController.stitchScenes(job.payload.videoPaths, job.projectId, job.attempt);
                         }
 
-                        data = { renderedVideo };
-                        metadata = { model: videoModelName, attempts: 1, acceptedAttempt: 1 };
+                        let data = { renderedVideo };
+                        let metadata = { model: videoModelName, attempts: 1, acceptedAttempt: 1 };
 
                         saveAssets(
                             { projectId: job.projectId },
@@ -420,7 +460,10 @@ export class WorkerService {
                             metadata,
                         );
 
-                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED", result: data });
+                        const updated = await this.projectRepository.getProjectFullState(job.projectId);
+
+                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
+                        this.publishStateUpdate(updated);
 
                         break;
                     }
@@ -428,7 +471,7 @@ export class WorkerService {
                     case "FRAME_RENDER": {
                         let payload = job.payload;
 
-                        ({ data, metadata, } = await agents.frameCompositionAgent.generateImage(
+                        let { data, metadata, } = await agents.frameCompositionAgent.generateImage(
                             payload.scene,
                             payload.prompt,
                             payload.framePosition,
@@ -439,9 +482,12 @@ export class WorkerService {
                             saveAssets,
                             updateScene,
                             createIncrementer(jobId),
-                        ));
+                        );
 
-                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED", result: data });
+                        const updated = await this.projectRepository.getProjectFullState(job.projectId);
+
+                        await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
+                        this.publishStateUpdate(updated);
 
                         break;
                     }
@@ -451,7 +497,7 @@ export class WorkerService {
 
                 const endTime = Date.now();
                 const durationMs = endTime - startTime;
-                this.publishJobEvent({ type: "JOB_COMPLETED", jobId });
+                this.publishJobEvent({ type: "JOB_COMPLETED", jobId, projectId: job.projectId });
 
                 console.log(`[Worker ${this.workerId}] Job ${jobId} completed in ${durationMs}ms`);
 

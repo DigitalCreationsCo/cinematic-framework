@@ -49,6 +49,8 @@ export class JobControlPlane {
      * Maps a UUID string to a signed 32-bit integer for Postgres advisory locking.
      * @param input - The UUID or string to hash.
      * @returns A 32-bit integer.
+     * Risk: MD5 hashes to 128-bit; forcing it into 32-bit (Int32Array) has a non-negligible collision risk in a high-scale system.
+     * Improvement: Use pg_advisory_xact_lock(bigint) (64-bit) instead. Use hashTo64BitInt function and a single 64-bit key to reduce the collision space by $2^{32}$.
      */
     private hashTo32BitInt(input: string): number {
         const hash = createHash('md5').update(input).digest('hex');
@@ -78,15 +80,18 @@ export class JobControlPlane {
             maxRetries: job.maxRetries,
         }).returning();
 
+        console.info({ job: newJob }, `Job created`)
+
         await this.publishJobEvent({
             type: "JOB_DISPATCHED",
-            jobId: newJob.id
+            jobId: newJob.id,
+            projectId: newJob.projectId,
         });
 
         return newJob as JobRecord;
     }
 
-    async getJob<T>(jobId: string): Promise<Extract<JobRecord, { type: T; }> | null> {
+    async getJob(jobId: string): Promise<JobRecord | null> {
 
         const [ row ] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
         if (!row) return null;
@@ -94,7 +99,7 @@ export class JobControlPlane {
         if (row && row.result) {
             row.result = this.reviveDates(row.result);
         }
-        return row as Extract<JobRecord, { type: T; }>;
+        return row as JobRecord;
     }
 
     /**
@@ -144,12 +149,11 @@ export class JobControlPlane {
             if (discovery.rowCount === 0) return null;
             const projectId = discovery.rows[ 0 ].project_id;
 
-            const nsKey = this.hashTo32BitInt(projectId);
-            const jobKey = this.hashTo32BitInt(jobId);
+            const jobKey = this.hashTo64BitInt(jobId);
 
             const lock = await client.query(
-                `SELECT pg_try_advisory_xact_lock($1, $2) as locked`,
-                [ nsKey, jobKey ]
+                `SELECT pg_try_advisory_xact_lock($1) as locked`,
+                [ jobKey ]
             );
 
             if (!lock.rows[ 0 ].locked) return null;
@@ -171,7 +175,7 @@ export class JobControlPlane {
                 .update(jobs)
                 .set({
                     state: "RUNNING",
-                    updatedAt: claimTime // Use the same timestamp for DB consistency
+                    updatedAt: claimTime 
                 })
                 .where(and(eq(jobs.id, jobId), eq(jobs.state, "CREATED")))
                 .returning();
@@ -203,11 +207,12 @@ export class JobControlPlane {
         if (result) {
             await this.publishJobEvent({
                 type: "JOB_DISPATCHED",
-                jobId: result.id
+                jobId: result.id,
+                projectId: result.projectId,
             });
-            console.log(`[JobControlPlane] ${auditLog.trim()} | Job: ${jobId} | New Attempt: ${result.attempt}`);
+            console.log({ functionName: this.requeueJob.name, auditLog: auditLog.trim(), job: result }, `New Attempt`);
         } else {
-            console.warn(`[JobControlPlane] Race condition avoided: Job ${jobId} already updated by worker.`);
+            console.warn({ functionName: this.requeueJob.name, auditLog: auditLog.trim(), job: result }, `Race condition avoided: Job already updated by worker.`);
         }
     }
 

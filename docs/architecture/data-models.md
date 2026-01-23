@@ -19,7 +19,7 @@ The final `SceneSchema` is an intersection of these role schemas plus generation
 
 ```typescript
 SceneSchema = z.intersection(
-  AudioSegmentSchema,              // Director: Timing
+  AudioAnalysisAttributesSchema,              // Director: Timing
   z.intersection(
     z.object({ id: number }),      // Core ID
     z.intersection(

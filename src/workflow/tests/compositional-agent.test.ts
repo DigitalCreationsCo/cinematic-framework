@@ -342,7 +342,7 @@ describe('CompositionalAgent', () => {
         vi.spyOn(storageManager, 'getObjectPath').mockReturnValue('storyboard.json');
         vi.spyOn(storageManager, 'uploadJSON').mockResolvedValue('gs://bucket-name/storyboard.json');
 
-        const result = await compositionalAgent.generateStoryboardFromPrompt(enhancedPrompt);
+        const result = await compositionalAgent.generateStoryboardExclusivelyFromPrompt(enhancedPrompt);
         expect(result).toEqual(mockStoryboard);
         expect(storageManager.uploadJSON).toHaveBeenCalled();
     });

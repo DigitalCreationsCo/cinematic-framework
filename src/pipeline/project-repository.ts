@@ -2,8 +2,10 @@ import { db } from "../shared/db";
 import { scenes, projects, characters, locations, jobs } from "../shared/db/schema";
 import { eq, asc, inArray, sql, } from "drizzle-orm";
 import {
-    Scene, Location, Project, InitialProject,
-    Character,
+    Scene, Location, Project, Character,
+    SceneAttributes,
+    CharacterAttributes,
+    LocationAttributes,
 } from "../shared/types/workflow.types";
 import {
     DbProjectSchema, DbSceneSchema, DbCharacterSchema, DbLocationSchema, ProjectEntity,
@@ -53,7 +55,7 @@ export class ProjectRepository {
         });
     }
 
-    async createProject(insertProject: InitialProject): Promise<InitialProject> {
+    async createProject(insertProject: Project): Promise<Project> {
 
         // Map InitialProject to DB insert
         const [ project ] = await db.insert(projects).values({ ...insertProject }).returning();
@@ -68,10 +70,10 @@ export class ProjectRepository {
             await this.createLocations(project.id, insertProject.locations);
         }
 
-        return mapDbProjectToDomain({ project, validate: false });
+        return mapDbProjectToDomain({ project });
     }
 
-    async updateProject(projectId: string, data: Partial<InitialProject>): Promise<Project> {
+    async updateProject(projectId: string, data: Partial<Project>): Promise<Project> {
         const { metadata, metrics, ...otherValues } = data;
         const updatePayload: any = { ...otherValues, updatedAt: new Date() };
         if (metadata) {
@@ -87,37 +89,6 @@ export class ProjectRepository {
         }
 
         return this.getProjectFullState(projectId);
-    }
-
-    async updateInitialProject(projectId: string, data: Partial<InitialProject>): Promise<InitialProject> {
-        const { metadata, metrics, ...otherValues } = data;
-        const updatePayload: any = { ...otherValues, updatedAt: new Date() };
-        if (metadata) {
-            updatePayload.metadata = sql`COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metadata)}::jsonb`;
-        }
-        if (metrics) {
-            updatePayload.metrics = sql`COALESCE(metrics, '{}'::jsonb) || ${JSON.stringify(metrics)}::jsonb`;
-        }
-        if (Object.keys(data).length > 0) {
-            await db.update(projects)
-                .set(updatePayload)
-                .where(eq(projects.id, projectId));
-        }
-
-        const projectEntity = await this.getProject(projectId);
-        const dbScenes = await db.select().from(scenes).where(eq(scenes.projectId, projectId)).orderBy(asc(scenes.sceneIndex));
-        const dbChars = await db.select().from(characters).where(eq(characters.projectId, projectId));
-        const dbLocs = await db.select().from(locations).where(eq(locations.projectId, projectId));
-        const domainScenes = dbScenes.map(s => mapDbSceneToDomain(DbSceneSchema.parse(s)));
-        const domainCharacters = dbChars.map(c => mapDbCharacterToDomain(DbCharacterSchema.parse(c)));
-        const domainLocations = dbLocs.map(l => mapDbLocationToDomain(DbLocationSchema.parse(l)));
-        return mapDbProjectToDomain({
-            project: projectEntity,
-            scenes: domainScenes,
-            characters: domainCharacters,
-            locations: domainLocations,
-            validate: false
-        });
     }
 
     async updateCharacters(updates: Character[]) {
@@ -153,7 +124,7 @@ export class ProjectRepository {
         return records.map(r => mapDbSceneToDomain(DbSceneSchema.parse(r)));
     }
 
-    async createScenes(projectId: string, scenesData: Scene[]): Promise<Scene[]> {
+    async createScenes(projectId: string, scenesData: SceneAttributes[]): Promise<Scene[]> {
         const rows = scenesData.map(s => ({
             ...mapDomainSceneToDb(s),
             projectId // Ensure project ID override
@@ -171,10 +142,10 @@ export class ProjectRepository {
         return upserted.map(c => mapDbSceneToDomain(DbSceneSchema.parse(c)));
     }
 
-    async createCharacters(projectId: string, charactersData: Character[]): Promise<Character[]> {
+    async createCharacters(projectId: string, charactersData: CharacterAttributes[]): Promise<Character[]> {
         const rows = charactersData.map(s => ({
             ...mapDomainCharacterToDb(s),
-            projectId // Ensure project ID override
+            projectId
         }));
         if (rows.length === 0) return [];
 
@@ -188,10 +159,10 @@ export class ProjectRepository {
             .returning();
         return upserted.map(c => mapDbCharacterToDomain(DbCharacterSchema.parse(c)));
     }
-    async createLocations(projectId: string, locationsData: Location[]): Promise<Location[]> {
+    async createLocations(projectId: string, locationsData: LocationAttributes[]): Promise<Location[]> {
         const rows = locationsData.map(s => ({
             ...mapDomainLocationToDb(s),
-            projectId // Ensure project ID override
+            projectId 
         }));
         if (rows.length === 0) return [];
 
