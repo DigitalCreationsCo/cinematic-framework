@@ -1,6 +1,5 @@
 node_modules/
 src/server/public
-vite.config.ts.*
 *.tar.gz
 .env
 tsconfig.tsbuildinfo
@@ -14,7 +13,7 @@ test_videos/
 *.avi
 **/coverage/
 diff
-script/vertex-ai/out/*.json
+scripts/vertex-ai/out/*.json
 
 # Terraform
 .terraform/

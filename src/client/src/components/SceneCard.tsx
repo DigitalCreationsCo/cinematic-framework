@@ -1,15 +1,15 @@
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Card, CardContent, CardHeader } from "#/components/ui/card";
+import { Button } from "#/components/ui/button";
+import { Badge } from "#/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
 import { Play, Camera, Sun, Music, Clock, ChevronRight, RefreshCw } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { Scene, StatusType } from "@shared/types/pipeline.types";
+import { cn } from "#/lib/utils";
+import type { Scene, StatusType } from "#shared/types/pipeline.types";
 import StatusBadge from "./StatusBadge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "#/components/ui/skeleton";
 import { memo } from "react";
-import { useStore } from "@/lib/store";
-import { getAllBestFromAssets } from "@shared/utils/utils";
+import { useStore } from "#/lib/store";
+import { getAllBestFromAssets } from "#shared/utils/utils";
 
 interface SceneCardProps {
   scene: Scene;
@@ -118,7 +118,7 @@ const SceneCard = memo(function SceneCard({ scene, isSelected, isLoading, status
               </div>
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Sun className="w-3 h-3 shrink-0" />
-                { isLoading ? <Skeleton className="h-3 w-24" /> : <span className="truncate">{ scene.lighting.quality.Hardness }</span> }
+                { isLoading ? <Skeleton className="h-3 w-24" /> : <span className="truncate">{ scene.lighting.quality.hardness }</span> }
               </div>
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Music className="w-3 h-3 shrink-0" />

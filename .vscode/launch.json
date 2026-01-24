@@ -2,21 +2,21 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Current File (Hot Reload)",
+            "name": "Debug Current File (Node 22 Native)",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/node_modules/.bin/vite-node",
-            "args": [
-                "--watch",
-                "-c",
-                "vite.config.node.ts",
-                "${file}"
+            "program": "${file}",
+            "runtimeArgs": [
+                "--experimental-transform-types",
+                "--watch"
             ],
+            "args": ["${file}"],
+
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal",
             "skipFiles": [
                 "<node_internals>/**"
-            ],
+                ],
             "sourceMaps": true,
             "internalConsoleOptions": "neverOpen"
         },
@@ -24,220 +24,88 @@
             "name": "Docker: Attach to Worker",
             "type": "node",
             "request": "attach",
-            "remoteRoot": "/usr/src/app",
-            "localRoot": "${workspaceFolder}/src/worker",
-            "port": 9230,
+            "port": 9231,
             "restart": true,
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "remoteRoot": "/app",
+            "localRoot": "${workspaceFolder}",
             "sourceMaps": true,
-            "outFiles": [
-                "${workspaceFolder}/src/pipeline/**/*.js",
-                "${workspaceFolder}/src/workflow/**/*.js",
-                "${workspaceFolder}/src/worker/**/*.js",
-                "${workspaceFolder}/audio/**/*.js",
-                "${workspaceFolder}/src/shared/**/*.js",
-                "!**/node_modules/**"
-            ],
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/src/pipeline/**",
-                "${workspaceFolder}/src/workflow/**",
-                "${workspaceFolder}/src/worker/**",
-                "!**/node_modules/**"
-            ]
+            "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+            "resolveSourceMapLocations": ["${workspaceFolder}/src/**"],
         },
         {
             "name": "Docker: Attach to Pipeline",
             "type": "node",
             "request": "attach",
-            "remoteRoot": "/usr/src/app",
-            "localRoot": "${workspaceFolder}/src/pipeline",
             "port": 9230,
             "restart": true,
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "remoteRoot": "/app",
+            "localRoot": "${workspaceFolder}",
             "sourceMaps": true,
-            "outFiles": [
-                "${workspaceFolder}/src/pipeline/**/*.js",
-                "${workspaceFolder}/src/workflow/**/*.js",
-                "${workspaceFolder}/audio/**/*.js",
-                "${workspaceFolder}/src/shared/**/*.js",
-                "!**/node_modules/**"
-            ],
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/src/pipeline/**",
-                "${workspaceFolder}/src/workflow/**",
-                "!**/node_modules/**"
-            ]
+            "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+            "resolveSourceMapLocations": ["${workspaceFolder}/src/**"],
         },
         {
             "name": "Docker: Attach to Server",
             "type": "node",
             "request": "attach",
             "port": 9229,
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
-            "remoteRoot": "/usr/src/app",
             "restart": true,
+            "remoteRoot": "/app",
+            "localRoot": "${workspaceFolder}",
+            "sourceMaps": true,
+            "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+            "resolveSourceMapLocations": ["${workspaceFolder}/src/**"],
         },
         {
             "name": "Launch Worker",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/node_modules/.bin/tsx",
-            "args": "src/worker/index.ts",
+            "program": "${workspaceFolder}/scripts/dev-runner.js",
+            "args": ["dist/worker/index.js"],
             "envFile": "${workspaceFolder}/.env",
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "sourceMaps": true,
             "console": "integratedTerminal",
             "restart": true,
             "autoAttachChildProcesses": true,
-            "outFiles": [
-                "${workspaceFolder}/src/**/*.js",
-                "!**/node_modules/**"
-            ],
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/src/**",
-                "!**/node_modules/**"
-            ]
+            "sourceMaps": true,
+            "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+            "resolveSourceMapLocations": ["${workspaceFolder}/src/**"]
         },
         {
             "name": "Launch Pipeline",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/node_modules/.bin/tsx",
-            "args": "src/pipeline/index.ts",
+            "program": "${workspaceFolder}/scripts/dev-runner.js",
+            "args": ["dist/pipeline/index.js"],
             "envFile": "${workspaceFolder}/.env",
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "sourceMaps": true,
             "console": "integratedTerminal",
             "restart": true,
             "autoAttachChildProcesses": true,
-            "outFiles": [
-                "${workspaceFolder}/src/**/*.js",
-                "!**/node_modules/**"
-            ],
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/src/**",
-                "!**/node_modules/**"
-            ]
+            "sourceMaps": true,
+            "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+            "resolveSourceMapLocations": ["${workspaceFolder}/src/**"]
         },
         {
             "name": "Launch Server",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/node_modules/.bin/tsx",
-            "args": "src/server/index.ts",
+            "program": "${workspaceFolder}/scripts/dev-runner.js",
+            "args": ["dist/server/index.js"],
             "envFile": "${workspaceFolder}/.env",
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "sourceMaps": true,
             "console": "integratedTerminal",
             "restart": true,
             "autoAttachChildProcesses": true,
-            "outFiles": [
-                "${workspaceFolder}/src/**/*.js",
-                "!**/node_modules/**"
-            ],
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/src/**",
-                "!**/node_modules/**"
-            ]
-        },
-        {
-            "name": "Debug Server (Hot Reload)",
-            "type": "node",
-            "request": "launch",
-            "program": "${workspaceFolder}/node_modules/.bin/vite-node",
-            "args": [
-                "--watch",
-                "-c",
-                "vite.config.node.ts",
-                "src/server/index.ts"
-            ],
-            "envFile": "${workspaceFolder}/.env",
-            "console": "integratedTerminal",
-            "skipFiles": [
-                "<node_internals>/**",
-            ],
             "sourceMaps": true,
-            "restart": true,
-            "autoAttachChildProcesses": true,
-            "outFiles": [
-                "${workspaceFolder}/**/*.js",
-                "!**/node_modules/**"
-            ],
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/src/**",
-                "!**/node_modules/**"
-            ],
-            "smartStep": true,
-        },
-        {
-            "name": "Debug Worker (Hot Reload)",
-            "type": "node",
-            "request": "launch",
-            "program": "${workspaceFolder}/node_modules/.bin/vite-node",
-            "args": [
-                "--watch",
-                "-c",
-                "vite.config.node.ts",
-                "src/worker/index.ts"
-            ],
-            "envFile": "${workspaceFolder}/.env",
-            "console": "integratedTerminal",
-            "skipFiles": [
-                "<node_internals>/**",
-            ],
-            "sourceMaps": true,
-            "restart": true,
-            "autoAttachChildProcesses": true,
-            "outFiles": [
-                "${workspaceFolder}/**/*.js",
-                "!**/node_modules/**"
-            ],
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/src/**",
-                "!**/node_modules/**"
-            ],
-            "smartStep": true,
-        },
-        {
-            "name": "Debug Pipeline (Hot Reload)",
-            "type": "node",
-            "request": "launch",
-            "program": "${workspaceFolder}/node_modules/.bin/vite-node",
-            "args": [
-                "--watch",
-                "-c",
-                "vite.config.node.ts",
-                "src/pipeline/index.ts"
-            ],
-            "envFile": "${workspaceFolder}/.env",
-            "console": "integratedTerminal",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
-            "sourceMaps": true,
-            "restart": true,
-            "autoAttachChildProcesses": true,
-            "outFiles": [
-                "${workspaceFolder}/**/*.js",
-                "!**/node_modules/**"
-            ],
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/src/**",
-                "!**/node_modules/**"
-            ],
-            "smartStep": true,
+            "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+            "resolveSourceMapLocations": ["${workspaceFolder}/src/**"]
         },
         {
             "name": "Debug Client",
@@ -246,7 +114,8 @@
             "url": "http://localhost:8000",
             "webRoot": "${workspaceFolder}/src/client",
             "sourceMapPathOverrides": {
-                "/*": "${webRoot}/*"
+                "webpack:///./src/*": "${webRoot}/*",
+                "vsmaps:///*": "${workspaceFolder}/*"
             }
         },
         {
@@ -256,17 +125,20 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${workspaceFolder}/src/workflow/dist/graph.js",
+            "program": "${workspaceFolder}/dist/workflow/graph.js",
             "args": [
                 "--id",
                 "video_1765360860268"
             ],
             "preLaunchTask": "tsc: build - tsconfig.json",
-            "outFiles": [
-                "${workspaceFolder}/src/workflow/dist/**/*.js"
-            ],
             "sourceMaps": true,
             "smartStep": true,
+            "outFiles": [
+                "${workspaceFolder}/src/**/*.js"
+            ],
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/src/**"
+            ],
             "internalConsoleOptions": "openOnSessionStart"
         },
     ],
@@ -287,16 +159,8 @@
                 "Launch Pipeline",
                 "Launch Server",
                 "Debug Client",
-            ]
-        },
-        {
-            "name": "Debug Full-Stack (Hot Reload)",
-            "configurations": [
-                "Debug Worker (Hot Reload)",
-                "Debug Pipeline (Hot Reload)",
-                "Debug Server (Hot Reload)",
-                "Debug Client"
-            ]
+            ],
+            "preLaunchTask": "Watch All"
         }
     ]
 }

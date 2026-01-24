@@ -1,11 +1,11 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "#/components/ui/card";
+import { Badge } from "#/components/ui/badge";
 import { MapPin, Sun, Cloud } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { Location } from "@shared/types/workflow.types";
-import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton
+import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
+import type { Location } from "#shared/types/workflow.types";
+import { Skeleton } from "#/components/ui/skeleton"; // Import Skeleton
 import { memo } from "react";
-import { getAllBestFromAssets } from "@shared/utils/utils";
+import { getAllBestFromAssets } from "#shared/utils/utils";
 
 interface LocationCardProps {
   location: Location;
@@ -63,7 +63,7 @@ const LocationCard = memo(function LocationCard({ location, onSelect, isLoading 
               <div className="flex items-center gap-1">
                 <Sun className="w-3 h-3" />
                 <span className="truncate">
-                  { isLoading ? <Skeleton className="h-3 w-16" /> : location.lightingConditions.quality.Hardness }
+                  { isLoading ? <Skeleton className="h-3 w-16" /> : location.lightingConditions.quality.hardness }
                 </span>
               </div>
               <div className="flex items-center gap-1">

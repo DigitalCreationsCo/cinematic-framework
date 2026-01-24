@@ -1,7 +1,7 @@
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "#/components/ui/card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton
+import { cn } from "#/lib/utils";
+import { Skeleton } from "#/components/ui/skeleton"; // Import Skeleton
 import { memo } from "react";
 
 interface MetricCardProps {

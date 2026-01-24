@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
-import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "#/components/ui/button";
+import { Slider } from "#/components/ui/slider";
+import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
 import {
   Play,
   Pause,
@@ -16,9 +16,9 @@ import {
   Volume,
   Volume1,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { Scene } from "@shared/types/workflow.types";
-import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "#/lib/utils";
+import type { Scene } from "#shared/types/workflow.types";
+import { Skeleton } from "#/components/ui/skeleton";
 
 interface PlaybackControlsProps {
   scenes: Scene[];
@@ -233,7 +233,7 @@ const PlaybackControls = memo(function PlaybackControls({
   }
 
   return (
-    <div className="bg-card border rounded-md p-3 space-y-3" data-testid="playback-controls">
+    <div className="bg-card border rounded-md py-3 px-6 space-y-3" data-testid="playback-controls">
       <div className="relative">
         <div className="absolute -top-1 left-0 right-0 h-1 flex">
           { scenes.map((scene) => {
@@ -275,6 +275,17 @@ const PlaybackControls = memo(function PlaybackControls({
       </div>
 
       <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono justify-center">
+          <span data-testid="text-current-time">{ formatTime(currentTime) }</span>
+          <span>/</span>
+          <span data-testid="text-total-duration">{ formatTime(totalDuration) }</span>
+          { playbackScene && (
+            <span className="ml-2 text-foreground">
+              Playhead: Scene #{ playbackScene.id }
+            </span>
+          ) }
+        </div>
+
         <div className="flex items-center gap-1">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -350,17 +361,6 @@ const PlaybackControls = memo(function PlaybackControls({
             </TooltipTrigger>
             <TooltipContent>Theatre Mode</TooltipContent>
           </Tooltip>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono flex-1 justify-center">
-          <span data-testid="text-current-time">{ formatTime(currentTime) }</span>
-          <span>/</span>
-          <span data-testid="text-total-duration">{ formatTime(totalDuration) }</span>
-          { playbackScene && (
-            <span className="ml-2 text-foreground">
-              Playhead: Scene #{ playbackScene.id }
-            </span>
-          ) }
         </div>
 
         <div className="flex items-center gap-2">

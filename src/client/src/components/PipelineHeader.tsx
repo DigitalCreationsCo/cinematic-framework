@@ -1,9 +1,9 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "#/components/ui/button";
 import { Play, Pause, RotateCcw, Moon, Sun, Square } from "lucide-react";
 import StatusBadge from "./StatusBadge";
 import ConnectionStatus from "./ConnectionStatus";
-import { useStore } from "@/lib/store";
-import { Scene } from "@shared/types/workflow.types";
+import { useStore } from "#/lib/store";
+import { Scene } from "#shared/types/workflow.types";
 import { useCallback } from "react";
 
 interface PipelineHeaderProps {

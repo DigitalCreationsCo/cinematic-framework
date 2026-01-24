@@ -1,24 +1,24 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
+import { Badge } from "#/components/ui/badge";
+import { Button } from "#/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
+import { ScrollArea } from "#/components/ui/scroll-area";
 import { Play, Pause, RefreshCw, Camera, Sun, Music, Users, MapPin, FileText } from "lucide-react";
 import { useRef, useState, useEffect, useCallback, RefObject, memo, useMemo } from "react";
-import type { Scene, AssetStatus, Character, Location, QualityEvaluationResult, AssetVersion, AssetRegistry, AssetKey, AssetHistory } from "@shared/types/workflow.types";
+import type { Scene, AssetStatus, Character, Location, QualityEvaluationResult, AssetVersion, AssetRegistry, AssetKey, AssetHistory } from "#shared/types/workflow.types";
 import StatusBadge from "./StatusBadge";
 import QualityEvaluationPanel from "./QualityEvaluationPanel";
 import FramePreview from "./FramePreview";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "#/components/ui/skeleton";
 import { RegenerateFrameDialog } from "./RegenerateFrameDialog";
 import { RegenerateSceneDialog } from "./RegenerateSceneDialog";
 import { AssetHistoryPicker } from "./AssetHistoryPicker";
-import { regenerateFrame, updateSceneAsset, regenerateScene, getSceneAssets } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { regenerateFrame, updateSceneAsset, regenerateScene, getSceneAssets } from "#/lib/api";
+import { useToast } from "#/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
 import { Trash2, History } from "lucide-react";
-import { useStore } from "@/lib/store";
-import { getAllBestFromAssets } from "@shared/utils/utils";
+import { useStore } from "#/lib/store";
+import { getAllBestFromAssets } from "#shared/utils/utils";
 
 interface SceneDetailPanelProps {
   scene: Scene;
@@ -454,7 +454,7 @@ const SceneDetailPanel = memo(function SceneDetailPanel({
                     <div className="flex items-center gap-2 text-sm">
                       <Sun className="w-4 h-4 text-muted-foreground" />
                       <span className="text-muted-foreground">Lighting:</span>
-                      <span className="font-medium">{ isLoading ? <Skeleton className="h-4 w-20" /> : scene.lighting.quality.Hardness }</span>
+                      <span className="font-medium">{ isLoading ? <Skeleton className="h-4 w-20" /> : scene.lighting.quality.hardness }</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <Music className="w-4 h-4 text-muted-foreground" />

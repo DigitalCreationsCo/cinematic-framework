@@ -1,5 +1,5 @@
-import { cn } from "@/lib/utils";
-import type { QualityScore } from "@shared/types/workflow.types";
+import { cn } from "#/lib/utils";
+import type { QualityScore } from "#shared/types/workflow.types";
 import StatusBadge from "./StatusBadge";
 
 interface QualityScoreBarProps {

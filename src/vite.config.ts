@@ -1,11 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import tsconfigPaths from 'vite-tsconfig-paths';
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 export default defineConfig({
   plugins: [
     react(),
+    tsconfigPaths({ root: path.resolve(import.meta.dirname, "..") }),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== "production" &&
       process.env.REPL_ID !== undefined
@@ -19,18 +21,18 @@ export default defineConfig({
       ]
       : []),
   ],
+  root: path.resolve(import.meta.dirname, "client"),
   resolve: {
     alias: {
-      "@": path.resolve(import.meta.dirname, "src", "client", "src"),
-      "@shared": path.resolve(import.meta.dirname, "src", "shared"),
-      "@assets": path.resolve(import.meta.dirname, "src", "attached_assets"),
+      // Manual fallback to ensure Vite resolves aliased paths correctly
+      "#": path.resolve(import.meta.dirname, "client/src"),
+      "#shared": path.resolve(import.meta.dirname, "shared"),
     },
   },
-  root: path.resolve(import.meta.dirname, "src", "client"),
   build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
+    outDir: path.resolve(import.meta.dirname, "../dist/server/public"),
     emptyOutDir: true,
-    sourcemap: true, // Added for production debugging
+    sourcemap: true, // production debugging
     rollupOptions: {
       output: {
         manualChunks: {

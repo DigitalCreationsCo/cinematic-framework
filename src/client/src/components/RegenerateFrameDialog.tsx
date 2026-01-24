@@ -4,12 +4,12 @@ import {
     DialogHeader,
     DialogTitle,
     DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+} from "#/components/ui/dialog";
+import { Button } from "#/components/ui/button";
+import { Textarea } from "#/components/ui/textarea";
 import { useEffect, useState } from "react";
-import { AssetKey, AssetVersion, Scene } from "@shared/types/workflow.types";
-import { getAllBestFromAssets } from "@shared/utils/utils";
+import { AssetKey, AssetVersion, Scene } from "#shared/types/workflow.types";
+import { getAllBestFromAssets } from "#shared/utils/utils";
 
 interface RegenerateFrameDialogProps {
     scene: Scene;

@@ -1,12 +1,12 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "#/components/ui/dialog";
+import { ScrollArea } from "#/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
+import { Badge } from "#/components/ui/badge";
 import { useEffect, useState } from "react";
-import { getSceneAssets } from "@/lib/api";
-import { Skeleton } from "@/components/ui/skeleton";
+import { getSceneAssets } from "#/lib/api";
+import { Skeleton } from "#/components/ui/skeleton";
 import { Clock, Play } from "lucide-react";
-import { AssetKey, AssetVersion } from "@shared/types/workflow.types";
+import { AssetKey, AssetVersion } from "#shared/types/workflow.types";
 
 
 

@@ -1,11 +1,11 @@
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "#/components/ui/card";
 import { Users, User as UserIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { Character } from "@shared/types/workflow.types";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "#/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
+import type { Character } from "#shared/types/workflow.types";
+import { Skeleton } from "#/components/ui/skeleton";
 import { memo } from "react";
-import { getAllBestFromAssets } from "@shared/utils/utils";
+import { getAllBestFromAssets } from "#shared/utils/utils";
 
 interface CharacterCardProps {
   character: Character;

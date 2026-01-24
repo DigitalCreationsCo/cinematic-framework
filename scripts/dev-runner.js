@@ -1,7 +1,5 @@
-const { spawn } = require('child_process');
+import { spawn } from 'child_process';
 
-// Capture the target script from the command line arguments
-// Usage: node dev-runner.js <your-script.js>
 const targetScript = process.argv[2];
 
 if (!targetScript) {
@@ -18,14 +16,22 @@ const start = () => {
     child.kill();
   }
 
-  // Construct args: node [--inspect] targetScript
-  const args = debugMode ? ['--inspect=9229', targetScript] : [targetScript];
+  const args = [
+    "--import", "tsx",
+    "-r", "dotenv/config", 
+    "--experimental-transform-types",
+    "--no-warnings=ExperimentalWarning",
+    "--enable-source-maps",
+    targetScript
+  ];
+
+  if (debugMode) args.unshift('--inspect=9229');
   
   console.log('\x1b[33m%s\x1b[0m', `\n--- [${new Date().toLocaleTimeString()}] Running: ${targetScript} (${debugMode ? 'DEBUG ON' : 'DEBUG OFF'}) ---`);
 
   child = spawn('node', args, {
     stdio: 'inherit',
-    shell: true
+    env: { ...process.env, FORCE_COLOR: "1" }
   });
 
   child.on('close', (code) => {
@@ -51,7 +57,6 @@ console.log('\x1b[36m%s\x1b[0m', `
 process.stdin.setRawMode(true);
 process.stdin.resume();
 process.stdin.setEncoding('utf8');
-
 process.stdin.on('data', (key) => {
   const input = key.toString().toLowerCase();
 

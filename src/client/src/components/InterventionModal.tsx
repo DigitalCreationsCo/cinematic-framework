@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { useStore } from '@/lib/store';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '#/components/ui/dialog';
+import { Button } from '#/components/ui/button';
+import { useStore } from '#/lib/store';
+import { Alert, AlertDescription, AlertTitle } from '#/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
-import { Textarea } from '@/components/ui/textarea';
-import { resolveIntervention, resumePipeline } from '@/lib/api';
+import { Textarea } from '#/components/ui/textarea';
+import { resolveIntervention, resumePipeline } from '#/lib/api';
 
 export function InterventionModal() {
     const { interruptionState, setInterruptionState, setProjectStatus, selectedProject, setIsLoading } = useStore();

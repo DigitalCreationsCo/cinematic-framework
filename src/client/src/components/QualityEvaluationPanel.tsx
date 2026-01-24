@@ -1,9 +1,9 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "#/components/ui/collapsible";
+import { Badge } from "#/components/ui/badge";
 import { ChevronDown, AlertTriangle, AlertCircle, Info } from "lucide-react";
 import { useState } from "react";
-import type { QualityEvaluationResult, QualityIssue } from "@shared/types/workflow.types";
+import type { QualityEvaluationResult, QualityIssue } from "#shared/types/workflow.types";
 import QualityScoreBar from "./QualityScoreBar";
 import StatusBadge from "./StatusBadge";
 

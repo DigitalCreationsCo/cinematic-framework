@@ -1,7 +1,7 @@
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } from "#/components/ui/scroll-area";
 import { AlertCircle, AlertTriangle, Info, CheckCircle, X } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { PipelineMessage } from "@shared/types/pipeline.types";
+import { cn } from "#/lib/utils";
+import type { PipelineMessage } from "#shared/types/pipeline.types";
 import { memo } from "react";
 
 interface MessageLogProps {
@@ -12,7 +12,7 @@ interface MessageLogProps {
 
 const typeConfig = {
   info: { icon: Info, className: "text-chart-1 bg-chart-1/10" },
-  warning: { icon: AlertTriangle, className: "text-chart-4 bg-chart-4/10" },
+  warn: { icon: AlertTriangle, className: "text-chart-4 bg-chart-4/10" },
   error: { icon: AlertCircle, className: "text-destructive bg-destructive/10" },
   success: { icon: CheckCircle, className: "text-chart-3 bg-chart-3/10" },
 };

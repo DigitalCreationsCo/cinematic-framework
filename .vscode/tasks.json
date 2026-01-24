@@ -1,77 +1,16 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"label": "docker-compose up: debug",
-			"type": "docker-compose",
-			"dockerCompose": {
-				"up": {
-					"detached": true,
-					"build": true,
-					"services": [
-						"pubsub-emulator",
-						"api-server",
-						"pipeline",
-						"client",
-					]
-				},
-				"files": [
-					"${workspaceFolder}/docker-compose.debug.yml"
-				]
-			}
-		},
-		{
-			"label": "docker-compose up",
-			"type": "docker-compose",
-			"dockerCompose": {
-				"up": {
-					"detached": true,
-					"build": true,
-					"services": [
-						"pubsub-emulator",
-						"api-server",
-						"pipeline",
-						"client",
-					]
-				},
-				"files": [
-					"${workspaceFolder}/docker-compose.yml",
-				]
-			}
-		},
-		{
-			"label": "docker-run: debug",
-			"type": "docker-run",
-			"dependsOn": [
-				"docker-build"
-			],
-			"dockerRun": {
-				"env": {
-					"DEBUG": "*",
-					"NODE_ENV": "development"
-				}
-			},
-			"node": {
-				"enableDebugging": true
-			}
-		},
-		{
-			"label": "docker-run: release",
-			"type": "docker-run",
-			"dependsOn": [
-				"docker-build"
-			],
-			"platform": "node"
-		},
-		{
-			"label": "docker-build",
-			"type": "docker-build",
-			"platform": "node",
-			"dockerBuild": {
-				"dockerfile": "${workspaceFolder}/Dockerfile",
-				"context": "${workspaceFolder}",
-				"pull": true
-			}
-		},
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Watch All",
+      "type": "shell",
+      "command": "npx tsc -w --preserveWatchOutput",
+      "isBackground": true,
+      "problemMatcher": "$tsc-watch",
+      "presentation": {
+        "group": "build",
+        "reveal": "silent"
+      }
+    }
+  ]
 }

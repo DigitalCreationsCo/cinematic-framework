@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useStore } from "../lib/store";
-import { PipelineEvent } from "@shared/types/pipeline.types";
-import { Project, Scene } from "@shared/types/workflow.types";
+import { PipelineEvent } from "#shared/types/pipeline.types";
+import { Project, Scene } from "#shared/types/workflow.types";
 import { requestFullState } from "../lib/api";
 import { v7 as uuidv7 } from "uuid";
 
@@ -43,7 +43,7 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
     eventSource.onopen = () => {
       setConnectionStatus("connected");
       setError(null);
-      console.log(`[Client] Connected for projectId: ${projectId}`);
+      console.log({ projectId }, "Client connected");
 
       requestFullState({ projectId: projectId }).catch(error => console.error({ error }, "Failed to get project full state"));
     };
@@ -53,7 +53,7 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
         setIsLoading(true);
         const parsedEvent = JSON.parse(event.data) as PipelineEvent;
 
-        console.log(`[Client] Received: ${parsedEvent.type}`, parsedEvent.payload);
+        console.log({ event: parsedEvent }, `Client received event.`);
 
         switch (parsedEvent.type) {
           case "WORKFLOW_STARTED":
@@ -145,7 +145,6 @@ export function usePipelineEvents({ projectId }: UsePipelineEventsProps) {
             break;
 
           case "WORKFLOW_COMPLETED":
-            setProject(parsedEvent.payload.project);
             setProjectStatus("complete");
             break;
 

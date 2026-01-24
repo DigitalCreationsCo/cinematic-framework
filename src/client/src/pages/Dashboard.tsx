@@ -1,13 +1,13 @@
 import { useEffect, useCallback, useMemo } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
+import { ScrollArea } from "#/components/ui/scroll-area";
+import { Button } from "#/components/ui/button";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup
-} from "@/components/ui/resizable";
+} from "#/components/ui/resizable";
 import {
   Film,
   Users,
@@ -25,23 +25,23 @@ import type {
   Character,
   Location,
   AssetStatus,
-} from "@shared/types/workflow.types";
-import { getAllBestFromAssets } from "@shared/utils/utils";
-import PipelineHeader from "@/components/PipelineHeader";
-import SceneCard from "@/components/SceneCard";
-import SceneDetailPanel from "@/components/SceneDetailPanel";
-import Timeline from "@/components/Timeline";
-import PlaybackControls from "@/components/PlaybackControls";
-import MessageLog from "@/components/MessageLog";
-import CharacterCard from "@/components/CharacterCard";
-import LocationCard from "@/components/LocationCard";
-import MetricCard from "@/components/MetricCard";
-import DebugStatePanel from "@/components/DebugStatePanel";
-import { usePipelineEvents } from "@/hooks/use-pipeline-events";
-import { useStore } from "@/lib/store";
-import { regenerateScene, resumePipeline, startPipeline, stopPipeline } from "@/lib/api";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useMediaPreloader } from "@/hooks/use-media-preloader";
+} from "#shared/types/workflow.types";
+import { getAllBestFromAssets } from "#shared/utils/utils";
+import PipelineHeader from "#/components/PipelineHeader";
+import SceneCard from "#/components/SceneCard";
+import SceneDetailPanel from "#/components/SceneDetailPanel";
+import Timeline from "#/components/Timeline";
+import PlaybackControls from "#/components/PlaybackControls";
+import MessageLog from "#/components/MessageLog";
+import CharacterCard from "#/components/CharacterCard";
+import LocationCard from "#/components/LocationCard";
+import MetricCard from "#/components/MetricCard";
+import DebugStatePanel from "#/components/DebugStatePanel";
+import { usePipelineEvents } from "#/hooks/use-pipeline-events";
+import { useStore } from "#/lib/store";
+import { regenerateScene, resumePipeline, startPipeline, stopPipeline } from "#/lib/api";
+import { Skeleton } from "#/components/ui/skeleton";
+import { useMediaPreloader } from "#/hooks/use-media-preloader";
 
 export default function Dashboard() {
   const {
@@ -114,7 +114,7 @@ export default function Dashboard() {
     : [], [ selectedScene, currentCharacters ]);
 
   const selectedSceneLocation = useMemo(() => selectedScene
-    ? currentLocations.find(l => l.id === selectedScene.locationId)
+    ? currentLocations.find(l => l.id === selectedScene.location)
     : undefined, [ selectedScene, currentLocations ]);
 
   const completedScenes = useMemo(() => currentScenes.filter(s => s.status === "complete").length, [ currentScenes ]);
