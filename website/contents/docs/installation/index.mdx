@@ -1,0 +1,107 @@
+---
+title: Architecture
+keywords: ["architecture", "generative ai", "system design", "cinematic canvas"]
+---
+
+## Installation (Local Development with Docker)
+
+The local setup now requires running Docker Compose to manage the background services:
+
+```bash
+# 1. Install dependencies for API/Worker/Client
+npm install
+
+# 2. Start necessary infrastructure components (Pub/Sub Emulator, API Server, Client)
+docker-compose up --build -d
+
+# Note: The postgres-db service is started automatically by docker-compose if needed by the worker, but is not externally exposed or required by the API server anymore.
+```
+
+## Local Development (Without Docker)
+
+For faster iteration and debugging, you can run the services directly using `tsx` outside of Docker. You will need to start the dependency containers first.
+
+```bash
+# 1. Start the dependent infrastructure (Postgres and Pub/Sub Emulator)
+# Ensure you use the appropriate docker-compose file if needed, or run the services separately.
+# Example: docker-compose up -d pubsub-emulator postgres-db
+
+# 2. Start the Client (e.g., in VS Code integrated terminal)
+npm run dev
+
+# 3. Start the Server (The API layer)
+npm run start:server
+
+# 4. Start the Worker (The LangGraph execution environment)
+npm run start:worker
+
+# Alternatively, use the new VS Code Debug Configurations:
+# - Launch Worker
+# - Launch Server
+# - Debug Client
+# - Debug Server (Hot Reload)
+# - Debug Worker (Hot Reload)
+# - Debug Full-Stack (launches all 3)
+# - Debug Full-Stack (Hot Reload) (launches Server, Worker, Client with hot reload)
+```
+
+## Configuration
+
+### Environment Variables
+
+Update `.env` (or environment variables in deployment). **The API Server now explicitly loads environment variables using `dotenv` upon startup.** Note that `GCP_PROJECT_ID`, `GCP_BUCKET_NAME`, and `POSTGRES_URL` are required for full operation.
+
+```bash
+# Google Cloud Platform Configuration
+GCP_PROJECT_ID="your-gcp-project-id"
+GCP_BUCKET_NAME="your-gcp-bucket-name"
+PUBSUB_EMULATOR_PROJECT_ID="test-project" # Required for Pub/Sub operations
+PUBSUB_EMULATOR_HOST="" # Set this to 'pubsub-emulator:8085' when running in Docker, or 'localhost:8085' when running locally outside Docker. Leave blank if using actual Pub/Sub service.
+# GOOGLE_APPLICATION_CREDENTIALS is often omitted when using ADC or Workload Identity
+# POSTGRES_URL must point to the database accessible by the pipeline worker
+POSTGRES_URL="postgres://postgres:example@postgres-db:5432/cinematiccanvas"
+
+# LLM Configuration (Only supports VertexAI)
+LLM_TEXT_PROVIDER="google"
+TEXT_MODEL_NAME="gemini-2.5-pro"
+IMAGE_MODEL_NAME="gemini-2.5-flash-image"
+VIDEO_MODEL_NAME="veo-2.0-generate-exp"
+```
+
+### Required GCP Permissions
+
+Your service account needs the following IAM roles:
+
+- `storage.objectAdmin` or `storage.objectCreator` + `storage.objectViewer` on the bucket
+- `aiplatform.user` for Vertex AI API access
+
+## Configuration
+
+### Environment Variables (Docker Compose Context)
+
+When running locally via `docker-compose.yml`, the following variables are implicitly set or need external definition for services connecting to external GCP resources (if not using the emulator):
+
+- `PUBSUB_EMULATOR_HOST`: Points to the local Pub/Sub emulator container.
+- `POSTGRES_URL`: Connection string for the service database.
+- `GCP_PROJECT_ID`, `GCP_BUCKET_NAME`: GCP resource identifiers.
+- `GCP_PROJECT_ID`: Project ID for Pub/Sub operations (used by worker/server if not using emulator host).
+
+## Security: Google Cloud Credentials & Data Access
+
+**State Persistence**: All workflow progress, scenes, characters, and metrics are now persisted in a PostgreSQL database via LangGraph checkpoints (`thread_id` corresponds to `projectId`). 
+
+## Troubleshooting
+
+### Common Issues (Updated)
+
+- **Issue: "Failed to connect to database"**
+  - Solution: Ensure the `pipeline-worker` service can access PostgreSQL. If running locally, check the `POSTGRES_URL` in `.env` or passed to the worker environment. The `postgres-db` service might need manual verification if not running via compose.
+- **Issue: "Pipeline did not resume / Ran from beginning"**
+  - Solution: Verify that the `projectId` used matches the `thread_id` saved in the database, and that the `pipeline-worker` service is correctly deserializing checkpoint state (`channel_values`).
+- **Issue: "Video generation timed out"**
+  - Solution: Increase timeout settings configured within the pipeline agents or pipeline worker environment.
+- **Issue: "Safety filter triggered"**
+  - Solution: The framework automatically sanitizes prompts. Review safety error codes in pipeline agents.
+- **Issue: "FFmpeg errors"**
+  - Solution: Verify FFmpeg is installed and accessible in the `pipeline-worker` container's PATH.
+

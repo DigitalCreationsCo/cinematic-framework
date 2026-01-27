@@ -1,0 +1,55 @@
+---
+title: Usage
+keywords: ["generative ai", "api", "pipeline", "usage", "cinematic canvas"]
+---
+
+## Usage (API Interaction)
+
+Pipeline execution is initiated via API calls that publish commands to Pub/Sub, allowing the decoupled worker service to pick them up. The API server also provides endpoints for querying current state and available projects, leveraging direct GCS access for the latter.
+
+### Starting a Pipeline
+
+Use POST to `/api/video/start`. This publishes a `START_PIPELINE` command.
+
+```bash
+curl -X POST http://localhost:8000/api/video/start \
+-H "Content-Type: application/json" \
+-d '{
+  "projectId": "new-video-id-12345",
+  "audioUrl": "gs://my-bucket/audio/song.mp3",
+  "enhancedPrompt": "A 1980s VHS-style music video..."
+}'
+```
+
+### Stopping a Pipeline
+
+Use POST to `/api/video/stop`. This publishes a `STOP_PIPELINE` command, causing the worker to save its current state and terminate processing for that run ID.
+
+In local CLI executions (e.g., running `src/workflow/graph.ts` directly), the workflow now supports graceful interruption via **SIGINT (Ctrl+C)**. This triggers an `AbortController` signal, allowing LLM calls to be cancelled mid-flight, ensuring a cleaner shutdown and checkpointing if possible.
+
+```bash
+curl -X POST http://localhost:8000/api/video/stop \
+-H "Content-Type: application/json" \
+-d '{
+  "projectId": "new-video-id-12345"
+}'
+```
+
+### Listing Available Projects
+
+Use GET to `/api/projects`. This queries the configured GCS bucket directly to list existing project directories (prefixes). **The API now returns a JSON object `{ "projects": [...] }` instead of an array.** The listing now excludes any project directory named 'audio' to prevent accessing raw audio assets.
+
+### Viewing Live State Updates (SSE)
+
+Client applications connect to `/api/events/:projectId` to receive real-time state updates via SSE, which relies on the worker publishing to the `video-events` topic.
+
+## Performance Considerations
+
+- **Scene generation**: ~2-5 minutes per scene (API dependent)
+- **Total workflow time**: Highly dependent on retry counts, as failures are now managed via command/checkpointing, not just internal retries. A stalled pipeline can be explicitly stopped via API command.
+
+## Limitations
+
+- Video durations must be exactly 4, 6, or 8 seconds (Vertex AI constraint).
+- Maximum 15-minute timeout per scene generation.
+- Requires significant GCP quota for video generation API.

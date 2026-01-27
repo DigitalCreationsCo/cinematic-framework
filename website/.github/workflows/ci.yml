@@ -1,0 +1,44 @@
+name: Documents Search CI
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate content
+        run: sh .husky/post-process.sh
+
+      - name: Upload search data artifact
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: search-data
+          path: public/search-data/
+          retention-days: 30

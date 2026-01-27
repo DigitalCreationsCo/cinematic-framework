@@ -1,0 +1,129 @@
+---
+title: Introduction
+description: This section provides an overview of how to get started with Cinematic Canvas, a generative film making tool.
+keywords: ["introduction", "guide", "generative ai", "film", "movie", "ai video", "music video", "cinematic canvas"]
+---
+
+## Cinematic Canvas
+
+Cinematic Canvas is an AI-powered cinematic video generation framework that transforms creative prompts and audio into professional-quality videos or music videos with continuity, character consistency, and cinematic storytelling.
+
+## Overview
+
+Cinematic Canvas leverages Google's Vertex AI Gemini models and LangGraph to orchestrate a multi-agent workflow:
+
+- **Analyzes audio tracks** to extract musical structure, and compose narrative timing.
+- **Generates detailed storyboards** with scenes, characters, locations, and cinematography.
+- **Maintains visual continuity** across scenes using reference images and persistent state checkpoints.
+- **Generated Asset Versioning** tracks all and *best* assets.
+- **Produces cinematic videos** with intentional shot composition, lighting, and camera movements.
+- **Evaluation Guidelines** improve the generation process by learning from quality-check feedback.
+- **Persisted State** using PostgreSQL and database-persisted graph checkpoints.
+
+## Using This Documentation
+
+Navigation is on the left. Pages flow from setup to advanced features, but you're free to jump around.
+
+Use the table of contents on the right to skip through sections.
+
+Start with the [Installation Guide](/docs/installation).
+
+## Core Features
+
+| Feature                              | Description                                                                 |
+| ------------------------------------ | --------------------------------------------------------------------------- |
+| **Audio-Driven and/or Prompt-Based** | Generate videos or music videos from audio files (with automatic scene timing) and/or from creative prompts.           |
+| **Multi-Agent Architecture**         | Specialized agents for audio analysis, storyboard composition, character/location management, scene generation, and quality control.               |
+| **Visual Continuity**                | Maintains character appearance and location consistency using reference images and **pre-generated start/end frames** for each scene.               |
+| **Role-Based Prompt Architecture**   | Film production crew roles (Director, Cinematographer, Gaffer, Script Supervisor, etc.) compose prompts for specialized, high-quality output.               |
+| **Cinematic Quality**                | Professional shot types, camera movements, lighting, and transitions               |
+| **Scene Regeneration & Intervention**   | Allows users to selectively regenerate specific scenes or **individual frames** (`REGENERATE_FRAME`) without restarting the entire pipeline. It also supports interactive correction of LLM failures via `RESOLVE_INTERVENTION`.               |
+| **Self-Improving Generation**        | A `QualityCheckAgent` evaluates generated scenes and provides feedback. This feedback is used to refine a set of "Generation Rules" that guide subsequent scene generations, improving quality and consistency over time.               |
+| **Learning Metrics**                 | The framework tracks the number of attempts and quality scores for each scene, calculating trend lines to provide real-time feedback on whether the system is "learning" (i.e., requiring fewer attempts to generate high-quality scenes).               |
+| **Distributed Architecture & Resilience**                | Supports safe horizontal scaling across multiple worker replicas. Workflow state is persisted in PostgreSQL via LangGraph checkpointers, allowing for robust resumption and enabling command-driven operations like `START/STOP/REGENERATE` via Pub/Sub commands. Graceful cancellation is supported via AbortSignal propagation, allowing pipelines to safely interrupt long-running LLM and API calls.               |
+| **Comprehensive Schemas**                    | Type-safe data structures using Zod for all workflow stages, defined in [src/shared/db/schema.ts](https://github.com/DigitalCreationsCo/cinematic-canvas/blob/main/src/shared/db/schema.ts). The system implements a strict Project schema and runtime validation, ensuring application logic always operates on fully validated data. |
+| **Asset Versioning**                    | Tracks all generated assets and identifies the best versions based on quality metrics.               |
+| **Human-in-the-Loop Retry Logic**                    | Supports human-in-the-loop retry logic for failed steps.               |
+| **Enhanced Observability**                    | Enhanced observability with detailed logging and metrics tracking.               |
+
+## Prerequisites
+
+- **Node.js** (v22 or higher recommended)
+- **Docker** and **Docker Compose** (for local development environment)
+- **Google Cloud Project** with:
+  - Vertex AI API enabled
+  - Google Cloud Storage bucket created
+  - Service account with appropriate permissions
+
+## Project Structure
+
+```
+cinematic-canvas/
+├── .keeper/                          # Agent task tracking
+├── audio/                            # Local audio files for testing
+├── src/client/                           # Frontend application (React/Vite)
+├── docs/                             # Documentation files
+├── src/pipeline/                 # Dedicated service for running LangGraph/Checkpointer (Uses Node 20, runs via 'node index.ts')
+│   ├── Dockerfile
+│   └── index.ts                      # Main worker logic subscribing to Pub/Sub commands
+├── src/workflow/                         # Core workflow agents and logic
+│   ├── agents/                       # Agent implementations
+│   ├── llm/                          # LLM provider abstractions
+│   ├── checkpointer-manager.ts       # Abstraction for Postgres checkpointer (LangGraph state serialization change)
+│   ├── lib/                          # Utility libraries
+│   ├── prompts/                      # System prompts for agents
+│   ├── index.ts                      # Core graph definition (Uses import.meta.main)
+│   └── types.ts
+├── src/server/                           # Stateless API server
+│   ├── index.ts                      # Server entry point and SSE implementation
+│   └── routes.ts                     # API routing and Pub/Sub command publishing
+├── src/shared/                           # Shared types/schemas used across client, server, and worker
+│   ├── types/pipeline.types.ts             # Project and domain types
+│   ├── pubsub-types.ts               # Command/Event structures (e.g., START_PIPELINE)
+│   └── schema.ts
+├── .env.example
+├── package.json                      # Dependencies and scripts
+├── docker-compose.yml                # Local development orchestration (Postgres service removed)
+├── Dockerfile.api                    # Dockerfile for API/Server (Uses Node 20)
+└── ...
+```
+
+## Dependencies
+
+### Core Dependencies (Updated)
+
+- **@google-cloud/pubsub** (^5.2.0): For command/event communication between services.
+- **@langchain/langgraph-checkpoint-postgres** (^1.0.0): For persistent state management, handling LangGraph Checkpoint objects directly.
+- **pg** (^8.12.0): PostgreSQL client library used by the checkpointer.
+- **uuid** (^13.0.0): Used by the API server for unique SSE subscription IDs.
+
+### Development Dependencies
+
+(No major changes observed in dev dependencies relevant to this file, retaining existing list below for completeness)
+
+- **typescript** (^5.9.3): TypeScript compiler
+- **vitest** (^4.0.14): Testing framework
+- **@vitest/coverage-v8** (^4.0.14): Code coverage
+- **ts-node** (^10.9.2): TypeScript execution
+
+## Contributing
+
+Contributions are welcome! Please ensure:
+
+- All tests pass (`npm test`)
+- Code coverage remains above 90% (`npm run coverage`)
+- TypeScript strict mode compliance
+- New services are properly containerized (Node 22) and configured in `docker-compose.yml`.
+
+## License
+
+ISC
+
+## Support
+
+For issues and questions:
+
+- Reach out via [GitHub](https://github.com/digitalcreationsco/cinematic-canvas)
+- Review Docker Compose logs (`docker-compose logs`).
+- Check PostgreSQL database for state inconsistencies.
+- Review Pub/Sub topic messages if commands are not reaching the worker.

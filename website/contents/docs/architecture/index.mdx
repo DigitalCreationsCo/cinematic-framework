@@ -1,0 +1,105 @@
+---
+title: Architecture
+keywords: ["architecture", "generative ai", "system design", "cinematic canvas"]
+---
+
+## Architecture
+
+The framework uses a **LangGraph state machine** running across one or more horizontally scalable `pipeline-worker` services (using Node 22). Execution is controlled via commands published to a Pub/Sub topic (`video-commands`). The worker service handles project concurrency via mechanisms like checkpointers and distributed locking. State changes are broadcast via another Pub/Sub topic (`video-events`), which the API server relays to connected clients via SSE.
+
+<Mermaid 
+  key="architecture-diag"
+  chart={`graph TD;
+    A[Client/API] -->|Publish Command| B[Pub/Sub video-commands];
+    B --> C[Pipeline Worker];
+    C -->|Check Save State| D[PostgreSQL Checkpoint];
+    C -->|Execute Graph| E[LangGraph Workflow];
+    C -->|Publish State Update| F[Pub/Sub video-events];
+    F --> G[API Server];
+    G -->|SSE Stream| A;
+
+    subgraph Workflow_Execution
+        E;
+        D;
+    end;`}
+/>
+
+### Key Components & Agents
+
+1. **AudioProcessingAgent**: Analyzes audio files to extract musical structure, timing, and mood, setting initial scene parameters.
+2. **CompositionalAgent**: Expands creative prompts and generates comprehensive storyboards.
+3. **ContinuityManagerAgent**: Manages character/location reference images and orchestrates **Meta-Prompting**. It uses a high-reasoning LLM to synthesize detailed department specifications into cohesive, high-quality video generation prompts, ensuring visual coherence. It also supports idempotent workflow by checking GCS for pre-generated assets.
+4. **SceneGeneratorAgent**: Generates individual video clips, now relying on pre-generated start/end frames from the persistent state for continuity.
+5. **QualityCheckAgent**: Evaluates generated scenes for quality and consistency, feeding back into the prompt/rule refinement loop.
+6. **Prompt CorrectionInstruction**: Guides the process for refining prompts based on quality feedback.
+7. **Generation Rules Presets**: Proactive domain-specific rules that can be automatically added to guide generation quality.
+8. **Pipeline Worker (`src/pipeline/`)**: A dedicated, horizontally scalable service running the LangGraph instance using Node.js v20+. It handles command execution (`START_PIPELINE`, `STOP_PIPELINE`, `REGENERATE_SCENE`, `REGENERATE_FRAME`, `RESOLVE_INTERVENTION`), and uses the `PostgresCheckpointer` for reliable state management. (Distributed locking has been temporarily disabled). It intercepts console logs and publishes relevant info to the client as real-time `LOG` events via Pub/Sub.
+9. **API Server (`src/server/`)**: The stateless API server acts as a proxy, publishing client requests as Pub/Sub commands and streaming Pub/Sub events back to connected clients via a single, shared, persistent SSE subscription to reduce Pub/Sub resource usage. It features error handling and acknowledgement for Pub/Sub messages to ensure reliable event delivery.
+
+### Advisory Locking
+
+The system implements a distributed advisory locking mechanism to prevent multiple workers from processing the same job. This is achieved using PostgreSQL advisory locks.
+Illustrated example: A race condition where Worker A and Worker B attempt to claim the same Job (job_123) from Project (proj_abc) at the exact same moment.
+
+- Both workers identify job_123.
+- CRITICAL: Both workers locally compute the hash integers required for the lock:
+  - nsKey = 32-bit Hash(ProjectID)
+  - lockKey = 32-bit Hash(JobID)
+- The Lock Race (Transaction Start):
+  - Worker A inputs pg_try_advisory_xact_lock(nsKey, lockKey).
+  - Postgres grants the lock and returns true.
+  - Worker B inputs pg_try_advisory_xact_lock(nsKey, lockKey).
+  - Postgres (seeing the hash key is taken) returns false immediately.
+- The Divergence:
+  - Worker B (Loser): Receives false → Exits immediately (Returns null). Does NOT attempt any updates.
+  - Worker A (Winner):
+    - Concurrency Check: Performs SELECT COUNT(*) for running jobs. (Assume limit is not reached).
+    - Atomic Update: Performs UPDATE jobs SET state='RUNNING' WHERE id='job_123' AND state='CREATED'.
+    - Commit: Transaction ends, Postgres automatically releases the advisory lock.
+
+<Mermaid 
+chart={`sequenceDiagram
+    autonumber
+    participant WA as Worker A
+    participant WB as Worker B
+    participant DB as Postgres (DB)
+
+    Note over WA, WB: Initialization: Compute Hashes Locally
+    WA->>WA: nsKey = Hash32("proj_abc")<br/>lockKey = Hash32("job_123")
+    WB->>WB: nsKey = Hash32("proj_abc")<br/>lockKey = Hash32("job_123")
+
+    rect rgb(240, 240, 240)
+        Note over WA, DB: Transaction Start (Worker A)
+        WA->>DB: BEGIN
+        activate WA
+        activate DB
+        WA->>DB: SELECT pg_try_advisory_xact_lock(nsKey, lockKey)
+        Note right of DB: Guard Rail: Attempting Lock
+        DB-->>WA: true (Lock Granted)
+
+        rect rgb(255, 200, 200)
+            Note over WB, DB: Transaction Start (Worker B)
+            WB->>DB: BEGIN
+            activate WB
+            WB->>DB: SELECT pg_try_advisory_xact_lock(nsKey, lockKey)
+            DB-->>WB: false (Lock Denied)
+            Note right of WB: Bounced: Immediate Exit
+            WB-->>WB: return null
+            deactivate WB
+        end
+
+        Note over WA, DB: Critical Section (Winner)
+        WA->>DB: SELECT COUNT(*) WHERE state='RUNNING'
+        DB-->>WA: count=2 (Limit < 10)
+        
+        WA->>DB: UPDATE jobs SET state='RUNNING' <br/>WHERE id='job_123' AND state='CREATED'
+        DB-->>WA: row_updated=1
+        
+        WA->>DB: COMMIT
+        deactivate WA
+        Note right of DB: Automatic: Release Advisory Lock
+        deactivate DB
+    end
+
+    WA-->>WA: return [JobRecord, timestamp]`}
+    />
