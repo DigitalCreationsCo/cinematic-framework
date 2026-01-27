@@ -1,11 +1,12 @@
 import { db } from "../db/index.js";
-import { scenes, projects, characters, locations } from "../db/schema.js";
+import { scenes, projects, characters, locations, scenesToCharacters } from "../db/schema.js";
 import { eq, asc, inArray, sql, } from "drizzle-orm";
 import {
     Scene, Location, Project, Character,
     SceneAttributes,
     CharacterAttributes,
     LocationAttributes,
+    Storyboard,
 } from "../types/workflow.types.js";
 import {
     DbProjectSchema, DbSceneSchema, DbCharacterSchema, DbLocationSchema, ProjectEntity,
@@ -19,7 +20,7 @@ import {
 } from "../db/zod-db.js";
 import { mapDbProjectToDomain, mapDomainProjectToInsertProjectDb } from "../domain/project-mappers.js";
 import { mapDbSceneToDomain, mapDomainSceneToInsertSceneDb } from "../domain/scene-mappers.js";
-import { mapDbCharacterToDomain, mapDomainCharacterToInsertCharacterDb } from "../domain/character-mappers.js";
+import { extractCharacterJoins, mapDbCharacterToDomain, mapDomainCharacterToInsertCharacterDb } from "../domain/character-mappers.js";
 import { mapDbLocationToDomain, mapDomainLocationToInsertLocationDb } from "../domain/location-mappers.js";
 import { getTableColumns } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
@@ -159,13 +160,8 @@ export class ProjectRepository {
             let validLocs: any[] = [];
 
             if (sceneDrafts && sceneDrafts.length > 0) {
-                const scenesToUpsert = sceneDrafts.map(s => InsertScene.parse({
-                    ...s,
-                    projectId,
-                    updatedAt: new Date()
-                }));
                 validScenes = await tx.insert(scenes)
-                    .values(scenesToUpsert)
+                    .values(sceneDrafts)
                     .onConflictDoUpdate({
                         target: scenes.id,
                         set: this.buildConflictUpdateColumns(scenes)
@@ -175,26 +171,16 @@ export class ProjectRepository {
             }
 
             if (charDrafts && charDrafts.length > 0) {
-                const charsToUpsert = charDrafts.map(c => InsertCharacter.parse({
-                    ...c,
-                    projectId,
-                    updatedAt: new Date()
-                }));
                 validChars = await tx.insert(characters)
-                    .values(charsToUpsert)
+                    .values(charDrafts)
                     .onConflictDoUpdate({ target: characters.id, set: this.buildConflictUpdateColumns(characters) })
                     .returning();
                 console.debug({ insertedNumChars: validChars.length });
             }
 
             if (locDrafts && locDrafts.length > 0) {
-                const locsToUpsert = locDrafts.map(l => InsertLocation.parse({
-                    ...l,
-                    projectId,
-                    updatedAt: new Date()
-                }));
                 validLocs = await tx.insert(locations)
-                    .values(locsToUpsert)
+                    .values(locDrafts)
                     .onConflictDoUpdate({ target: locations.id, set: this.buildConflictUpdateColumns(locations) })
                     .returning();
                 console.debug({ insertedNumLocs: validLocs.length });
@@ -203,7 +189,7 @@ export class ProjectRepository {
             let projectPayload: any = { ...projectFields, updatedAt: new Date() };
 
             if (storyboard) {
-                const enrichedStoryboard = {
+                const enrichedStoryboard: Storyboard = {
                     ...storyboard,
                     scenes: validScenes.map(mapDbSceneToDomain),
                     characters: validChars.map(mapDbCharacterToDomain),
@@ -281,29 +267,60 @@ export class ProjectRepository {
     async getProjectScenes(projectId: string): Promise<Scene[]> {
         if (!db) throw new Error("Database not initialized");
 
-        const records = await db.select().from(scenes)
-            .where(eq(scenes.projectId, projectId))
-            .orderBy(asc(scenes.sceneIndex));
-        return records.map(r => mapDbSceneToDomain(DbSceneSchema.parse(r)));
+        const records = await db.query.scenes.findMany({
+            where: eq(scenes.projectId, projectId),
+            orderBy: asc(scenes.sceneIndex),
+            with: {
+                location: true,
+                characters: {
+                    columns: {},
+                    with: {
+                        character: {
+                            columns: {
+                                id: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        return records.map(r => Scene.parse(r));
     }
 
-    async createScenes(projectId: string, scenesData: SceneAttributes[]): Promise<Scene[]> {
+    async createScenes(projectId: string, scenesData: (SceneAttributes[] | Scene[])): Promise<Scene[]> {
         if (!db) throw new Error("Database not initialized");
 
-        const rows = scenesData.map(s => ({
-            ...mapDomainSceneToInsertSceneDb({ ...s, projectId }),
-            projectId // Ensure project ID override
-        }));
-        if (rows.length === 0) return [];
+        const scenesWithCharacters: Scene[] = [];
+        const scenesToUpsert: InsertScene[] = scenesData.map((s) => {
+            const _scene = mapDomainSceneToInsertSceneDb({ ...s, projectId });
+            if ("characters" in s) {
+                scenesWithCharacters.push({ ..._scene, characters: s.characters });
+            }
+            return _scene;
+        });
+        if (scenesToUpsert.length === 0) return [];
 
         const upserted = await db
             .insert(scenes)
-            .values(rows)
+            .values(scenesToUpsert)
             .onConflictDoUpdate({
                 target: scenes.id,
-                set: { ...rows[ 0 ] }
+                set: { ...scenesToUpsert[ 0 ] }
             })
             .returning();
+
+        const characterJoins = extractCharacterJoins(scenesWithCharacters);
+
+        if (characterJoins.length > 0) {
+            const sceneIds = upserted.map(s => s.id);
+
+            await db.delete(scenesToCharacters).where(inArray(scenesToCharacters.sceneId, sceneIds));
+            await db.insert(scenesToCharacters).values(characterJoins);
+        }
+
+        console.debug({ insertedNumScenes: upserted.length, linkedCharacters: characterJoins.length });
+
         return upserted.map(c => mapDbSceneToDomain(DbSceneSchema.parse(c)));
     }
 

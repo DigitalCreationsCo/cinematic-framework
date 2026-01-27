@@ -1,7 +1,8 @@
 import {
   pgTable, uuid, text, timestamp, integer,
   jsonb, real, pgEnum,
-  index, uniqueIndex
+  index, uniqueIndex,
+  primaryKey
 } from "drizzle-orm/pg-core";
 import {
   ProjectMetadata, AssetRegistry, 
@@ -17,7 +18,7 @@ import {
   CameraMovement,
 } from "../types/workflow.types.js";
 import { v7 as uuidv7 } from "uuid";
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // --- ENUMS ---
 export const assetStatusEnum = pgEnum("asset_status", [ "pending", "generating", "evaluating", "complete", "error" ]);
@@ -62,32 +63,22 @@ export const characters = pgTable("characters", {
   age: text("age").notNull(),
   physicalTraits: jsonb("physical_traits").$type<PhysicalTraits>().notNull(),
   appearanceNotes: jsonb("appearance_notes").$type<string[]>().notNull(),
-
   assets: jsonb("assets").$type<AssetRegistry>().default({}).notNull(),
   state: jsonb("state").$type<CharacterState>().notNull(),
 });
 
-export const locations = pgTable("locations", {
-  id: uuid("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
-  referenceId: text("reference_id").notNull(), 
-  name: text("name").notNull(),
-  type: text("type").notNull(),
-  lightingConditions: jsonb("lighting_conditions").$type<Lighting>().notNull(),
-  timeOfDay: text("time_of_day").notNull(),
-  weather: text("weather").notNull(),
-  colorPalette: jsonb("color_palette").$type<string[]>().notNull(),
-  architecture: jsonb("architecture").$type<string[]>().notNull(),
-  naturalElements: jsonb("natural_elements").$type<string[]>().notNull(),
-  manMadeObjects: jsonb("man_made_objects").$type<string[]>().notNull(),
-  groundSurface: text("ground_surface").notNull(),
-  skyOrCeiling: text("sky_or_ceiling").notNull(),
-
-  assets: jsonb("assets").$type<AssetRegistry>().default({}).notNull(),
-  state: jsonb("state").$type<LocationState>().notNull(),
-});
+export const scenesToCharacters = pgTable("scenes_to_characters", {
+  sceneId: uuid("scene_id")
+    .notNull()
+    .references(() => scenes.id, { onDelete: "cascade" }),
+  characterId: uuid("character_id")
+    .notNull()
+    .references(() => characters.id, { onDelete: "cascade" }),
+}, (t) => ({
+  pk: primaryKey({ columns: [ t.sceneId, t.characterId ] }),
+  sceneCharacterIdx: uniqueIndex("idx_scene_character")
+    .on(t.sceneId, t.characterId),
+}));
 
 export const scenes = pgTable("scenes", {
   id: uuid("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
@@ -119,13 +110,46 @@ export const scenes = pgTable("scenes", {
   lighting: jsonb("lighting").$type<Lighting>().notNull(),
   // Script Supervisor Links
   continuityNotes: text("continuity_notes").array().default([]),
-  characters: uuid("character_ids").array().default([]),
-  location: uuid("location_id").references(() => locations.id),
+  location: uuid("location_id").references(() => locations.id, { onDelete: "set null" }),
   // Persistent Results
   status: assetStatusEnum("status").default("pending"),
   progressMessage: text("progress_message"),
   assets: jsonb("assets").$type<AssetRegistry>().default({}),
 });
+
+export const scenesRelations = relations(scenes, ({ one, many }) => ({
+  location: one(locations, {
+    fields: [ scenes.location ],
+    references: [ locations.id ],
+  }),
+  characters: many(scenesToCharacters),
+}));
+
+export const locations = pgTable("locations", {
+  id: uuid("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  referenceId: text("reference_id").notNull(),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  mood: text("mood").notNull(),
+  lightingConditions: jsonb("lighting_conditions").$type<Lighting>().notNull(),
+  timeOfDay: text("time_of_day").notNull(),
+  weather: text("weather").notNull(),
+  colorPalette: jsonb("color_palette").$type<string[]>().notNull(),
+  architecture: jsonb("architecture").$type<string[]>().notNull(),
+  naturalElements: jsonb("natural_elements").$type<string[]>().notNull(),
+  manMadeObjects: jsonb("man_made_objects").$type<string[]>().notNull(),
+  groundSurface: text("ground_surface").notNull(),
+  skyOrCeiling: text("sky_or_ceiling").notNull(),
+  assets: jsonb("assets").$type<AssetRegistry>().default({}).notNull(),
+  state: jsonb("state").$type<LocationState>().notNull(),
+});
+
+export const locationsRelations = relations(locations, ({ many }) => ({
+  scenes: many(scenes),
+}));
 
 export const jobs = pgTable("jobs", {
   id: text("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
@@ -138,8 +162,7 @@ export const jobs = pgTable("jobs", {
   uniqueKey: text("unique_key"),
   assetKey: text("asset_key"),
   attempt: integer("attempt").default(1).notNull(),
-  maxRetries: integer("max_retries").default(4).notNull(), // Default (3) + 1st attempt
-
+  maxRetries: integer("max_retries").default(3).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({

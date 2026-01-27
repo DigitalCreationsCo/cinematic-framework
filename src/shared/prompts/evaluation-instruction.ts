@@ -1,6 +1,6 @@
 export const promptVersion = "3.0.0-quality-control";
 
-import { Character, Location, PromptCorrection, QualityIssue, Scene } from "../../shared/types/workflow.types.js";
+import { Character, Location, PromptCorrection, QualityIssue, Scene } from "../types/workflow.types.js";
 import { formatCharacterSpecs, formatLocationSpecs, getAllBestFromAssets, getJSONSchema } from "../../shared/utils/utils.js";
 import { composeDepartmentSpecs } from "./prompt-composer.js";
 import { buildQualityControlVideoPrompt, buildQualityControlFramePrompt } from "./role-quality-control.js";

@@ -24,7 +24,7 @@
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "db:push": "drizzle-kit push"
+    "db:push": "npx tsx node_modules/drizzle-kit/bin.cjs push"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",

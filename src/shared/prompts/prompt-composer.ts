@@ -5,14 +5,14 @@
  * at various generation points in the workflow.
  */
 
-import { Scene, Character, Location, QualityEvaluationResult, CharacterAttributes, LocationAttributes } from "../../shared/types/workflow.types.js";
+import { Scene, Character, Location, QualityEvaluationResult, CharacterAttributes, LocationAttributes } from "../types/workflow.types.js";
 import { buildDirectorSceneBeatPrompt } from "./role-director.js";
-import { buildCinematographerGuidelines, buildCinematographerFrameComposition, buildCinematographerNarrative } from "./role-cinematographer.js";
 import { buildGafferGuidelines, buildGafferLightingSpec } from "./role-gaffer.js";
 import { buildScriptSupervisorContinuityChecklist } from "./role-script-supervisor.js";
 import { buildCostumeAndMakeupSpec, buildCostumeAndMakeupNarrative } from "./role-costume-makeup.js";
 import { buildProductionDesignerSpec, buildProductionDesignerNarrative } from "./role-production-designer.js";
 import { formatCharacterSpecs, formatLocationSpecs } from "../../shared/utils/utils.js";
+import { buildCinematographerGuidelines, buildCinematographerNarrative } from "./role-cinematographer.js";
 
 /**
  * Format character temporal state for prompts

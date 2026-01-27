@@ -10,7 +10,7 @@ import { SemanticExpertAgent } from "../shared/agents/semantic-expert-agent.js";
 import { FrameCompositionAgent } from "../shared/agents/frame-composition-agent.js";
 import { SceneGeneratorAgent } from "../shared/agents/scene-generator.js";
 import { ContinuityManagerAgent } from "../shared/agents/continuity-manager.js";
-import { VersionMetric, AssetVersion, Scene, Project, Character, Location, Storyboard, SceneAttributes, CharacterAttributes, LocationAttributes } from "../shared/types/workflow.types.js";
+import { VersionMetric, AssetVersion, Project, Character, Location, Scene, Storyboard, SceneAttributes, CharacterAttributes, LocationAttributes, ProjectMetadata } from "../shared/types/workflow.types.js";
 import { SaveAssetsCallback, PipelineEvent, UpdateSceneCallback, GetAttemptMetricCallback, OnAttemptCallback } from "../shared/types/pipeline.types.js";
 import { ProjectRepository } from "../shared/services/project-repository.js";
 import { MediaController } from "../shared/services/media-controller.js";
@@ -21,10 +21,10 @@ import { v7 as uuidv7 } from 'uuid';
 import { videoModelName } from "../shared/llm/google/models.js";
 import { extractGenerationRules } from "../shared/prompts/prompt-composer.js";
 import { mapDbProjectToDomain } from "../shared/domain/project-mappers.js";
-import { InsertProject, InsertScene } from "../shared/db/zod-db.js";
-import { InsertCharacter } from "../shared/db/zod-db.js";
-import { InsertLocation } from "../shared/db/zod-db.js";
-
+import { InsertProject } from "../shared/db/zod-db.js";
+import { mapDomainSceneToInsertSceneDb } from "../shared/domain/scene-mappers.js";
+import { mapDomainCharacterToInsertCharacterDb } from "../shared/domain/character-mappers.js";
+import { mapDomainLocationToInsertLocationDb, mapReferenceIdsToIds } from "../shared/domain/location-mappers.js";
 
 /**
  * Orchestrates job execution for AI agents.
@@ -208,16 +208,42 @@ export class WorkerService {
                             { attempt: job.attempt, maxRetries: job.maxRetries, projectId: job.projectId },
                         );
 
+                        const characters: Character[] = data.storyboardAttributes.characters.map((character) => mapDomainCharacterToInsertCharacterDb({
+                            ...character,
+                            projectId: project.id,
+                        }));
+                        const locations: Location[] = data.storyboardAttributes.locations.map((location) => mapDomainLocationToInsertLocationDb({
+                            ...location,
+                            projectId: project.id,
+                        }));
+                        const scenes: Scene[] = data.storyboardAttributes.scenes.map((_scene) => ({
+                            ...mapDomainSceneToInsertSceneDb({ ..._scene, projectId: project.id }),
+                            characters: mapReferenceIdsToIds(characters, _scene.characters),
+                            location: mapReferenceIdsToIds(locations, [ _scene.location ])[ 0 ],
+                        }));
+
+                        console.debug({ charactersToInsert: characters, numCharacters: characters.length });
+                        console.debug({ locationsToInsert: locations, numLocations: locations.length });
+                        console.debug({ scenesToInsert: scenes, numScenes: scenes.length });
+                        
+                        const updateMetadata: ProjectMetadata = { ...project.metadata, ...data.storyboardAttributes.metadata };
+                        const storyboard: Storyboard = {
+                            ...data.storyboardAttributes,
+                            metadata: updateMetadata,
+                            scenes,
+                            characters,
+                            locations,
+                        };
+
                         saveAssets(
                             { projectId: project.id },
                             'storyboard',
                             'text',
-                            [ JSON.stringify(data.storyboardAttributes) ],
+                            [ JSON.stringify(storyboard) ],
                             { model: metadata.model }
                         );
 
-                        const storyboard = Storyboard.parse(data.storyboardAttributes);
-                        project = mapDbProjectToDomain({ project: { ...project, storyboard } });
+                        project = mapDbProjectToDomain({ project: { ...project, metadata: updateMetadata, storyboard }, scenes, characters, locations });
                         const updated = await this.projectRepository.updateProject(project.id, project);
 
                         await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
@@ -247,22 +273,25 @@ export class WorkerService {
                             { model: metadata.model }
                         );
 
-                        const projectMetadata = {
+                        const projectMetadata: ProjectMetadata = {
                             ...project.metadata,
                             ...analysisData,
                         };
 
-                        const storyboard = Storyboard.parse({
+                        const storyboard: Storyboard = {
                             metadata: projectMetadata,
-                        });
+                            scenes: [],
+                            characters: [],
+                            locations: [],
+                        };
 
-                        project = Project.parse({
+                        project = {
                             ...project,
                             status: "pending",
                             metadata: projectMetadata,
                             storyboard,
                             audioAnalysis: data.analysis,
-                        });
+                        };
 
                         const updated = await this.projectRepository.updateProject(job.projectId, project);
 
@@ -299,38 +328,33 @@ export class WorkerService {
                             ));
                         }
 
-                        const scenesAttributes: SceneAttributes[] = data.storyboardAttributes.scenes;
-                        const scenes: InsertScene[] = scenesAttributes.map((scene) => InsertScene.parse({
-                            ...scene,
-                            projectId: project.id,
-                        }));
-                        console.debug({ scenesAttributes, scenesToInsert: scenes, numScenes: scenes.length });
-
-                        const charactersAttributes: CharacterAttributes[] = data.storyboardAttributes.characters;
-                        const characters: InsertCharacter[] = charactersAttributes.map((character) => InsertCharacter.parse({
+                        const characters: Character[] = data.storyboardAttributes.characters.map((character) => mapDomainCharacterToInsertCharacterDb({
                             ...character,
                             projectId: project.id,
                         }));
-                        console.debug({ charactersAttributes, charactersToInsert: characters, numCharacters: characters.length });
-
-                        const locationsAttributes: LocationAttributes[] = data.storyboardAttributes.locations;
-                        const locations: InsertLocation[] = locationsAttributes.map((location) => InsertLocation.parse({
+                        const locations: Location[] = data.storyboardAttributes.locations.map((location) => mapDomainLocationToInsertLocationDb({
                             ...location,
                             projectId: project.id,
                         }));
-                        console.debug({ locationsAttributes, locationsToInsert: locations, numLocations: locations.length });
+                        const scenes: Scene[] = data.storyboardAttributes.scenes.map((_scene) => ({
+                            ...mapDomainSceneToInsertSceneDb({ ..._scene, projectId: project.id }),
+                            characters: mapReferenceIdsToIds(characters, _scene.characters),
+                            location: mapReferenceIdsToIds(locations, [ _scene.location ])[ 0 ],
+                        }));
 
-                        const updateMetadata = { ...project.metadata, ...data.storyboardAttributes.metadata };
+                        console.debug({ charactersToInsert: characters, numCharacters: characters.length });
+                        console.debug({ locationsToInsert: locations, numLocations: locations.length });
+                        console.debug({ scenesToInsert: scenes, numScenes: scenes.length });
 
-                        const updatedStoryboard = { ...data.storyboardAttributes, characters, locations, scenes, metadata: updateMetadata };
-
+                        const updateMetadata: ProjectMetadata = { ...project.metadata, ...data.storyboardAttributes.metadata };
+                        const updatedStoryboard: Storyboard = { ...data.storyboardAttributes, characters, locations, scenes, metadata: updateMetadata };
                         const fullProject: InsertProject = {
                             ...project,
                             storyboard: updatedStoryboard,
                             metadata: updateMetadata,
-                            scenes,
                             characters,
                             locations,
+                            scenes,
                         };
 
                         const updated = await this.projectRepository.updateProject(job.projectId, fullProject);
@@ -414,7 +438,7 @@ export class WorkerService {
                         const project = await this.projectRepository.getProjectFullState(job.projectId);
                         if (!project?.storyboard) throw new Error("No project storyboard available");
 
-                        await agents.continuityAgent.generateSceneFramesBatch(
+                        let { data, metadata } = await agents.continuityAgent.generateSceneFramesBatch(
                             project,
                             job.assetKey as 'scene_start_frame' | 'scene_end_frame',
                             saveAssets,
@@ -422,7 +446,7 @@ export class WorkerService {
                             createIncrementer(jobId),
                         );
 
-                        const updated = await this.projectRepository.updateProject(job.projectId, project);
+                        const updated = await this.projectRepository.updateProject(job.projectId, { scenes: data.updatedScenes });
 
                         await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
                         this.publishStateUpdate(updated);

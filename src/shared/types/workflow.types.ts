@@ -74,7 +74,15 @@ export type DirectorScene = z.infer<typeof DirectorScene>;
 
 export const ScriptSupervisorScene = z.object({
   continuityNotes: z.array(z.string()).optional().describe("continuity requirements").default([]),
-  characters: z.array(z.string()).describe("list of character IDs present in scene").default([]),
+  characters: z.preprocess(
+    (val) => {
+      if (Array.isArray(val) && val.length > 0 && typeof val[ 0 ] === 'object') {
+        return val.map((item) => item.character?.id || item.characterId);
+      }
+      return val;
+    },
+    z.array(z.string())
+  ).describe("Flattened list of character IDs present in scene").default([]),
   location: z.string().default("").describe("ID of the location where scene takes place"),
 }).describe("Script Supervisor specifications for scene");
 export type ScriptSupervisorScene = z.infer<typeof ScriptSupervisorScene>;
@@ -102,6 +110,15 @@ export interface SceneGenerationInput {
   scene: SceneAttributes;
   enhancedPrompt: string;
 }
+
+export const SceneWithoutCharacters = IdentityBase
+  .extend({
+    ...ProjectRef.shape,
+    ...SceneAttributes.shape,
+    ...SceneStatus.shape,
+    assets: AssetRegistry,
+  }).omit({ characters: true });
+export type SceneWithoutCharacters = z.infer<typeof SceneWithoutCharacters>;
 
 export const Scene = IdentityBase
   .extend({
@@ -200,11 +217,11 @@ export const CharacterAttributes = z.object({
 export type CharacterAttributes = z.infer<typeof CharacterAttributes>;
 
 export const Character = IdentityBase
-  .extend(ProjectRef.shape)
-  .extend(CharacterAttributes.shape)
   .extend({
+    ...ProjectRef.shape,
+    ...CharacterAttributes.shape,
     assets: AssetRegistry,
-});
+  });
 export type Character = z.infer<typeof Character>;
 
 
@@ -283,11 +300,11 @@ export const LocationAttributes = z.object({
 export type LocationAttributes = z.infer<typeof LocationAttributes>;
 
 export const Location = IdentityBase
-  .extend(ProjectRef.shape)
-  .extend(LocationAttributes.shape)
   .extend({
+    ...ProjectRef.shape,
+    ...LocationAttributes.shape,
     assets: AssetRegistry,
-});
+  });
 export type Location = z.infer<typeof Location>;
 
 
@@ -372,13 +389,10 @@ export const GenerationRules = z.array(z.string()).default([]).describe("generat
 export const Project = IdentityBase.extend({
   storyboard: Storyboard.readonly().describe("The immutable storyboard snapshot"),
   metadata: ProjectMetadata.describe("Fully populated production metadata"),
-  audioAnalysis: AudioAnalysisAttributes.nullish(),
-  characters: z.array(Character).default([]),
-  locations: z.array(Location).default([]),
-  scenes: z.array(Scene).default([]),
-  status: AssetStatus.default("pending"),
   metrics: WorkflowMetrics,
   assets: AssetRegistry,
+  audioAnalysis: AudioAnalysisAttributes.nullish(),
+  status: AssetStatus.default("pending"),
   currentSceneIndex: z.number().default(0).describe("Index of scene currently being processed"),
   forceRegenerateSceneIds: z.array(z.string()).default([]).describe("List of scene IDs to force video regenerate"),
   generationRules: GenerationRules,
@@ -387,6 +401,9 @@ export const Project = IdentityBase.extend({
     if (typeof val === "string") { try { return JSON.parse(val); } catch { return []; } }
     return [];
   }, z.array(GenerationRules)).default([]).describe("history of generation rule guidelines"),
+  scenes: z.array(Scene).default([]),
+  characters: z.array(Character).default([]),
+  locations: z.array(Location).default([]),
 });
 export type Project = z.infer<typeof Project>;
 

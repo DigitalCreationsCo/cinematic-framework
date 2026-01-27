@@ -1,5 +1,5 @@
 // deprecated
-import { Scene } from "../../shared/types/workflow.types.js";
+import { Scene } from "../types/workflow.types.js";
 import { composeGenerationRules } from "./prompt-composer.js";
 
 export const continuitySystemPrompt = `As the continuity supervisor for a high-budget cinematic production, the task is to ensure that every frame feels like it belongs to the same carefully crafted world.

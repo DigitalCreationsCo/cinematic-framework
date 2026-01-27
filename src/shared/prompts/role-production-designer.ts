@@ -1,6 +1,6 @@
 export const promptVersion = "3.0.0-production-designer";
 
-import { Location } from "../../shared/types/workflow.types.js";
+import { Location } from "../types/workflow.types.js";
 import { getAllBestFromAssets } from "../../shared/utils/utils.js";
 
 /**

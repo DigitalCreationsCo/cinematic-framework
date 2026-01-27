@@ -1,6 +1,6 @@
 export const promptVersion = "3.0.0-cinematographer";
 
-import { cameraAnglesWithDescriptions, cameraMovementsWithDescriptions, Composition, Scene, shotTypesWithDescriptions, TransitionTypes } from "../../shared/types/workflow.types.js";
+import { cameraAnglesWithDescriptions, cameraMovementsWithDescriptions, Composition, Scene, shotTypesWithDescriptions, TransitionTypes } from "../types/workflow.types.js";
 import { getJSONSchema } from '../../shared/utils/utils.js';
 
 /**

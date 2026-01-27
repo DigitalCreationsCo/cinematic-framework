@@ -13,12 +13,17 @@ import {
   GenerationRules,
   WorkflowMetrics,
   Project,
-  Storyboard
+  Storyboard,
+  SceneStatus,
+  SceneAttributes,
+  CharacterAttributes,
+  LocationAttributes,
+  AssetStatus,
 } from "../types/workflow.types.js";
+import { InsertIdentityBase, ProjectRef } from "../types/identity.types.js";
 
 
 
-// --- SCENE HELPERS ---
 export const DbSceneSchema = createSelectSchema(dbSchema.scenes, {
   ...Cinematography.shape,
   lighting: Lighting,
@@ -26,9 +31,10 @@ export const DbSceneSchema = createSelectSchema(dbSchema.scenes, {
 });
 
 export const InsertScene = createInsertSchema(dbSchema.scenes, {
-  description: z.string().default(""),
-  ...Cinematography.shape,
-  lighting: Lighting.default(() => (Lighting.parse({}))),
+  ...InsertIdentityBase.shape,
+  ...ProjectRef.shape,
+  ...SceneAttributes.omit({ characters: true }).shape,
+  ...SceneStatus.shape,
   assets: AssetRegistry.default(() => (AssetRegistry.parse({}))),
 });
 export type InsertScene = z.infer<typeof InsertScene>;
@@ -39,8 +45,9 @@ export const DbCharacterSchema = createSelectSchema(dbSchema.characters, {
 });
 
 export const InsertCharacter = createInsertSchema(dbSchema.characters, {
-  physicalTraits: PhysicalTraits.default(() => (PhysicalTraits.parse({}))),
-  state: CharacterState.default(() => (CharacterState.parse({}))),
+  ...InsertIdentityBase.shape,
+  ...ProjectRef.shape,
+  ...CharacterAttributes.shape,
   assets: AssetRegistry.default(() => (AssetRegistry.parse({}))),
 });
 export type InsertCharacter = z.infer<typeof InsertCharacter>;
@@ -50,8 +57,9 @@ export const DbLocationSchema = createSelectSchema(dbSchema.locations, {
 });
 
 export const InsertLocation = createInsertSchema(dbSchema.locations, {
-  lightingConditions: Lighting.default(() => (Lighting.parse({}))),
-  state: LocationState.default(() => (LocationState.parse({}))),
+  ...InsertIdentityBase.shape,
+  ...ProjectRef.shape,
+  ...LocationAttributes.shape,
   assets: AssetRegistry.default(() => (AssetRegistry.parse({}))),
 });
 export type InsertLocation = z.infer<typeof InsertLocation>;
@@ -71,6 +79,7 @@ export const DbProjectSchema = createSelectSchema(dbSchema.projects, {
 });
 
 export const InsertProject = createInsertSchema(dbSchema.projects, {
+  ...InsertIdentityBase.shape,
   storyboard: z.object({
     metadata: ProjectMetadata,
     scenes: z.array(InsertScene),
@@ -81,6 +90,9 @@ export const InsertProject = createInsertSchema(dbSchema.projects, {
   metrics: WorkflowMetrics.default(() => (WorkflowMetrics.parse({}))),
   assets: AssetRegistry.default(() => (AssetRegistry.parse({}))),
   audioAnalysis: AudioAnalysisAttributes.nullish(),
+  status: AssetStatus.default("pending"),
+  currentSceneIndex: z.number().default(0).describe("Index of scene currently being processed"),
+  forceRegenerateSceneIds: z.array(z.string()).default([]).describe("List of scene IDs to force video regenerate"),
   generationRules: GenerationRules.default([]),
   generationRulesHistory: z.array(GenerationRules).default([]),
 }).extend({
@@ -93,7 +105,9 @@ export type InsertProject = z.infer<typeof InsertProject>;
 
 // --- JOB HELPERS ---
 export const DbJobSchema = createSelectSchema(dbSchema.jobs);
-export const InsertJob = createInsertSchema(dbSchema.jobs);
+export const InsertJob = createInsertSchema(dbSchema.jobs, {
+  ...InsertIdentityBase.shape,
+});
 export type InsertJob = z.infer<typeof InsertJob>;
 
 // --- Derived Types ---
