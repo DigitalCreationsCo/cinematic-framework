@@ -18,20 +18,6 @@ export async function streamWithInterruptHandling(
 
     console.log({ commandName, projectId, config }, `Starting stream.`);
 
-    const currentState = await compiledGraph.getState(config);
-    console.log({
-        commandName,
-        projectId,
-        nextNodes: currentState.next, // If this is empty and input is null, graph won't run.
-        hasValues: !!currentState.values,
-        config,
-    }, `Current state check.`);
-    if (!input && (!currentState.next || currentState.next.length === 0)) {
-        console.warn({ commandName, projectId }, `Execution halted: The graph has no "next" nodes and no new input was provided. `);
-        console.warn({ commandName, projectId }, `Proceeding with empty input.`);
-        // return;
-    }
-
     try {
         const stream = await compiledGraph.stream(
             input,

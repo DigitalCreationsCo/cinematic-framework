@@ -151,11 +151,18 @@ export class WorkflowOperator {
             const compiledGraph = await this.getCompiledGraph(projectId, this.getAbortController(projectId));
 
             const snapshot = await compiledGraph.getState(config);
-            console.debug({ projectId, config, snapshot }, `Inspecting next graph values.`);
+
+            console.debug({
+                projectId, config, snapshot,
+                nextNodes: snapshot.next, // If this is empty and input is null, graph won't run.
+                snapshotHasValues: !!snapshot.values
+            }, `Inspecting next graph values.`);
 
             const project = await this.projectRepository.getProject(projectId);
 
+            let input = null;
             try {
+                // update nudges graph out of "finished" state
                 await compiledGraph.updateState(config, {
                     ...snapshot.values,
                     projectId: project.id,
@@ -171,7 +178,10 @@ export class WorkflowOperator {
                 throw e;
             }
 
-            const input = new Command({ goto: "__start__" });
+            if (!snapshot.next.length) {
+                console.debug({ projectId, functionName: this.resumePipeline[ 'name' ] }, 'Forcing graph start');
+                input = new Command({ goto: "__start__" });
+            }
 
             try {
                 await streamWithInterruptHandling(projectId, compiledGraph, input, config, "resumePipeline", this.publishEvent);

@@ -47,7 +47,7 @@ const MessageLog = memo(function MessageLog({ messages, maxHeight = "12rem", onD
                 <p className="break-words">{ msg.message }</p>
                 <div className="flex items-center gap-2 mt-1 text-muted-foreground">
                   <span className="font-mono">
-                    { msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }
+                    { msg.timestamp.toDateString() }
                   </span>
                   { msg.sceneId !== undefined && (
                     <span className="font-mono">Scene #{ msg.sceneId }</span>

@@ -108,7 +108,7 @@ export class WorkerService {
 
         const claim = await this.jobControlPlane.claimJob(jobId);
         if (!claim) {
-            console.warn(`[Worker] Job ${jobId} unavailable or concurrency limit reached.`);
+            console.warn({ jobId }, `Job unavailable or concurrency limit reached`);
             return;
         }
 
@@ -374,14 +374,21 @@ export class WorkerService {
                         const project = await this.projectRepository.getProjectFullState(job.projectId);
                         if (!project?.storyboard) throw new Error("No project storyboard available");
 
-                        let { data, metadata } = await agents.continuityAgent.generateCharacterAssets(
+                        const { data, metadata } = await agents.continuityAgent.generateCharacterAssets(
                             project.characters,
                             project.generationRules,
                             saveAssets,
                             createIncrementer(jobId),
                         );
 
-                        const updated = await this.projectRepository.updateProject(job.projectId, { characters: data.characters });
+                        // Fetch latest characters to avoid overwriting newly created assets
+                        const latestCharacters = await this.projectRepository.getProjectCharacters(job.projectId);
+                        const mergedCharacters = data.characters.map(updatedChar => {
+                            const latestChar = latestCharacters.find(c => c.id === updatedChar.id);
+                            return latestChar ? { ...latestChar, state: updatedChar.state } : updatedChar;
+                        });
+
+                        const updated = await this.projectRepository.updateProject(job.projectId, { characters: mergedCharacters });
 
                         await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
                         this.publishStateUpdate(updated);
@@ -394,14 +401,21 @@ export class WorkerService {
                         const project = await this.projectRepository.getProjectFullState(job.projectId);
                         if (!project?.storyboard) throw new Error("No project storyboard available");
 
-                        let { data, metadata } = await agents.continuityAgent.generateLocationAssets(
+                        const { data, metadata } = await agents.continuityAgent.generateLocationAssets(
                             project.locations,
                             project.generationRules,
                             saveAssets,
                             createIncrementer(jobId),
                         );
 
-                        const updated = await this.projectRepository.updateProject(job.projectId, { locations: data.locations });
+                        // Fetch latest locations to avoid overwriting newly created assets
+                        const latestLocations = await this.projectRepository.getProjectLocations(job.projectId);
+                        const mergedLocations = data.locations.map(updatedLoc => {
+                            const latestLoc = latestLocations.find(l => l.id === updatedLoc.id);
+                            return latestLoc ? { ...latestLoc, state: updatedLoc.state } : updatedLoc;
+                        });
+
+                        const updated = await this.projectRepository.updateProject(job.projectId, { locations: mergedLocations });
 
                         await this.jobControlPlane.updateJobSafe(jobId, job.attempt, { state: "COMPLETED" });
                         this.publishStateUpdate(updated);
@@ -547,7 +561,7 @@ export class WorkerService {
                 const durationMs = endTime - startTime;
                 this.publishJobEvent({ type: "JOB_COMPLETED", jobId, projectId: job.projectId });
 
-                console.log({ job, durationMs }, `Job completed in ${durationMs}ms`);
+                console.log({ job, durationMs }, `Job completed in ${durationMs / 1000}s`);
 
             } catch (error: any) {
                 console.error({ error, job }, "Execution failed");
