@@ -413,7 +413,7 @@ export class ProjectRepository {
 
         await db.update(scenes)
             .set({
-                assets: sql`COALESCE(assets, '{}'::jsonb) || jsonb_build_object(${assetKey}, ${JSON.stringify(history)}::jsonb)`,
+                assets: sql`COALESCE(assets, '{}'::jsonb) || jsonb_build_object(${assetKey}::text, ${JSON.stringify(history)}::jsonb)`,
                 updatedAt: new Date()
             } as any)
             .where(eq(scenes.id, sceneId));
@@ -424,7 +424,7 @@ export class ProjectRepository {
 
         await db.update(characters)
             .set({
-                assets: sql`COALESCE(assets, '{}'::jsonb) || jsonb_build_object(${assetKey}, ${JSON.stringify(history)}::jsonb)`,
+                assets: sql`COALESCE(assets, '{}'::jsonb) || jsonb_build_object(${assetKey}::text, ${JSON.stringify(history)}::jsonb)`,
                 updatedAt: new Date()
             } as any)
             .where(eq(characters.id, characterId));
@@ -435,7 +435,7 @@ export class ProjectRepository {
 
         await db.update(locations)
             .set({
-                assets: sql`COALESCE(assets, '{}'::jsonb) || jsonb_build_object(${assetKey}, ${JSON.stringify(history)}::jsonb)`,
+                assets: sql`COALESCE(assets, '{}'::jsonb) || jsonb_build_object(${assetKey}::text, ${JSON.stringify(history)}::jsonb)`,
                 updatedAt: new Date()
             } as any)
             .where(eq(locations.id, locationId));
@@ -446,7 +446,7 @@ export class ProjectRepository {
 
         await db.update(projects)
             .set({
-                assets: sql`COALESCE(assets, '{}'::jsonb) || jsonb_build_object(${assetKey}, ${JSON.stringify(history)}::jsonb)`,
+                assets: sql`COALESCE(assets, '{}'::jsonb) || jsonb_build_object(${assetKey}::text, ${JSON.stringify(history)}::jsonb)`,
                 updatedAt: new Date()
             } as any)
             .where(eq(projects.id, projectId));
