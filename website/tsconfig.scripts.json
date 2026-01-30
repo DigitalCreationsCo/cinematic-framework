@@ -3,14 +3,16 @@
     "module": "esnext",
     "target": "esnext",
     "moduleResolution": "node",
-    "outDir": "dist/scripts",
+    "outDir": "dist/website/scripts",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "#w/*": [
+        "./*"
+      ]
     }
   },
   "include": ["scripts/**/*.ts"],

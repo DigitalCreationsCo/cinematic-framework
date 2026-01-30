@@ -9,7 +9,7 @@ import {
     Project,
     AssetStatus,
     LocationState,
-} from "../types/workflow.types.js";
+} from "../types/index.js";
 import { GCPStorageManager } from "../services/storage-manager.js";
 import { Modality } from "@google/genai";
 import { FrameCompositionAgent } from "./frame-composition-agent.js";
@@ -23,7 +23,8 @@ import { buildllmParams } from "../llm/google/google-llm-params.js";
 import { QualityCheckAgent } from "./quality-check-agent.js";
 import { evolveCharacterState, evolveLocationState } from "./state-evolution.js";
 import { GraphInterrupt } from "@langchain/langgraph";
-import { cleanJsonOutput, getAllBestFromAssets } from "../utils/utils.js";
+import { cleanJsonOutput } from "../utils/utils.js";
+import { getAllBestFromAssets } from "../utils/assets-utils.js";
 import { AssetVersionManager } from "../services/asset-version-manager.js";
 import { SaveAssetsCallback, UpdateSceneCallback, OnAttemptCallback } from "../types/pipeline.types.js";
 import { GenerativeResultEnvelope, GenerativeResultGenerateCharacterAssets, GenerativeResultGenerateLocationAssets, GenerativeResultGenerateSceneFrames, JobRecordGenerateCharacterAssets, JobRecordGenerateLocationAssets, JobRecordGenerateSceneFrames } from "../types/job.types.js";
@@ -86,14 +87,14 @@ export class ContinuityManagerAgent {
         const previousScene = previousSceneIndex >= 0 ? scenes[ previousSceneIndex ] : undefined;
 
         const charactersInScene = characters.filter(char =>
-            scene.characters.includes(char.id)
+            scene.characterIds.includes(char.id)
         );
         const characterReferenceImages = charactersInScene.flatMap(c => {
             const assets = getAllBestFromAssets(c.assets);
             return assets[ 'character_image' ]?.data ? [ assets[ 'character_image' ].data ] : [];
         });
 
-        const locationInScene = locations.find(loc => loc.id === scene.location)!;
+        const locationInScene = locations.find(loc => loc.id === scene.locationId)!;
         const locationAssets = getAllBestFromAssets(locationInScene?.assets);
         const locationReferenceImages = locationAssets[ 'location_image' ]?.data ? [ locationAssets[ 'location_image' ].data ] : [];
 
@@ -339,8 +340,8 @@ export class ContinuityManagerAgent {
 
             let currentScene = { ...scene };
 
-            const sceneCharacters = project.characters.filter(char => currentScene.characters.includes(char.id));
-            const sceneLocations = project.locations.filter(loc => currentScene.location.includes(loc.id));
+            const sceneCharacters = project.characters.filter(char => currentScene.characterIds.includes(char.id));
+            const sceneLocations = project.locations.filter(loc => currentScene.locationId.includes(loc.id));
 
             // --- Generate Start Frame ---
             const currentAssets = getAllBestFromAssets(currentScene.assets);
@@ -585,7 +586,7 @@ export class ContinuityManagerAgent {
     ): Project {
 
         const updatedCharacters = currentStoryboardState.characters.map((char: Character) => {
-            if (scene.characters.includes(char.id)) {
+            if (scene.characterIds.includes(char.id)) {
                 // Evolve character state based on scene narrative
                 const evolvedState = evolveCharacterState(char, scene, scene.description);
                 return {
@@ -597,7 +598,7 @@ export class ContinuityManagerAgent {
         });
 
         const updatedLocations = currentStoryboardState.locations.map((loc: Location) => {
-            if (loc.id === scene.location) {
+            if (loc.id === scene.locationId) {
                 // Evolve location state based on scene narrative
                 const evolvedState = evolveLocationState(loc, scene, scene.description);
                 return {

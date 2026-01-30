@@ -1,6 +1,6 @@
 import {
   Cinematography, Lighting, PhysicalTraits, DirectorScene, Location, Character
-} from "../shared/types/pipeline.types.js";
+} from "../shared/types/index.js";
 
 export const buildCinematicPrompt = (
   scene: DirectorScene,

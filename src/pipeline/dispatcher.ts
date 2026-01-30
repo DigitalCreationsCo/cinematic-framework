@@ -5,7 +5,7 @@ import { JobEvent, JobRecord, JobType } from "../shared/types/job.types.js";
 import {
     AssetKey,
     LlmRetryInterruptValue,
-} from "../shared/types/workflow.types.js";
+} from "../shared/types/index.js";
 import { JobControlPlane } from "../shared/services/job-control-plane.js";
 
 

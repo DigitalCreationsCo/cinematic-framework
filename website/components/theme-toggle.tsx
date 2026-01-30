@@ -4,7 +4,7 @@ import { useTheme } from 'next-themes'
 import * as React from 'react'
 import { RxMoon, RxSun } from 'react-icons/rx'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '#w/components/ui/button.js'
 
 export function ModeToggle() {
   const { theme, setTheme } = useTheme()

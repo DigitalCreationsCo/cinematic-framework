@@ -1,6 +1,6 @@
 import { PersonGeneration, Video, Image, VideoGenerationReferenceType, Operation, GenerateVideosResponse } from "@google/genai";
 import { GCPStorageManager } from "../services/storage-manager.js";
-import { Character, Location, QualityEvaluationResult, Scene, SceneGenerationResult } from "../types/workflow.types.js";
+import { Character, Location, QualityEvaluationResult, Scene, SceneGenerationResult } from "../types/index.js";
 import { GetAttemptMetricCallback, OnAttemptCallback, SaveAssetsCallback, UpdateSceneCallback } from "../types/pipeline.types.js";
 import { RAIError } from "../utils/errors.js";
 import ffmpeg from "fluent-ffmpeg";

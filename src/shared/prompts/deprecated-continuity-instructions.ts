@@ -1,5 +1,5 @@
 // deprecated
-import { Scene } from "../types/workflow.types.js";
+import { Scene } from "../types/index.js";
 import { composeGenerationRules } from "./prompt-composer.js";
 
 export const continuitySystemPrompt = `As the continuity supervisor for a high-budget cinematic production, the task is to ensure that every frame feels like it belongs to the same carefully crafted world.
@@ -114,7 +114,7 @@ export const buildRefineAndEnhancePrompt = (
     previousEvaluation: any,
     jsonSchema: any
 ) => {
-    const characterDetails = scene.characters
+    const characterDetails = scene.characterIds
         .map((charId) => {
             const char = characters.find((c) => c.id === charId);
             if (!char) return "";

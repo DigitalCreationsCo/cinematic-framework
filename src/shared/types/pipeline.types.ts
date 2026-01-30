@@ -1,5 +1,12 @@
-//shared/types/pipeline.types.ts
-import { Project, Scene, AssetStatus, AssetKey, VersionMetric, AssetVersion, AssetType, Scope } from "./workflow.types.js";
+// shared/types/pipeline.types.ts
+import { Project } from "./entities.types.js";
+import { Scene } from "./workflow.types.js";
+import { AssetStatus, AssetKey, AssetType, Scope, AssetVersion } from "./assets.types.js";
+import { VersionMetric } from "./metrics.types.js";
+
+// ============================================================================
+// PUBSUB MESSAGE BASE
+// ============================================================================
 
 export type PubSubMessage<T extends string, P = undefined> = P extends undefined ? {
     type: T;
@@ -14,7 +21,9 @@ export type PubSubMessage<T extends string, P = undefined> = P extends undefined
     payload: P;
 };
 
-// ===== COMMANDS (Client -> Server -> Pipeline) =====
+// ============================================================================
+// COMMANDS (Client -> Server -> Pipeline)
+// ============================================================================
 
 export type PipelineCommand =
     | StartPipelineCommand
@@ -90,8 +99,9 @@ export type ResolveInterventionCommand = PubSubMessage<
     }
 >;
 
-
-// ===== EVENTS (Pipeline -> Server -> Client) =====
+// ============================================================================
+// EVENTS (Pipeline -> Server -> Client)
+// ============================================================================
 
 export type PipelineEvent =
     | WorkflowStartedEvent
@@ -151,6 +161,9 @@ export type InterventionResolvedEvent = PubSubMessage<
     }
     >;
 
+// ============================================================================
+// PIPELINE STATE & CALLBACKS
+// ============================================================================
 
 export interface PipelineMessage {
     id: string;
@@ -178,5 +191,3 @@ export type UpdateSceneCallbackArgs = [
 export type UpdateSceneCallback = (...args: UpdateSceneCallbackArgs) => void;
 export type GetAttemptMetricCallback = (attemptMetric: Pick<VersionMetric, "assetKey" | "finalScore" | "startTime" | "ruleAdded" | "attemptNumber" | "assetVersion" | "corrections">) => void;
 export type OnAttemptCallback = (attempt: number) => void;
-
-export * from './workflow.types.js';

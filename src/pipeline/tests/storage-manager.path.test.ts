@@ -1,4 +1,4 @@
-import { GCPStorageManager } from '../../workflow/storage-manager';
+import { GCPStorageManager } from '../../shared/services/storage-manager.js';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 

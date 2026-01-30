@@ -6,7 +6,7 @@ const pool = new pg.Pool({
   connectionString: process.env.POSTGRES_URL,
 });
 
-export const db = drizzle(pool);
+export const db = drizzle({ client: pool });
 
 async function dropAllTables() {
     console.log("⏳ Dropping all tables...");

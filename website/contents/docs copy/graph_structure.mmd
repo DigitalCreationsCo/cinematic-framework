@@ -1,0 +1,62 @@
+%%{init: {'flowchart': {'curve': 'linear'}}}%%
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	expand_creative_prompt(expand_creative_prompt)
+	generate_storyboard_exclusively_from_prompt(generate_storyboard_exclusively_from_prompt)
+	create_scenes_from_audio(create_scenes_from_audio)
+	enrich_storyboard_and_scenes(enrich_storyboard_and_scenes)
+	semantic_analysis(semantic_analysis)
+	generate_character_assets(generate_character_assets)
+	generate_location_assets(generate_location_assets)
+	generate_scene_assets(generate_scene_assets)
+	process_scene(process_scene)
+	render_video(render_video)
+	finalize(finalize)
+	__end__([<p>__end__</p>]):::last
+	create_scenes_from_audio --> enrich_storyboard_and_scenes;
+	enrich_storyboard_and_scenes --> semantic_analysis;
+	finalize --> __end__;
+	generate_character_assets --> generate_location_assets;
+	generate_location_assets --> generate_scene_assets;
+	generate_scene_assets --> process_scene;
+	generate_storyboard_exclusively_from_prompt --> enrich_storyboard_and_scenes;
+	render_video --> finalize;
+	semantic_analysis --> generate_character_assets;
+	__start__ -.-> expand_creative_prompt;
+	__start__ -.-> generate_storyboard_exclusively_from_prompt;
+	__start__ -.-> create_scenes_from_audio;
+	__start__ -.-> enrich_storyboard_and_scenes;
+	__start__ -.-> semantic_analysis;
+	__start__ -.-> generate_character_assets;
+	__start__ -.-> generate_location_assets;
+	__start__ -.-> generate_scene_assets;
+	__start__ -.-> process_scene;
+	__start__ -.-> render_video;
+	__start__ -.-> finalize;
+	__start__ -.-> __end__;
+	process_scene -.-> expand_creative_prompt;
+	process_scene -.-> generate_storyboard_exclusively_from_prompt;
+	process_scene -.-> create_scenes_from_audio;
+	process_scene -.-> enrich_storyboard_and_scenes;
+	process_scene -.-> semantic_analysis;
+	process_scene -.-> generate_character_assets;
+	process_scene -.-> generate_location_assets;
+	process_scene -.-> generate_scene_assets;
+	process_scene -.-> render_video;
+	process_scene -.-> finalize;
+	process_scene -.-> __end__;
+	expand_creative_prompt -.-> create_scenes_from_audio;
+	expand_creative_prompt -.-> generate_storyboard_exclusively_from_prompt;
+	generate_storyboard_exclusively_from_prompt -.-> enrich_storyboard_and_scenes;
+	create_scenes_from_audio -.-> enrich_storyboard_and_scenes;
+	enrich_storyboard_and_scenes -.-> semantic_analysis;
+	semantic_analysis -.-> generate_character_assets;
+	generate_character_assets -.-> generate_location_assets;
+	generate_location_assets -.-> generate_scene_assets;
+	generate_scene_assets -.-> process_scene;
+	process_scene -.-> render_video;
+	render_video -.-> finalize;
+	process_scene -.-> process_scene;
+	classDef default fill:#f2f0ff,line-height:1.2;
+	classDef first fill-opacity:0;
+	classDef last fill:#bfb6fc;

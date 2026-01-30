@@ -1,7 +1,9 @@
 export const promptVersion = "3.0.0-quality-control";
 
-import { Character, Location, PromptCorrection, QualityIssue, Scene } from "../types/workflow.types.js";
-import { formatCharacterSpecs, formatLocationSpecs, getAllBestFromAssets, getJSONSchema } from "../../shared/utils/utils.js";
+import { Character, Location, PromptCorrection, QualityIssue, Scene } from "../types/index.js";
+import { getJSONSchema } from "../../shared/utils/utils.js";
+import { getAllBestFromAssets } from "../../shared/utils/assets-utils.js";
+import { formatCharacterSpecs, formatLocationSpecs } from "../../shared/utils/type-utils.js";
 import { composeDepartmentSpecs } from "./prompt-composer.js";
 import { buildQualityControlVideoPrompt, buildQualityControlFramePrompt } from "./role-quality-control.js";
 
@@ -83,7 +85,7 @@ ${previousScene ? `PREVIOUS SCENE CONTEXT:
 Scene ${previousScene.id}:
 - Description: ${previousScene.description}
 - Lighting: ${JSON.stringify(previousScene.lighting)}
-- Characters: ${previousScene.characters.join(", ")}
+- Characters: ${previousScene.characterIds.join(", ")}
 - End Frame: ${getAllBestFromAssets(previousScene.assets)[ 'scene_end_frame' ]?.data || "N/A"}
 ` : "This is the first scene - no previous context."}
 
@@ -221,7 +223,7 @@ export const buildFrameEvaluationPrompt = (
   generationRules: string[] = []
 ): string => {
   // Get location for department specs
-  const location = locations.find(l => l.id === scene.location) || locations[ 0 ];
+  const location = locations.find(l => l.id === scene.locationId) || locations[ 0 ];
 
   // Compose department specifications for evaluation
   const departmentSpecs = composeDepartmentSpecs(
@@ -253,10 +255,10 @@ const buildLegacyFrameEvaluationPrompt = (
   characters: Character[],
   locations: Location[],
 ): string => {
-  const sceneCharacters = characters.filter(c => scene.characters.includes(c.id));
+  const sceneCharacters = characters.filter(c => scene.characterIds.includes(c.id));
 
-  if (!scene.location) throw Error("No locations in this scene.");
-  const sceneLocation = locations.find(l => l.id === scene.location);
+  if (!scene.locationId) throw Error("No locations in this scene.");
+  const sceneLocation = locations.find(l => l.id === scene.locationId);
   if (!sceneLocation) throw Error("[buildLegacyFrameEvaluationPrompt]: Location not found");
 
   return `As a professional cinematography and VFX specialist evaluating keyframes for high-end video production, evaluate this generated still frame that will serve as a ${framePosition === "start" ? "starting" : "ending"} keyframe anchor for video generation.

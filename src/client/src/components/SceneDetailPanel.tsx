@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs.j
 import { ScrollArea } from "#/components/ui/scroll-area.js";
 import { Play, Pause, RefreshCw, Camera, Sun, Music, Users, MapPin, FileText } from "lucide-react";
 import { useRef, useState, useEffect, useCallback, RefObject, memo, useMemo } from "react";
-import type { Scene, AssetStatus, Character, Location, QualityEvaluationResult, AssetVersion, AssetRegistry, AssetKey, AssetHistory } from "../../../shared/types/workflow.types.js";
+import type { Scene, AssetStatus, Character, Location, QualityEvaluationResult, AssetVersion, AssetRegistry, AssetKey, AssetHistory } from "../../../shared/types/index.js";
 import StatusBadge from "./StatusBadge.js";
 import QualityEvaluationPanel from "./QualityEvaluationPanel.js";
 import FramePreview from "./FramePreview.js";
@@ -18,7 +18,7 @@ import { useToast } from "#/hooks/use-toast.js";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip.js";
 import { Trash2, History } from "lucide-react";
 import { useStore } from "#/lib/store.js";
-import { getAllBestFromAssets } from "../../../shared/utils/utils.js";
+import { getAllBestFromAssets } from "../../../shared/utils/assets-utils.js";
 
 interface SceneDetailPanelProps {
   scene: Scene;

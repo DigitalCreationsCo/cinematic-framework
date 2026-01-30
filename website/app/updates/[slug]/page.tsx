@@ -1,11 +1,11 @@
 import { notFound } from 'next/navigation';
-import { getUpdate, getAllUpdates } from '@/lib/updates';
-import { Typography } from '@/components/ui/typography';
-import { Separator } from '@/components/ui/separator';
-import { Link } from '@/lib/transition';
-import { buttonVariants } from '@/components/ui/button';
-import { UpdatesSidebar } from '@/components/sidebar/updates-sidebar';
-import { TableOfContents } from '@/components/toc';
+import { getUpdate, getAllUpdates } from '#w/lib/updates.js';
+import { Typography } from '#w/components/ui/typography.js';
+import { Separator } from '#w/components/ui/separator.js';
+import { Link } from '#w/lib/transition/index.js';
+import { buttonVariants } from '#w/components/ui/button.js';
+import { UpdatesSidebar } from '#w/components/sidebar/updates-sidebar.js';
+import { TableOfContents } from '#w/components/toc/index.js';
 import Image from 'next/image';
 import { FaGithub, FaLinkedin, FaTwitter, FaEnvelope } from 'react-icons/fa';
 

@@ -1,38 +1,32 @@
 {
-  "exclude": [
-    "node_modules",
-    "**/build",
-    "**/dist",
-    "**/tests/**/*",
-    "**/*.test.ts"
-  ],
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "rootDir": "src",
-    "sourceMap": true,
-    "inlineSourceMap": false,
-    "inlineSources": true,
-    "declaration": true,
-    "declarationMap": true,
-    "noEmit": false,
-    "allowImportingTsExtensions": false,
-    "incremental": true,
-    "tsBuildInfoFile": "dist/.tsbuildinfo",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "isolatedModules": true,
+    "rootDir": ".",
+    "outDir": "./dist",
+    "pretty": true,
     "lib": [
       "esnext",
       "dom",
       "dom.iterable"
     ],
-    "jsx": "preserve",
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "isolatedModules": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "strict": true,
+    "useUnknownInCatchVariables": false,
+    "allowImportingTsExtensions": false,
+    "resolveJsonModule": true,
+    "noImplicitOverride": true,
+    "skipLibCheck": true,
+    "preserveConstEnums": true,
+    "jsx": "react-jsx",
+    "newLine": "lf",
     "types": [
-      "node",
-      "vite/client"
-    ]
+      "node"
+    ],
   }
 }

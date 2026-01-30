@@ -1,13 +1,13 @@
-import { WorkflowOperator } from '../services/workflow-service';
-import { CheckpointerManager } from '../../workflow/checkpointer-manager';
-import { CinematicVideoWorkflow } from '../../workflow/graph';
-import { streamWithInterruptHandling } from '../helpers/stream-helper';
-import { GCPStorageManager } from '../../workflow/storage-manager';
-import { JobControlPlane } from '../services/job-control-plane';
+import { WorkflowOperator } from '../workflow-service.js';
+import { CheckpointerManager } from '../checkpointer-manager.js';
+import { CinematicVideoWorkflow } from '../graph.js';
+import { streamWithInterruptHandling } from '../helpers/stream-helper.js';
+import { GCPStorageManager } from '../../shared/services/storage-manager.js';
+import { JobControlPlane } from '../../shared/services/job-control-plane.js';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Command } from "@langchain/langgraph";
-import { Scene } from '../../shared/types/pipeline.types';
-import { handleJobCompletion } from "../handlers/handleJobCompletion.ts";
+import { Scene } from '../../shared/types/index.js';
+import { handleJobCompletion } from "../handlers/handleJobCompletion.js";
 
 // Mock dependencies
 vi.mock('../../workflow/checkpointer-manager');
@@ -85,6 +85,7 @@ describe('WorkflowOperator', () => {
             mockControlPlane,
             mockPublishEvent,
             mockProjectRepository,
+            {} as any,
             gcpProjectId,
             bucketName
         );

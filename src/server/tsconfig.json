@@ -3,15 +3,15 @@
     "compilerOptions": {
         "rootDir": ".",
         "outDir": "../../dist/server",
-        "tsBuildInfoFile": "../../dist/server/.tsbuildinfo",
         "paths": {
-            "*": [
+            "./*": [
                 "./*"
-            ],
-            "#/*": [
-                "../client/src/*"
             ]
-        }
+        },
+        "types": [
+            "node",
+            "vite/client"
+        ]
     },
     "include": [
         "**/*",

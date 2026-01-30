@@ -15,7 +15,7 @@ import { LuFolder, LuFolderClosed } from 'react-icons/lu'
 
 const ctx = createContext(0)
 
-interface FolderProps {
+export interface FolderProps {
   name: string
   label?: ReactElement
   open?: boolean
@@ -24,7 +24,7 @@ interface FolderProps {
   children: ReactNode
 }
 
-interface FileProps {
+export interface FileProps {
   name: string
   label?: ReactElement
 }

@@ -7,17 +7,12 @@ import {
     CharacterAttributes,
     LocationAttributes,
     Storyboard,
-} from "../types/workflow.types.js";
-import {
-    DbProjectSchema, DbSceneSchema, DbCharacterSchema, DbLocationSchema, ProjectEntity,
-    SceneEntity,
-    CharacterEntity,
-    LocationEntity,
+    SceneEntity, ProjectEntity,
     InsertScene,
     InsertCharacter,
     InsertLocation,
     InsertProject,
-} from "../db/zod-db.js";
+} from "../types/index.js";
 import { mapDbProjectToDomain, mapDomainProjectToInsertProjectDb } from "../domain/project-mappers.js";
 import { mapDbSceneToDomain, mapDomainSceneToInsertSceneDb } from "../domain/scene-mappers.js";
 import { extractCharacterJoins, mapDbCharacterToDomain, mapDomainCharacterToInsertCharacterDb } from "../domain/character-mappers.js";
@@ -40,16 +35,16 @@ export class ProjectRepository {
         return records;
     }
 
-    async getProject(projectId: string, tx: any = db): Promise<ProjectEntity> {
+    async getProject(projectId: string, tx: Omit<typeof db, "$client"> = db): Promise<ProjectEntity> {
         if (!tx) throw new Error("Database not initialized");
 
         const [ record ] = await tx.select().from(projects).where(eq(projects.id, projectId));
         if (!record) throw new Error(`Project ${projectId} not found`);
 
-        return DbProjectSchema.parse(record);
+        return ProjectEntity.parse(record);
     }
 
-    async getProjectFullState(projectId: string, tx: any = db): Promise<Project> {
+    async getProjectFullState(projectId: string, tx: Omit<typeof db, "$client"> = db): Promise<Project> {
         if (!tx) throw new Error("Database not initialized");
 
         const projectEntity = await this.getProject(projectId, tx);
@@ -57,69 +52,77 @@ export class ProjectRepository {
         console.debug({ storyboardNumChars: projectEntity.storyboard.characters.length });
         console.debug({ storyboardNumLocs: projectEntity.storyboard.locations.length });
 
-        const dbScenes = await tx.select().from(scenes)
-            .where(eq(scenes.projectId, projectId))
-            .orderBy(asc(scenes.sceneIndex)) as SceneEntity[];
-        const dbChars = await tx.select().from(characters).where(eq(characters.projectId, projectId)) as CharacterEntity[];
-        const dbLocs = await tx.select().from(locations).where(eq(locations.projectId, projectId)) as LocationEntity[];
+        const dbScenes = await tx.query.scenes.findMany({
+            where: { projectId },
+            orderBy: (scenes, { asc }) => [ asc(scenes.sceneIndex) ],
+            with: {
+                characters: {
+                    columns: {
+                        id: true,
+                    }
+                }
+            }
+        });
+        const dbChars = await tx.query.characters.findMany({
+            where: { projectId },
+        });
+        const dbLocs = await tx.query.locations.findMany({
+            where: { projectId },
+        });
 
-        const domainScenes = dbScenes.map(s => mapDbSceneToDomain(DbSceneSchema.parse(s)));
-        const domainCharacters = dbChars.map(c => mapDbCharacterToDomain(DbCharacterSchema.parse(c)));
-        const domainLocations = dbLocs.map(l => mapDbLocationToDomain(DbLocationSchema.parse(l)));
+        const domainScenes = dbScenes.map(s => mapDbSceneToDomain(SceneEntity.parse(s)));
+        const domainCharacters = dbChars.map(c => mapDbCharacterToDomain(c));
+        const domainLocations = dbLocs.map(l => mapDbLocationToDomain(l));
         console.debug({ returnedNumScenes: domainScenes.length });
         console.debug({ returnedNumChars: domainCharacters.length });
         console.debug({ returnedNumLocs: domainLocations.length });
 
         return mapDbProjectToDomain({
-            project: projectEntity,
+            ...projectEntity,
             scenes: domainScenes,
             characters: domainCharacters,
             locations: domainLocations,
         });
     }
 
-    async createProject(insert: Project): Promise<Project> {
+    async createProject(insert: InsertProject): Promise<Project> {
         if (!db) throw new Error("Database not initialized");
 
         const projectId = insert.id || uuidv7();
         insert.id = projectId;
 
-        let scenes = insert.scenes.map(s => InsertScene.parse({
+        let scenesToInsert = (insert.scenes || []).map(s => InsertScene.parse({
             ...s,
             projectId,
-            updatedAt: new Date()
         }));
-        let characters = insert.characters.map(c => InsertCharacter.parse({
+        let charactersToInsert = (insert.characters || []).map(c => InsertCharacter.parse({
             ...c,
             projectId,
-            updatedAt: new Date()
         }));
-        let locations = insert.locations.map(l => InsertLocation.parse({
+        let locationsToInsert = (insert.locations || []).map(l => InsertLocation.parse({
             ...l,
             projectId,
-            updatedAt: new Date()
         }));
 
         if (insert.scenes && insert.scenes.length > 0) {
-            scenes = await this.createScenes(insert.id, insert.scenes);
+            scenesToInsert = await this.createScenes(insert.id, insert.scenes);
         }
         if (insert.characters && insert.characters.length > 0) {
-            characters = await this.createCharacters(insert.id, insert.characters);
+            charactersToInsert = await this.createCharacters(insert.id, insert.characters);
         }
         if (insert.locations && insert.locations.length > 0) {
-            locations = await this.createLocations(insert.id, insert.locations);
+            locationsToInsert = await this.createLocations(insert.id, insert.locations);
         }
 
-        const projectEntity = mapDomainProjectToInsertProjectDb(insert);
-        projectEntity.storyboard = {
-            metadata: projectEntity.metadata,
-            scenes: scenes,
-            characters: characters,
-            locations: locations,
-        };
-        const [ project ] = await db.insert(projects).values(projectEntity as Project).returning();
+        const projectEntity: Project = Project.parse({
+            ...insert,
+            scenes: scenesToInsert,
+            characters: charactersToInsert,
+            locations: locationsToInsert,
+        });
+        const [ project ] = await db.insert(projects).values(projectEntity).returning();
 
-        return mapDbProjectToDomain({ project });
+        return mapDbProjectToDomain(project);
     }
 
     /* 
@@ -160,8 +163,9 @@ export class ProjectRepository {
             let validLocs: any[] = [];
 
             if (sceneDrafts && sceneDrafts.length > 0) {
+                const mappedScenes = sceneDrafts.map(s => mapDomainSceneToInsertSceneDb({ ...s, projectId }));
                 validScenes = await tx.insert(scenes)
-                    .values(sceneDrafts)
+                    .values(mappedScenes)
                     .onConflictDoUpdate({
                         target: scenes.id,
                         set: this.buildConflictUpdateColumns(scenes)
@@ -229,7 +233,7 @@ export class ProjectRepository {
             .where(eq(projects.id, projectId))
             .returning();
 
-        return mapDbProjectToDomain({ project: update });
+        return mapDbProjectToDomain(update);
     }
 
     async updateCharacters(updates: Character[]) {
@@ -261,41 +265,36 @@ export class ProjectRepository {
 
         const [ record ] = await db.select().from(scenes).where(eq(scenes.id, sceneId));
         if (!record) throw new Error(`Scene ${sceneId} not found`);
-        return mapDbSceneToDomain(DbSceneSchema.parse(record));
+        return mapDbSceneToDomain(SceneEntity.parse(record));
     }
 
     async getProjectScenes(projectId: string): Promise<Scene[]> {
         if (!db) throw new Error("Database not initialized");
 
         const records = await db.query.scenes.findMany({
-            where: eq(scenes.projectId, projectId),
-            orderBy: asc(scenes.sceneIndex),
+            where: { projectId },
+            orderBy: { sceneIndex: "asc" },
             with: {
-                location: true,
                 characters: {
-                    columns: {},
-                    with: {
-                        character: {
-                            columns: {
-                                id: true
-                            }
-                        }
+                    columns: {
+                        id: true
                     }
-                }
+                },
+                location: { columns: { id: true } },
             }
         });
 
         return records.map(r => Scene.parse(r));
     }
 
-    async createScenes(projectId: string, scenesData: (SceneAttributes[] | Scene[])): Promise<Scene[]> {
+    async createScenes(projectId: string, scenesData: (InsertScene[] | Scene[])): Promise<SceneEntity[]> {
         if (!db) throw new Error("Database not initialized");
 
         const scenesWithCharacters: Scene[] = [];
         const scenesToUpsert: InsertScene[] = scenesData.map((s) => {
             const _scene = mapDomainSceneToInsertSceneDb({ ...s, projectId });
-            if ("characters" in s) {
-                scenesWithCharacters.push({ ..._scene, characters: s.characters });
+            if ("characterIds" in s) {
+                scenesWithCharacters.push({ ...s, ..._scene, characterIds: s.characterIds });
             }
             return _scene;
         });
@@ -306,7 +305,7 @@ export class ProjectRepository {
             .values(scenesToUpsert)
             .onConflictDoUpdate({
                 target: scenes.id,
-                set: { ...scenesToUpsert[ 0 ] }
+                set: this.buildConflictUpdateColumns(scenes)
             })
             .returning();
 
@@ -321,7 +320,7 @@ export class ProjectRepository {
 
         console.debug({ insertedNumScenes: upserted.length, linkedCharacters: characterJoins.length });
 
-        return upserted.map(c => mapDbSceneToDomain(DbSceneSchema.parse(c)));
+        return upserted.map(c => SceneEntity.parse(c));
     }
 
     async createCharacters(projectId: string, charactersData: CharacterAttributes[]): Promise<Character[]> {
@@ -335,10 +334,10 @@ export class ProjectRepository {
             .values(rows)
             .onConflictDoUpdate({
                 target: characters.id,
-                set: { ...rows[ 0 ] }
+                set: this.buildConflictUpdateColumns(characters)
             })
             .returning();
-        return upserted.map(c => mapDbCharacterToDomain(DbCharacterSchema.parse(c)));
+        return upserted.map(c => mapDbCharacterToDomain(Character.parse(c)));
     }
     async createLocations(projectId: string, locationsData: LocationAttributes[]): Promise<Location[]> {
         if (!db) throw new Error("Database not initialized");
@@ -354,18 +353,19 @@ export class ProjectRepository {
             .values(rows)
             .onConflictDoUpdate({
                 target: locations.id,
-                set: { ...rows[ 0 ] }
+                set: this.buildConflictUpdateColumns(locations)
             })
             .returning();
-        return upserted.map(c => mapDbLocationToDomain(DbLocationSchema.parse(c)));
+        return upserted.map(c => mapDbLocationToDomain(Location.parse(c)));
     }
 
     async updateScenes(updates: Scene[]) {
         if (!db) throw new Error("Database not initialized");
 
         return Promise.all(updates.map(async scene => {
+            const dbValues = mapDomainSceneToInsertSceneDb({ ...scene });
             const [ row ] = await db.update(scenes)
-                .set({ ...scene, updatedAt: new Date() } as any)
+                .set({ ...dbValues, updatedAt: new Date() })
                 .where(eq(scenes.id, scene.id))
                 .returning();
             return row;
@@ -379,7 +379,7 @@ export class ProjectRepository {
             .set({ status: status as any })
             .where(eq(scenes.id, sceneId))
             .returning();
-        return mapDbSceneToDomain(DbSceneSchema.parse(updated));
+        return mapDbSceneToDomain(SceneEntity.parse(updated));
     }
 
     // Characters
@@ -387,7 +387,7 @@ export class ProjectRepository {
         if (!db) throw new Error("Database not initialized");
 
         const records = await db.select().from(characters).where(eq(characters.projectId, projectId));
-        return records.map(c => DbCharacterSchema.parse(c) as unknown as Character);
+        return records.map(c => Character.parse(c) as unknown as Character);
     }
 
     async getCharactersByIds(ids: string[]): Promise<Character[]> {
@@ -401,7 +401,7 @@ export class ProjectRepository {
             .select()
             .from(characters)
             .where(inArray(characters.id, ids));
-        return records.map(c => DbCharacterSchema.parse(c) as unknown as Character);
+        return records.map(c => Character.parse(c) as unknown as Character);
     }
 
     // Locations
@@ -409,7 +409,7 @@ export class ProjectRepository {
         if (!db) throw new Error("Database not initialized");
 
         const records = await db.select().from(locations).where(eq(locations.projectId, projectId));
-        return records.map(l => DbLocationSchema.parse(l) as unknown as Location);
+        return records.map(l => Location.parse(l) as unknown as Location);
     }
 
     async getLocationsByIds(ids: string[]): Promise<Location[]> {
@@ -422,7 +422,7 @@ export class ProjectRepository {
             .select()
             .from(locations)
             .where(inArray(locations.id, ids));
-        return records.map(l => DbLocationSchema.parse(l) as unknown as Location);
+        return records.map(l => Location.parse(l) as unknown as Location);
     }
 
     async updateSceneAssets(sceneId: string, assetKey: string, history: any) {

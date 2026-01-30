@@ -7,8 +7,8 @@ import remarkStringify from 'remark-stringify'
 import { unified } from 'unified'
 import { Node, Parent } from 'unist'
 import { visit } from 'unist-util-visit'
-import { Paths } from '@/lib/pageroutes'
-import { Documents } from '@/settings/documents'
+import { Paths } from '#w/lib/pageroutes.js';
+import { Documents } from '#w/settings/documents.js'
 
 const docsDir = path.join(process.cwd(), 'contents/docs')
 const outputDir = path.join(process.cwd(), 'public', 'search-data')

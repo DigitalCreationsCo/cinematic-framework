@@ -53,6 +53,7 @@ export function initLogger(
                 type: "LOG",
                 projectId: context.projectId,
                 correlationId: context.correlationId,
+                timestamp: new Date().toISOString(),
                 payload: {
                     level,
                     message: refinedMessage,

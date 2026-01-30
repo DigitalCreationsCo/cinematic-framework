@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next'
-import { PageRoutes } from '@/lib/pageroutes'
-import { Settings } from '@/types/settings'
+import { PageRoutes } from '#w/lib/pageroutes.js';
+import { Settings } from '#w/types/settings.js'
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return PageRoutes.map((page) => ({

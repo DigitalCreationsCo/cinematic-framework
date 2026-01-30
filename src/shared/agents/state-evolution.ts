@@ -1,4 +1,4 @@
-import { Character, Location, Scene, CharacterState, LocationState, WeatherIntensity } from "../types/workflow.types.js";
+import { Character, Location, Scene, CharacterState, LocationState, WeatherIntensity } from "../types/index.js";
 
 /**
  * State Evolution Helper

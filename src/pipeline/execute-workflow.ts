@@ -15,7 +15,7 @@ import {
   Scene,
   Storyboard,
   WorkflowState,
-} from "../shared/types/workflow.types.js";
+} from "../shared/types/index.js";
 import { PipelineEvent } from "../shared/types/pipeline.types.js";
 import { GCPStorageManager } from "../shared/services/storage-manager.js";
 import { TextModelController } from "../shared/llm/text-model-controller.js";
@@ -23,8 +23,6 @@ import { VideoModelController } from "../shared/llm/video-model-controller.js";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { imageModelName, qualityCheckModelName, textModelName, videoModelName } from "../shared/llm/google/models.js";
-import { deleteBogusUrlsStoryboard, getAllBestFromAssets } from "../shared/utils/utils.js";
-import { QualityCheckAgent } from "../shared/agents/quality-check-agent.js";
 import { CheckpointerManager } from "./checkpointer-manager.js";
 import { RunnableConfig } from "@langchain/core/runnables";
 

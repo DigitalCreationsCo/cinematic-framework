@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useStore } from "#/lib/store.js";
 import { PipelineEvent } from "../../../shared/types/pipeline.types.js";
-import { Project, Scene } from "../../../shared/types/workflow.types.js";
+import { Project, Scene } from "../../../shared/types/index.js";
 import { requestFullState } from "#/lib/api.js";
 import { v7 as uuidv7 } from "uuid";
 

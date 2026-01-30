@@ -1,6 +1,6 @@
 import { Storage } from "@google-cloud/storage";
 import path from "path";
-import { GcsObjectType } from "../types/workflow.types.js";
+import { GcsObjectType } from "../types/index.js";
 
 
 
@@ -58,12 +58,12 @@ export class GCPStorageManager {
 
       const hasAll = permissionsToCheck.every(p => permissions[ p ]);
 
-      console.log({ permissions });
+      console.debug({ permissions });
 
       if (hasAll) {
-        console.log("✅ Credentials have the specified permissions.");
+        console.debug("✅ Credentials have the specified permissions.");
       } else {
-        console.log("❌ Credentials are missing the specified permissions.");
+        console.error("❌ Credentials are missing the specified permissions.");
         throw Error(`Credentials are missing the specified permissions.`);
       }
     }, (error) => {

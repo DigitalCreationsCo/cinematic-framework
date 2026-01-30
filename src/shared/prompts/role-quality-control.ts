@@ -1,9 +1,9 @@
 export const promptVersion = "3.1.0-quality-control-enhanced";
 
-import { Scene } from "../types/workflow.types.js";
+import { Scene } from "../types/index.js";
 import { ISSUE_CATEGORIZATION_GUIDE, EVALUATION_CALIBRATION_GUIDE } from "./evaluation-guidelines.js";
 import { composeGenerationRules } from "./prompt-composer.js";
-import { getAllBestFromAssets } from "../../shared/utils/utils.js";
+import { getAllBestFromAssets } from "../../shared/utils/assets-utils.js";
 
 /**
  * QUALITY CONTROL SUPERVISOR - Evaluation & Feedback
@@ -188,7 +188,7 @@ ${previousScene
 Scene ${previousScene.id}:
 - Description: ${previousScene.description}
 - Lighting: ${JSON.stringify(previousScene.lighting)}
-- Characters: ${previousScene.characters.join(", ")}
+- Characters: ${previousScene.characterIds.join(", ")}
 - End Frame: ${previousScene.assets[ 'scene_end_frame' ]?.versions[ previousScene.assets[ 'scene_end_frame' ]?.best ].data || "N/A"}`
     : "This is the first scene - no previous context."
   }

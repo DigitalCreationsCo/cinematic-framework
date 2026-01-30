@@ -1,28 +1,45 @@
-//shared/job.types.ts
-import { AssetKey, AudioAnalysis, AudioAnalysisAttributes, Character, Location, Project, QualityEvaluationResult, Scene, SceneGenerationResult, Storyboard, StoryboardAttributes } from "./workflow.types.js";
+//shared/types/job.types.ts
+
+import { AssetKey } from "./assets.types.js";
+import { AudioAnalysis } from "./audio.types.js";
+import { Character, Location } from "./workflow.types.js";
+import { QualityEvaluationResult } from "./quality.types.js";
+import { Scene, SceneGenerationResult, StoryboardAttributes } from "./index.js";
 
 
 
-export type JobType =
-    | "EXPAND_CREATIVE_PROMPT"
-    | "GENERATE_STORYBOARD"
-    | "PROCESS_AUDIO_TO_SCENES"
-    | "ENHANCE_STORYBOARD"
-    | "SEMANTIC_ANALYSIS"
-    | "GENERATE_CHARACTER_ASSETS"
-    | "GENERATE_LOCATION_ASSETS"
-    | "GENERATE_SCENE_FRAMES"
-    | "GENERATE_SCENE_VIDEO"
-    | "RENDER_VIDEO"
-    | "FRAME_RENDER";
+// ============================================================================
+// JOB PROPERTIES
+// ============================================================================
 
-export type JobState =
-    | "CREATED"
-    | "RUNNING"
-    | "COMPLETED"
-    | "FAILED"
-    | "FATAL"
-    | "CANCELLED";
+export const JOB_STATES = [
+    "CREATED",
+    "RUNNING",
+    "COMPLETED",
+    "FAILED",
+    "FATAL",
+    "CANCELLED"
+] as const;
+export type JobState = (typeof JOB_STATES)[ number ];
+
+export const JOB_TYPES = [
+    "EXPAND_CREATIVE_PROMPT",
+    "GENERATE_STORYBOARD",
+    "PROCESS_AUDIO_TO_SCENES",
+    "ENHANCE_STORYBOARD",
+    "SEMANTIC_ANALYSIS",
+    "GENERATE_CHARACTER_ASSETS",
+    "GENERATE_LOCATION_ASSETS",
+    "GENERATE_SCENE_FRAMES",
+    "GENERATE_SCENE_VIDEO",
+    "RENDER_VIDEO",
+    "FRAME_RENDER"
+] as const;
+export type JobType = (typeof JOB_TYPES)[ number ];
+
+// ============================================================================
+// JOB RECORDS
+// ============================================================================
 
 export type JobRecord =
     | JobRecordExpandCreativePrompt
@@ -64,61 +81,7 @@ type JobRecordBase<T extends JobType, R = undefined, P = undefined> = R extends 
     createdAt: Date;
     updatedAt: Date;
     payload: P;
-    };
-
-export type GenerativeResultEnvelope<T> = {
-    data: T;
-    metadata: {
-        model: string;
-        evaluation?: QualityEvaluationResult;
-        attempts: number;
-        acceptedAttempt: number;
-        warning?: string;
-    };
 };
-
-export type GenerativeResultExpandCreativePrompt = GenerativeResultEnvelope<{
-    expandedPrompt: string;
-}>;
-
-export type GenerativeResultGenerateStoryboard = GenerativeResultEnvelope<{
-    storyboardAttributes: StoryboardAttributes;
-}>;
-
-export type GenerativeResultProcessAudioToScenes = GenerativeResultEnvelope<{
-    analysis: AudioAnalysis;
-}>;
-
-export type GenerativeResultEnhanceStoryboard = GenerativeResultEnvelope<{
-    storyboardAttributes: StoryboardAttributes;
-}>;
-
-export type GenerativeResultSemanticAnalysis = GenerativeResultEnvelope<{
-    dynamicRules: string[];
-}>;
-
-export type GenerativeResultGenerateCharacterAssets = GenerativeResultEnvelope<{
-    characters: Character[];
-}>;
-
-export type GenerativeResultGenerateLocationAssets = GenerativeResultEnvelope<{
-    locations: Location[];
-}>;
-
-export type GenerativeResultGenerateSceneFrames = GenerativeResultEnvelope<{
-    updatedScenes: Scene[];
-}>;
-
-export type GenerativeResultGenerateSceneVideo = GenerativeResultEnvelope<SceneGenerationResult>;
-
-export type GenerativeResultStitchVideo = GenerativeResultEnvelope<{
-    renderedVideo: string;
-}>;
-
-export type GenerativeResultFrameRender = GenerativeResultEnvelope<{
-    scene: Scene;
-    image: string;
-}>;
 
 export type JobRecordExpandCreativePrompt = JobRecordBase<
     "EXPAND_CREATIVE_PROMPT"
@@ -186,6 +149,67 @@ export type JobRecordFrameRender = JobRecordBase<
     }
 >;
 
+// ============================================================================
+// GENERATIVE AI RESULT TYPES
+// ============================================================================
+
+export type GenerativeResultEnvelope<T> = {
+    data: T;
+    metadata: {
+        model: string;
+        evaluation?: QualityEvaluationResult;
+        attempts: number;
+        acceptedAttempt: number;
+        warning?: string;
+    };
+};
+
+export type GenerativeResultExpandCreativePrompt = GenerativeResultEnvelope<{
+    expandedPrompt: string;
+}>;
+
+export type GenerativeResultGenerateStoryboard = GenerativeResultEnvelope<{
+    storyboardAttributes: StoryboardAttributes;
+}>;
+
+export type GenerativeResultProcessAudioToScenes = GenerativeResultEnvelope<{
+    analysis: AudioAnalysis;
+}>;
+
+export type GenerativeResultEnhanceStoryboard = GenerativeResultEnvelope<{
+    storyboardAttributes: StoryboardAttributes;
+}>;
+
+export type GenerativeResultSemanticAnalysis = GenerativeResultEnvelope<{
+    dynamicRules: string[];
+}>;
+
+export type GenerativeResultGenerateCharacterAssets = GenerativeResultEnvelope<{
+    characters: Character[];
+}>;
+
+export type GenerativeResultGenerateLocationAssets = GenerativeResultEnvelope<{
+    locations: Location[];
+}>;
+
+export type GenerativeResultGenerateSceneFrames = GenerativeResultEnvelope<{
+    updatedScenes: Scene[];
+}>;
+
+export type GenerativeResultGenerateSceneVideo = GenerativeResultEnvelope<SceneGenerationResult>;
+
+export type GenerativeResultStitchVideo = GenerativeResultEnvelope<{
+    renderedVideo: string;
+}>;
+
+export type GenerativeResultFrameRender = GenerativeResultEnvelope<{
+    scene: Scene;
+    image: string;
+}>;
+
+// ============================================================================
+// JOB EVENTS
+// ============================================================================
 
 export type JobEvent =
     | { type: "JOB_DISPATCHED"; jobId: string; projectId: string; }

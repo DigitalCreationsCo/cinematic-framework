@@ -4,7 +4,7 @@ import clsx from 'clsx'
 import mermaid from 'mermaid'
 import React, { useCallback, useEffect, useMemo, useRef } from 'react'
 
-interface MermaidProps {
+export interface MermaidProps {
   chart: string
   className?: string
 }

@@ -1,6 +1,6 @@
 //pipeline/lib/llm-retry.ts
 import { interrupt } from "@langchain/langgraph";
-import { LlmRetryInterruptValue } from "../types/workflow.types.js";
+import { LlmRetryInterruptValue } from "../types/index.js";
 import { ApiError } from "@google/genai";
 
 

@@ -4,7 +4,7 @@ import { TextModelController } from "../llm/text-model-controller.js";
 import { buildllmParams } from "../llm/google/google-llm-params.js";
 import { imageModelName, qualityCheckModelName, textModelName } from "../llm/google/models.js";
 import { QualityCheckAgent } from "./quality-check-agent.js";
-import { Character, Location, QualityEvaluationResult, Scene } from "../types/workflow.types.js";
+import { Character, Location, QualityEvaluationResult, Scene } from "../types/index.js";
 import { retryLlmCall } from "../utils/llm-retry.js";
 import { RAIError } from "../utils/errors.js";
 import { GraphInterrupt } from "@langchain/langgraph";

@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import ffmpegBin from "@ffmpeg-installer/ffmpeg";
 import ffprobeBin from "@ffprobe-installer/ffprobe";
-import { Scene } from "../types/workflow.types.js";
+import { Scene } from "../types/index.js";
 import { GCPStorageManager } from "./storage-manager.js";
 ffmpeg.setFfmpegPath(ffmpegBin.path);
 ffmpeg.setFfprobePath(ffprobeBin.path);

@@ -24,7 +24,7 @@
             "name": "Launch Worker",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/scripts/dev-runner.js",
+            "program": "${workspaceFolder}/scripts/dev-runner.ts",
             "args": [
                 "${workspaceFolder}/dist/worker/index.js"
             ],
@@ -48,7 +48,7 @@
             "name": "Launch Pipeline",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/scripts/dev-runner.js",
+            "program": "${workspaceFolder}/scripts/dev-runner.ts",
             "args": [
                 "${workspaceFolder}/dist/pipeline/index.js"
             ],
@@ -72,7 +72,7 @@
             "name": "Launch Server",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/scripts/dev-runner.js",
+            "program": "${workspaceFolder}/scripts/dev-runner.ts",
             "args": [
                 "${workspaceFolder}/dist/server/index.js"
             ],
@@ -247,7 +247,7 @@
                 "--id",
                 "video_1765360860268"
             ],
-            "preLaunchTask": "tsc: build - tsconfig.json",
+            "preLaunchTask": "npx tsgo -b",
             "console": "integratedTerminal",
             "skipFiles": [
                 "<node_internals>/**"

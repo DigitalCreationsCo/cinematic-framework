@@ -1,17 +1,18 @@
 import {
     Scene,
-} from "../types/workflow.types.js";
-import {
-    SceneEntity, InsertScene
-} from "../db/zod-db.js";
+    SceneEntity,
+    InsertScene
+} from "../types/index.js";
 import { z } from "zod";
 
 
 
 export function mapDbSceneToDomain(entity: SceneEntity): Scene {
-    return Scene.parse(entity);
+    const scene = Scene.parse(entity);
+    return scene;
 }
 
 export function mapDomainSceneToInsertSceneDb(sceneAttributes: z.input<typeof InsertScene>): z.infer<typeof InsertScene> {
-    return InsertScene.parse(sceneAttributes);
+    const insertScene = InsertScene.parse(sceneAttributes);
+    return insertScene;
 }

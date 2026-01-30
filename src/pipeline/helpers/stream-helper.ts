@@ -1,5 +1,5 @@
 // src/pipeline/helpers/stream-helper.ts
-import { WorkflowState } from "../../shared/types/workflow.types.js";
+import { WorkflowState } from "../../shared/types/index.js";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { checkAndPublishInterruptFromSnapshot, checkAndPublishInterruptFromStream } from "./interrupts.js";
 import { PipelineEvent } from "../../shared/types/pipeline.types.js";
@@ -64,7 +64,7 @@ export async function streamWithInterruptHandling(
         console.log({ commandName, projectId }, `Stream completed.`);
 
     } catch (error) {
-        console.error({ commandName, projectId }, `Error during stream execution.`);
+        console.error({ error, commandName, projectId }, `Error during stream execution.`);
 
         const isNotFatalError = await checkAndPublishInterruptFromSnapshot(projectId, compiledGraph, config, publishEvent)
             || await checkAndPublishInterruptFromSnapshot(projectId, compiledGraph, config, publishEvent);

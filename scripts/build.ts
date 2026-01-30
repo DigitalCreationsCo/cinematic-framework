@@ -2,7 +2,6 @@ import { build as viteBuild } from "vite";
 import { build as esBuild } from "esbuild";
 import path from "path";
 import { rm } from "fs/promises";
-import tsConfig from "../tsconfig.json";
 import { execSync } from "child_process";
 
 async function buildAll() {
@@ -22,7 +21,7 @@ async function buildAll() {
 
   try {
     console.log("⚙️  Compiling TypeScript Projects...");
-    execSync("npx tsc -b", { stdio: "inherit" });
+    execSync("npx tsgo -b", { cwd: process.cwd(), stdio: "inherit" });
   } catch (error) {
     console.error("❌ TypeScript compilation failed");
     process.exit(1);

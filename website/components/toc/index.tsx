@@ -1,7 +1,7 @@
-import { TableAnchor, TableAnchorProps } from '@/components/toc/anchor'
-import { BackToTop } from '@/components/toc/backtotop'
-import Feedback from '@/components/toc/feedback'
-import { Settings } from '@/types/settings'
+import { TableAnchor, TableAnchorProps } from '#w/components/toc/anchor.js';
+import { BackToTop } from '#w/components/toc/backtotop.js';
+import Feedback from '#w/components/toc/feedback.js';
+import { Settings } from '#w/types/settings.js'
 
 interface TableProps {
   tocs: TableAnchorProps

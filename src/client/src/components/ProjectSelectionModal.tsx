@@ -10,7 +10,7 @@ import { Card, CardContent } from "#/components/ui/card.js";
 import { uploadAudio, startPipeline } from "#/lib/api.js";
 import { Loader2, Moon, Sun, Sparkles, FolderOpen, Plus } from "lucide-react";
 import { useStore } from '#/lib/store.js';
-import { Project } from '../../../shared/types/workflow.types.js';
+import { Project } from '../../../shared/types/index.js';
 
 interface ProjectSelectionModalProps {
   isOpen: boolean;

@@ -1,34 +1,22 @@
 {
   "version": "2.0.0",
   "tasks": [
-    // {
-    //   "label": "Watch Backend",
-    //   "type": "shell",
-    //   "command": "npx tsgo -w",
-    //   "isBackground": true,
-    //   "problemMatcher": {
-    //     "owner": "tsgo-watch",
-    //     "background": {
-    //       "activeOnStart": true,
-    //       "beginsPattern": "^.*build starting at.*$",
-    //       "endsPattern": "^.*build finished in.*$"
-    //     },
-    //     "pattern": {
-    //       "regexp": "^.*$"
-    //     }
-    //   },
-    //   "presentation": {
-    //     "reveal": "silent",
-    //     "panel": "shared",
-    //     "group": "watchers"
-    //   }
-    // },
     {
       "label": "Watch Backend",
       "type": "shell",
-      "command": "npx tsc -b --watch",
+      "command": "npx tsgo -b --watch",
       "isBackground": true,
-      "problemMatcher": "$tsc-watch",
+      "problemMatcher": {
+        "owner": "tsgo-watch",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^\\[.*\\] Starting compilation in watch mode\\.\\.\\.",
+          "endsPattern": "^\\[.*\\] Found 0 errors\\. Watching for file changes\\."
+        },
+        "pattern": {
+          "regexp": "^\\[.*\\] .*$"
+        }
+      },
       "presentation": {
         "reveal": "silent",
         "panel": "shared",
@@ -86,15 +74,6 @@
         "Watch Client (Dev)"
       ],
       "dependsOrder": "parallel",
-      "isBackground": true,
-      "problemMatcher": [
-        {
-          "base": "tsgo-watch"
-        },
-        {
-          "base": "vite-dev"
-        }
-      ],
       "presentation": {
         "reveal": "silent",
         "panel": "shared",
@@ -108,15 +87,6 @@
         "Watch Client (Build)"
       ],
       "dependsOrder": "parallel",
-      "isBackground": true,
-      "problemMatcher": [
-        {
-          "base": "tsgo-watch"
-        },
-        {
-          "base": "vite-build"
-        }
-      ],
       "presentation": {
         "reveal": "silent",
         "panel": "shared",
@@ -127,7 +97,6 @@
       "label": "Build Project",
       "type": "shell",
       "command": "npm run build",
-      "problemMatcher": [],
       "presentation": {
         "echo": true,
         "reveal": "always",

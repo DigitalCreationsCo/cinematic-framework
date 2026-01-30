@@ -1,16 +1,12 @@
 import {
-    Scene, Character, Location, Project
-} from "../types/workflow.types.js";
-import {
+    Scene, Character, Location, Project,
     InsertProject,
     ProjectEntity
-} from "../db/zod-db.js";
-import { z } from "zod";
+} from "../types/index.js";
 
 
 
-interface MapDBProjectToDomainProps {
-    project: ProjectEntity,
+interface MapDBProjectToDomainProps extends ProjectEntity {
     scenes?: Scene[],
     characters?: Character[],
     locations?: Location[],
@@ -20,8 +16,8 @@ interface MapDBProjectToDomainProps {
  * Maps a DB ProjectEntity + hydrated relations to a strict Project domain object.
  * Enforces ProjectSchema validation - throws if project is not fully hydrated.
  */
-export function mapDbProjectToDomain({ project: entity, scenes = [], characters = [], locations = [] }: MapDBProjectToDomainProps): Project {
-    const project: Project = {
+export function mapDbProjectToDomain({ scenes = [], characters = [], locations = [], ...entity }: MapDBProjectToDomainProps): Project {
+    const project = {
         ...entity,
         scenes,
         characters,
@@ -30,7 +26,6 @@ export function mapDbProjectToDomain({ project: entity, scenes = [], characters 
     return Project.parse(project);
 }
 
-export function mapDomainProjectToInsertProjectDb(project: Project): z.infer<typeof InsertProject> {
-    const { scenes, characters, locations, ...projectFields } = project;
-    return InsertProject.parse({ ...projectFields });
+export function mapDomainProjectToInsertProjectDb(project: InsertProject): InsertProject {
+    return InsertProject.parse(project);
 }

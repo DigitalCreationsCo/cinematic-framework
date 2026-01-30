@@ -4,7 +4,6 @@ import { eq, and, sql, desc, count, isNull } from "drizzle-orm";
 import { createHash } from 'crypto';
 import { JobState, JobEvent, JobType, JobRecord } from "../types/job.types.js";
 import { jobs } from "../db/schema.js";
-import { drizzle } from "drizzle-orm/node-postgres";
 
 
 
@@ -140,35 +139,40 @@ export class JobControlPlane {
      */
     async claimJob(jobId: string): Promise<[ JobRecord, string ] | null> {
 
-        return await this.poolManager.transaction(async (client) => {
-            const discovery = await client.query(
-                `SELECT project_id FROM jobs WHERE id = $1 LIMIT 1`,
-                [ jobId ]
-            );
-
-            if (discovery.rowCount === 0) return null;
-            const projectId = discovery.rows[ 0 ].project_id;
-
+        return await db.transaction(async (tx) => {
             const jobKey = this.hashTo64BitInt(jobId);
 
-            const lock = await client.query(
-                `SELECT pg_try_advisory_xact_lock($1) as locked`,
-                [ jobKey ]
+            // Acquire advisory lock and fetch job in one query
+            const lockResult = await tx.execute(
+                sql`SELECT pg_try_advisory_xact_lock(${jobKey}) as locked`
             );
 
-            if (!lock.rows[ 0 ].locked) return null;
+            if (!lockResult.rows[ 0 ]?.locked) return null;
 
-            const tx = drizzle(client, { schema });
+            // Fetch job and check concurrent jobs in parallel
             const limit = parseInt(process.env.MAX_CONCURRENT_JOBS_PER_WORKFLOW || "10", 10);
 
-            const [ { count } ] = await tx
-                .select({ count: sql<number>`count(*)` })
-                .from(jobs)
-                .where(and(eq(jobs.projectId, projectId), eq(jobs.state, "RUNNING")));
+            const [ jobResult, countResult ] = await Promise.all([
+                tx
+                    .select({ projectId: jobs.projectId })
+                    .from(jobs)
+                    .where(eq(jobs.id, jobId))
+                    .limit(1),
+                tx
+                    .select({ count: sql<number>`count(*)` })
+                    .from(jobs)
+                    .where(and(
+                        eq(jobs.projectId, sql`(SELECT project_id FROM jobs WHERE id = ${jobId})`),
+                        eq(jobs.state, "RUNNING")
+                    ))
+            ]);
 
+            if (jobResult.length === 0) return null;
+
+            const [ { count } ] = countResult;
             if (count >= limit) return null;
 
-            // Capture the claim time
+            // Claim the job
             const claimTime = new Date();
 
             const [ claimedJob ] = await tx
@@ -184,7 +188,6 @@ export class JobControlPlane {
 
             const revivedJob = this.reviveDates(claimedJob);
 
-            // Return as a tuple: [JobRecord, ISO String]
             return [ revivedJob, claimTime.toISOString() ];
         });
     }
@@ -210,7 +213,7 @@ export class JobControlPlane {
                 jobId: result.id,
                 projectId: result.projectId,
             });
-            console.log({ functionName: this.requeueJob.name, auditLog: auditLog.trim(), job: result }, `New Attempt`);
+            console.log({ functionName: this.requeueJob.name, auditLog: auditLog.trim(), job: result }, `Requeued with new attempt`);
         } else {
             console.warn({ functionName: this.requeueJob.name, auditLog: auditLog.trim(), job: result }, `Race condition avoided: Job already updated by worker.`);
         }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateTrend, predictRemainingAttempts } from '../../shared/utils/regression';
+import { calculateTrend, predictRemainingAttempts } from '../../shared/utils/regression.js';
 
 describe('Regression Utility', () => {
     describe('calculateTrend', () => {

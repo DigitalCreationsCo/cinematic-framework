@@ -1,14 +1,14 @@
-import { WorkerService } from '../worker-service';
-import { CompositionalAgent } from '../../workflow/agents/compositional-agent';
-import { GCPStorageManager } from '../../workflow/storage-manager';
+import { WorkerService } from '../worker-service.js';
+import { CompositionalAgent } from '../../shared/agents/compositional-agent.js';
+import { GCPStorageManager } from '../../shared/services/storage-manager.js';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock dependencies with explicit factories
-vi.mock('../pipeline/services/job-control-plane');
+vi.mock('../shared/services/job-control-plane.js');
 
 // Mock StorageManager factory
 const mockUploadJSON = vi.fn();
-vi.mock('../../workflow/storage-manager', () => {
+vi.mock('../../shared/services/storage-manager.js', () => {
     return {
         GCPStorageManager: vi.fn().mockImplementation(() => ({
             uploadJSON: mockUploadJSON
@@ -16,11 +16,11 @@ vi.mock('../../workflow/storage-manager', () => {
     };
 });
 
-vi.mock('../workflow/agents/audio-processing-agent');
+vi.mock('../../shared/agents/audio-processing-agent.js');
 
 // Mock CompositionalAgent factory with default spies we can access or override if needed
 const mockExpandCreativePrompt = vi.fn();
-vi.mock('../../workflow/agents/compositional-agent', () => {
+vi.mock('../../shared/agents/compositional-agent.js', () => {
     return {
         CompositionalAgent: vi.fn().mockImplementation(() => ({
             expandCreativePrompt: mockExpandCreativePrompt,
@@ -30,11 +30,11 @@ vi.mock('../../workflow/agents/compositional-agent', () => {
     };
 });
 
-vi.mock('../workflow/agents/quality-check-agent');
-vi.mock('../workflow/agents/semantic-expert-agent');
-vi.mock('../workflow/agents/frame-composition-agent');
-vi.mock('../workflow/agents/scene-generator');
-vi.mock('../workflow/agents/continuity-manager');
+vi.mock('../../shared/agents/quality-check-agent.js');
+vi.mock('../../shared/agents/semantic-expert-agent.js');
+vi.mock('../../shared/agents/frame-composition-agent.js');
+vi.mock('../../shared/agents/scene-generator.js');
+vi.mock('../../shared/agents/continuity-manager.js');
 
 describe('WorkerService', () => {
     let workerService: WorkerService;
@@ -64,6 +64,7 @@ describe('WorkerService', () => {
             workerId,
             bucketName,
             mockJobControlPlane,
+            { lock: vi.fn(), unlock: vi.fn() } as any,
             mockPublishJobEvent,
             vi.fn()
         );

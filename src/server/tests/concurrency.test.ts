@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LogContext, initLogger, logContextStore } from '../../shared/logger';
+import { LogContext, initLogger, logContextStore } from '../../shared/logger/index.js';
 
 describe('Concurrency & Context Integrity', () => {
     const mockPublish = vi.fn();

@@ -1,19 +1,19 @@
 import { db } from "../../shared/db/index.js";
 import { projects, scenes } from "../../shared/db/schema.js";
-import { eq, asc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { predictRemainingAttempts, calculateTrend } from "../../shared/utils/regression.js";
-import { WorkflowMetrics } from "../../shared/types/pipeline.types.js";
+import { WorkflowMetrics } from "../../shared/types/index.js";
 
 export async function aggregateProjectPerformance(projectId: string) {
   const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId)
+    where: { id: projectId }
   });
 
   if (!project) return;
 
   const projectScenes = await db.query.scenes.findMany({
-    where: eq(scenes.projectId, projectId),
-    orderBy: [asc(scenes.sceneIndex)]
+    where: { projectId },
+    orderBy: { sceneIndex: "asc" }
   });
 
   const attemptHistory: number[] = [];

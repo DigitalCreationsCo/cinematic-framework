@@ -3,7 +3,7 @@ import { Play, Pause, RotateCcw, Moon, Sun, Square } from "lucide-react";
 import StatusBadge from "./StatusBadge.js";
 import ConnectionStatus from "./ConnectionStatus.js";
 import { useStore } from "#/lib/store.js";
-import { Scene } from "../../../shared/types/workflow.types.js";
+import { Scene } from "../../../shared/types/index.js";
 import { useCallback } from "react";
 
 interface PipelineHeaderProps {

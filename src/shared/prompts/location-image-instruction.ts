@@ -1,4 +1,4 @@
-import { Location } from "../types/workflow.types.js";
+import { Location } from "../types/index.js";
 import { composeGenerationRules } from "./prompt-composer.js";
 import { buildProductionDesignerPrompt } from "./role-production-designer.js";
 

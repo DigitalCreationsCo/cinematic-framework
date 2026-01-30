@@ -46,7 +46,7 @@ This week's updates focus on **infrastructure resilience** and **developer produ
 **Revolutionary Developer Experience**: Complete overhaul of the development workflow to support concurrent debugging of multiple services without conflicts.
 
 **Key Features**:
-- **Dynamic Port Allocation**: Updated `dev-runner.js` to accept `--port` argument for Node inspector (defaults to 9229)
+- **Dynamic Port Allocation**: Updated `dev-runner.ts` to accept `--port` argument for Node inspector (defaults to 9229)
 - **Dedicated Service Configurations**: Each service (Server, Worker, Pipeline) has its own VS Code debug configuration using integrated terminal
 - **"Launch All Services" Compound Task**: Orchestrate the full stack with a single command
 - **Environment Standardization**: Unified `NODE_ENV=development` and source map resolution across all debug targets
@@ -71,7 +71,7 @@ This week's updates focus on **infrastructure resilience** and **developer produ
 **Commit**: `42f3038f` - *refactor: modernize dev-runner and resolve TS rootDir boundary errors*
 
 - Adjusted `tsconfig.json` `rootDir` to project root to allow `vite.config.ts` imports within server-side logic
-- Updated `dev-runner.js` to use `--import tsx` and `-r dotenv/config` for reliable environment variable inheritance in child processes
+- Updated `dev-runner.ts` to use `--import tsx` and `-r dotenv/config` for reliable environment variable inheritance in child processes
 - Synced `vite.config.ts` aliases with `tsconfig` paths for unified resolution
 - Streamlined build strategy with `--experimental-transform-types` and automated debug inspector attachment on port 9229
 

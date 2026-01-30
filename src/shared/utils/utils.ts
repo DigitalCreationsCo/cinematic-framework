@@ -1,4 +1,4 @@
-import { Character, Location, WorkflowMetrics, Trend, RegressionState, VALID_DURATIONS, Storyboard, Project, WorkflowState, AssetRegistry, AssetKey, AssetType, AssetHistory, AssetVersion, VersionMetric, StoryboardAttributes, CharacterAttributes, LocationAttributes, ValidDurations } from "../types/workflow.types.js";
+import { Character, Location, WorkflowMetrics, Trend, RegressionState, VALID_DURATIONS, WorkflowState, AssetRegistry, AssetKey, AssetType, AssetHistory, AssetVersion, VersionMetric, StoryboardAttributes, CharacterAttributes, LocationAttributes, ValidDurations } from "../types/index.js";
 import { z } from "zod";
 
 /**
@@ -65,127 +65,6 @@ export const formatTime = (seconds: number) => {
   const secs = Math.floor(seconds % 60);
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
-
-export function roundToValidDuration(duration: number): ValidDurations {
-  if (typeof duration !== 'number' || isNaN(duration)) {
-    throw new Error("Invalid input: duration must be a valid number.");
-  }
-
-  const validDurations = VALID_DURATIONS;
-  let closest: ValidDurations = validDurations[ 0 ];
-  let minDiff = Math.abs(duration - validDurations[ 0 ]);
-
-  for (let i = 1; i < validDurations.length; i++) {
-    const diff = Math.abs(duration - validDurations[ i ]);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closest = validDurations[ i ];
-    }
-  }
-  return closest;
-}
-
-/**
- * Format character specifications for prompt
- * TODO MAKE MORE DESCRIPTIVE
- */
-export function formatCharacterSpecs<C extends Character | CharacterAttributes>(characters: C[]): string {
-  return characters
-    .map(char => {
-      const assets = ('assets' in char) && char.assets;
-      const reference = assets
-        ? char.assets[ 'character_image' ]?.versions[ char.assets[ 'character_image' ]?.best ].data
-        : "None";
-      return `Name:${char.name} Reference ID:${char.referenceId}:
-  - Hair: ${char.physicalTraits.hair}
-  - Clothing: ${char.physicalTraits.clothing}
-  - Accessories: ${char.physicalTraits.accessories.join(", ")}
-  - Reference: ${reference}`;
-    })
-    .join("\n\n");
-}
-
-/**
- * Format location specifications for prompt
- * TODO MAKE MORE DESCRIPTIVE
- */
-export function formatLocationSpecs<L extends Location | LocationAttributes>(locations: L[]): string {
-  return locations
-    .map(location => {
-      const assets = ('assets' in location) && location.assets;
-      const description = assets ? assets[ 'location_description' ]?.versions[ assets[ 'location_description' ]?.best ].data : location.type;
-      const reference = assets ? assets[ 'location_image' ]?.versions[ assets[ 'location_image' ]?.best ].data : "None";
-      return `Name:${location.name} Reference ID:${location.referenceId}:
-  - Description: ${description}
-  - Lighting: ${JSON.stringify(location.lightingConditions)}
-  - Time of Day: ${location.timeOfDay}
-  - Reference: ${reference}`;
-    })
-    .join("\n\n");
-}
-
-/**
- * Calculates learning trends using incremental linear regression.
- * Updates the metrics state with the new attempt data.
- * 
- * @param currentMetrics - The current state of workflow metrics.
- * @param newAttempt - The new attempt metric to add.
- * @returns The updated workflow metrics with new regression state and trends.
- */
-export function calculateLearningTrends(
-  currentMetrics: WorkflowMetrics,
-  assetKey: AssetKey,
-  newAttempt: VersionMetric
-): WorkflowMetrics {
-  // Clone to avoid mutation of the input if it's from state
-  const metrics = { ...currentMetrics };
-
-  // Initialize defaults if missing (though types say they should be there)
-  const regression = metrics.regression || { count: 0, sumX: 0, sumY_a: 0, sumY_q: 0, sumXY_a: 0, sumXY_q: 0, sumX2: 0 };
-  const trendHistory = metrics.trendHistory ? [ ...metrics.trendHistory ] : [];
-  const versionMetrics = metrics.versionMetrics || {};
-
-  versionMetrics[ assetKey ] = versionMetrics[ assetKey ] || [];
-  versionMetrics[ assetKey ].push(newAttempt);
-
-  // Update regression stats
-  const n = regression.count + 1;
-  const x = n; // Time step is just the index 1..N
-  const y_q = newAttempt.finalScore;
-
-  const newRegression: RegressionState = {
-    count: n,
-    sumX: regression.sumX + x,
-    sumY_a: 0, // We are not tracking attempts vs attempts anymore, but quality over time
-    sumY_q: regression.sumY_q + y_q,
-    sumXY_a: 0,
-    sumXY_q: regression.sumXY_q + x * y_q,
-    sumX2: regression.sumX2 + x * x,
-  };
-
-  let qualityTrendSlope = 0;
-
-  if (n >= 2) {
-    const slope_q = (n * newRegression.sumXY_q - newRegression.sumX * newRegression.sumY_q) / (n * newRegression.sumX2 - newRegression.sumX * newRegression.sumX);
-    qualityTrendSlope = isNaN(slope_q) ? 0 : slope_q;
-  }
-
-  const newTrend: Trend = {
-    averageAttempts: 0, // Not relevant for single attempt stream
-    attemptTrendSlope: 0,
-    qualityTrendSlope,
-  };
-
-  trendHistory.push(newTrend);
-
-  return {
-    ...metrics,
-    versionMetrics,
-    trendHistory,
-    regression: newRegression,
-    globalTrend: newTrend,
-  };
-}
 
 
 /**
@@ -268,28 +147,4 @@ export function mergeParamsIntoState(
   return updates;
 }
 
-/**
- * Returns the best version from local assets.
- * Does not modify the DB.
- */
-const bestAssetsCache = new WeakMap();
-
-export function getAllBestFromAssets(assets: AssetRegistry | undefined | null, assetKey?: AssetKey): Partial<Record<AssetKey, AssetVersion>> {
-  if (!assets) return {} as Partial<Record<AssetKey, AssetVersion>>;
-
-  if (bestAssetsCache.has(assets)) {
-    return bestAssetsCache.get(assets)!;
-  }
-
-  const allAssetsBest: any = {};
-  Object.entries(assets).forEach(([ k, h ]) => {
-    if (h && h.versions && h.versions[ h.best ]) {
-      allAssetsBest[ k ] = h.versions[ h.best ];
-    }
-  });
-
-  const result = allAssetsBest as Partial<Record<AssetKey, AssetVersion>>;
-  bestAssetsCache.set(assets, result);
-  return result;
-};
-
+export { roundToValidDuration } from "../types/base.types.js";

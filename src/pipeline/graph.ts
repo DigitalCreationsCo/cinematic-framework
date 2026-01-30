@@ -8,7 +8,7 @@ import {
   ProjectMetadata,
   Storyboard,
   WorkflowState,
-} from "../shared/types/workflow.types.js";
+} from "../shared/types/index.js";
 import { PipelineEvent } from "../shared/types/pipeline.types.js";
 import { GCPStorageManager } from "../shared/services/storage-manager.js";
 import { imageModelName, qualityCheckModelName, textModelName, videoModelName } from "../shared/llm/google/models.js";

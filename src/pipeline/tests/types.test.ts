@@ -5,7 +5,7 @@ import {
   isInstrumentalScene,
   requiresTransition,
   Scene
-} from '../../shared/types/workflow.types';
+} from '../../shared/types/index.js';
 
 describe('Type Guards', () => {
   describe('isValidDuration', () => {

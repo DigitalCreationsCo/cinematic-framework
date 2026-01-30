@@ -1,4 +1,4 @@
-import { Paths } from '@/lib/pageroutes'
+import { Paths } from '#w/lib/pageroutes.js'
 
 export const Documents: Paths[] = [
   {

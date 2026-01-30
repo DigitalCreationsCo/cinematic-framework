@@ -1,5 +1,5 @@
 import { cn } from "#/lib/utils.js";
-import type { QualityScore } from "../../../shared/types/workflow.types.js";
+import type { QualityScore } from "../../../shared/types/index.js";
 import StatusBadge from "./StatusBadge.js";
 
 interface QualityScoreBarProps {

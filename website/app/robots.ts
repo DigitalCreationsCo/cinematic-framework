@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next'
 
-import { Settings } from '@/types/settings'
+import { Settings } from '#w/types/settings.js'
 
 export default function robots(): MetadataRoute.Robots {
   return {

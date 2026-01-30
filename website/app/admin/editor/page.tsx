@@ -2,13 +2,13 @@
 
 import { useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button } from '#w/components/ui/button.js';
+import { Input } from '#w/components/ui/input.js';
 import { useRouter } from 'next/navigation';
 import type { MDXEditorMethods } from '@mdxeditor/editor';
 
 // Dynamically import valid for Client Components too if intended to avoid SSR of that part
-const Editor = dynamic(() => import('@/components/mdx-editor'), {
+const Editor = dynamic(() => import('#w/components/mdx-editor.js'), {
   ssr: false,
   loading: () => <p>Loading editor...</p>
 });

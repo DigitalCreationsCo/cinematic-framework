@@ -1,4 +1,4 @@
-import { Sidebar } from '@/components/sidebar'
+import { Sidebar } from '#w/components/sidebar/index.js'
 
 export default function Documents({
   children,

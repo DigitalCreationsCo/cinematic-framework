@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { retryLlmCall } from './llm-retry';
+import { retryLlmCall } from '../../shared/utils/llm-retry.js';
 import { interrupt } from '@langchain/langgraph';
 
 // Mock GraphInterrupt
@@ -10,6 +10,8 @@ vi.mock('@langchain/langgraph', () => {
     };
 });
 
+const retryConfig = { attempt: 1, maxRetries: 3, projectId: '1' };
+
 describe('retryLlmCall', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -17,7 +19,7 @@ describe('retryLlmCall', () => {
 
     it('should return the result on the first successful call', async () => {
         const llmCall = vi.fn().mockResolvedValue('success');
-        const result = await retryLlmCall(llmCall, 'test-params');
+        const result = await retryLlmCall(llmCall, 'test-params', retryConfig);
         expect(result).toBe('success');
         expect(llmCall).toHaveBeenCalledTimes(1);
         expect(interrupt).not.toHaveBeenCalled();
@@ -30,7 +32,7 @@ describe('retryLlmCall', () => {
         // If interrupt returns null/undefined, the code throws "LLM call failed and resolution was not provided."
         (interrupt as any).mockReturnValue(undefined);
 
-        await expect(retryLlmCall(llmCall, 'test-params')).rejects.toThrow('LLM call failed and resolution was not provided.');
+        await expect(retryLlmCall(llmCall, 'test-params', retryConfig)).rejects.toThrow('LLM call failed and resolution was not provided.');
         expect(llmCall).toHaveBeenCalledTimes(1);
         expect(interrupt).toHaveBeenCalled();
     });
@@ -43,7 +45,7 @@ describe('retryLlmCall', () => {
         // First call fails, triggers interrupt. We mock interrupt to return 'retry'.
         (interrupt as any).mockReturnValueOnce({ action: 'retry' });
 
-        const result = await retryLlmCall(llmCall, 'test-params');
+        const result = await retryLlmCall(llmCall, 'test-params', retryConfig);
         expect(result).toBe('success');
         expect(llmCall).toHaveBeenCalledTimes(2);
         expect(interrupt).toHaveBeenCalledTimes(1);
@@ -56,7 +58,7 @@ describe('retryLlmCall', () => {
 
         (interrupt as any).mockReturnValueOnce({ action: 'retry', revisedParams: 'new-params' });
 
-        const result = await retryLlmCall(llmCall, 'test-params');
+        const result = await retryLlmCall(llmCall, 'test-params', retryConfig);
         expect(result).toBe('success');
         expect(llmCall).toHaveBeenCalledTimes(2);
         expect(llmCall).toHaveBeenLastCalledWith('new-params');
@@ -66,6 +68,6 @@ describe('retryLlmCall', () => {
         const llmCall = vi.fn().mockRejectedValue(new Error('failure'));
         (interrupt as any).mockReturnValue({ action: 'cancel' });
 
-        await expect(retryLlmCall(llmCall, 'test-params')).rejects.toThrow('User cancelled operation.');
+        await expect(retryLlmCall(llmCall, 'test-params', retryConfig)).rejects.toThrow('User cancelled operation.');
     });
 });

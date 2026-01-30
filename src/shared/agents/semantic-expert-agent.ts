@@ -1,5 +1,5 @@
 import { TextModelController } from "../llm/text-model-controller.js";
-import { Storyboard } from "../types/workflow.types.js";
+import { Storyboard } from "../types/index.js";
 import { getJSONSchema } from '../utils/utils.js';
 import { buildSemanticRulesPrompt } from "../prompts/semantic-rules-instruction.js";
 import { buildllmParams } from "../llm/google/google-llm-params.js";

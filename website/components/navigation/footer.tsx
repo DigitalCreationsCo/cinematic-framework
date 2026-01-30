@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 
-import { Settings } from '@/types/settings'
+import { Settings } from '#w/types/settings.js'
 
 export function Footer() {
   return (

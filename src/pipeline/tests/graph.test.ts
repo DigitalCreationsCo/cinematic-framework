@@ -1,9 +1,9 @@
-import { CinematicVideoWorkflow } from '../../workflow/graph';
-import { JobControlPlane } from '../services/job-control-plane';
-import { GCPStorageManager } from '../../workflow/storage-manager';
+import { CinematicVideoWorkflow } from '../graph.js';
+import { JobControlPlane } from '../../shared/services/job-control-plane.js';
+import { GCPStorageManager } from '../../shared/services/storage-manager.js';
 import { NodeInterrupt } from "@langchain/langgraph";
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Dispatcher } from '../dispatcher';
+import { Dispatcher } from '../dispatcher.js';
 
 // Mock dependencies
 vi.mock('../../pipeline/services/job-control-plane');

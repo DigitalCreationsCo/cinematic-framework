@@ -1,6 +1,6 @@
 export const promptVersion = "3.0.0-gaffer";
 
-import { Scene, Location, Lighting } from "../types/workflow.types.js";
+import { Scene, Location, Lighting } from "../types/index.js";
 import { getJSONSchema } from '../../shared/utils/utils.js';
 
 export const buildGafferPrompt = (scene: Scene, location: Location, timeOfDay: string) => `

@@ -1,6 +1,6 @@
-import { Link } from 'lib/transition'
+import { Link } from '#w/lib/transition/index.js'
 
-interface Routed {
+export interface Routed {
   href?: string
   children: React.ReactNode
 }

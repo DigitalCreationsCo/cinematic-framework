@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCinematicPrompt } from '../services/prompt-engine';
+import { buildCinematicPrompt } from '../prompt-engine.js';
 
 describe('Prompt Engine', () => {
     it('should build a prompt with all components', () => {

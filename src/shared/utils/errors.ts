@@ -1,6 +1,6 @@
 import { ApiError as GenAIApiError } from "@google/genai";
 import { NodeInterrupt } from "@langchain/langgraph";
-import { LlmRetryInterruptValue } from "../types/workflow.types.js";
+import { LlmRetryInterruptValue } from "../types/index.js";
 
 export class RAIError extends Error {
     constructor(message: string) {

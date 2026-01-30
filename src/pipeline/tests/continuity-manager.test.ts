@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ContinuityManagerAgent } from '../agents/continuity-manager';
-import { GCPStorageManager } from '../../workflow/storage-manager';
-import { FrameCompositionAgent } from '../agents/frame-composition-agent';
-import { QualityCheckAgent } from '../agents/quality-check-agent';
-import { TextModelController } from '../llm/text-model-controller';
-import { Scene, Project } from '../../shared/types/workflow.types';
-import { AssetVersionManager } from '../../shared/asset-version-manager';
+import { ContinuityManagerAgent } from '../../shared/agents/continuity-manager.js';
+import { GCPStorageManager } from '../../shared/services/storage-manager.js';
+import { FrameCompositionAgent } from '../../shared/agents/frame-composition-agent.js';
+import { QualityCheckAgent } from '../../shared/agents/quality-check-agent.js';
+import { TextModelController } from '../../shared/llm/text-model-controller.js';
+import { Scene, Project } from '../../shared/../shared/types/index.js';
+import { AssetVersionManager } from '../../shared/services/asset-version-manager.js';
 
 // Mock dependencies
 const mockGenerateContent = vi.fn();
@@ -42,7 +42,7 @@ describe('ContinuityManagerAgent', () => {
         imageModel = new TextModelController();
         storageManager = new GCPStorageManager('project-id', 'video-id', 'bucket-name');
         qualityAgent = new QualityCheckAgent(llm, storageManager);
-        frameComposer = new FrameCompositionAgent(llm, imageModel, qualityAgent, storageManager);
+        frameComposer = new FrameCompositionAgent(llm, imageModel, qualityAgent, storageManager, undefined as any);
 
         // Mock specific methods
         vi.spyOn(storageManager, 'getObjectPath').mockImplementation((params) => {
@@ -51,9 +51,10 @@ describe('ContinuityManagerAgent', () => {
             return 'path';
         });
         vi.spyOn(storageManager, 'getGcsUrl').mockImplementation((path) => `gs://bucket/${path}`);
-        vi.spyOn(frameComposer, 'generateImage').mockResolvedValue({ storageUri: 'gs://bucket/generated_frame.png', publicUri: 'public_uri.png', model: 'test-model' });
+        vi.spyOn(frameComposer, 'generateImage').mockResolvedValue({ data: { scene: {} as any, image: 'gs://bucket/generated_frame.png', }, metadata: { attempts: 1, acceptedAttempt: 1, model: 'test-model' } });
         vi.spyOn(qualityAgent, 'evaluateFrameQuality').mockResolvedValue({
-            overall: 'ACCEPT',
+            grade: 'ACCEPT',
+            score: 90,
             scores: {
                 narrativeFidelity: { rating: 'PASS', weight: 1, details: 'Good' },
                 characterConsistency: { rating: 'PASS', weight: 1, details: 'Good' },

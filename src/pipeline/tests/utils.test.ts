@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cleanJsonOutput, formatTime, roundToValidDuration } from '../../shared/utils/utils';
+import { cleanJsonOutput, formatTime, roundToValidDuration } from '../../shared/utils/utils.js';
 
 describe('Utility Functions', () => {
   describe('cleanJsonOutput', () => {

@@ -1,12 +1,12 @@
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { LuChevronDown, LuChevronRight } from 'react-icons/lu'
-import Anchor from '@/components/anchor'
-import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { SheetClose } from '@/components/ui/sheet'
-import { Paths } from '@/lib/pageroutes'
-import { cn } from '@/lib/utils'
+import Anchor from '#w/components/anchor.js';
+import { Button } from '#w/components/ui/button.js';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '#w/components/ui/collapsible.js';
+import { SheetClose } from '#w/components/ui/sheet.js';
+import { Paths } from '#w/lib/pageroutes.js';
+import { cn } from '#w/lib/utils.js'
 
 function isRoute(item: Paths): item is Extract<Paths, { title: string; href: string }> {
   return 'title' in item && 'href' in item

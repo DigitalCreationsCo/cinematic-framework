@@ -3,6 +3,9 @@
   "version": "1.0.1",
   "private": false,
   "type": "module",
+  "imports": {
+    "#w/*": "./website/*"
+  },
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",

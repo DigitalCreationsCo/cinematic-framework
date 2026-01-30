@@ -107,13 +107,13 @@ app.use((req, res, next) => {
       },
     );
 
-    if (import.meta.hot) {
-      import.meta.hot.on("vite:beforeFullReload", () => {
+    if ((import.meta as any).hot) {
+      (import.meta as any).hot.on("vite:beforeFullReload", () => {
         console.log("Reload");
         httpServer.close();
       });
 
-      import.meta.hot.dispose(() => {
+      (import.meta as any).hot.dispose(() => {
         console.log("Closing...");
         httpServer.close();
       });

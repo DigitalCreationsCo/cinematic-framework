@@ -1,5 +1,5 @@
 import { RunnableConfig } from "@langchain/core/runnables";
-import { LlmRetryInterruptValue, WorkflowState } from "../../shared/types/workflow.types.js";
+import { LlmRetryInterruptValue, WorkflowState } from "../../shared/types/index.js";
 import { PipelineEvent } from "../../shared/types/pipeline.types.js";
 import { extractInterruptValue } from "../../shared/utils/errors.js";
 

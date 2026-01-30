@@ -1,4 +1,4 @@
-import { Character } from "../types/workflow.types.js";
+import { Character } from "../types/index.js";
 import { composeGenerationRules } from "./prompt-composer.js";
 import { buildCostumeAndMakeupPrompt } from "./role-costume-makeup.js";
 

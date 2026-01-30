@@ -1,7 +1,7 @@
-import { Link } from 'lib/transition'
+import { Link } from '#w/lib/transition/index.js'
 import { LuChevronLeft, LuChevronRight } from 'react-icons/lu'
 
-import { getPreviousNext } from '@/lib/markdown'
+import { getPreviousNext } from '#w/lib/markdown.js'
 
 export function Pagination({ pathname }: { pathname: string }) {
   const res = getPreviousNext(pathname)

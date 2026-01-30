@@ -1,6 +1,6 @@
 export const promptVersion = "3.0.0-director";
 
-import { AudioAnalysisAttributes, SceneAttributes, VALID_DURATIONS } from "../types/workflow.types.js";
+import { AudioAnalysisAttributes, SceneAttributes, VALID_DURATIONS } from "../types/index.js";
 import { buildSafetyGuidelinesPrompt } from "./safety-instructions.js";
 
 /**

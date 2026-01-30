@@ -256,25 +256,6 @@ export class PoolManager extends EventEmitter {
         }
     }
 
-    /**
-     * Execute transaction with automatic rollback on error
-     */
-    async transaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
-
-        const client = await this.getConnection();
-        try {
-            await client.query('BEGIN');
-            const result = await callback(client);
-            await client.query('COMMIT');
-            return result;
-        } catch (error) {
-            await client.query('ROLLBACK');
-            throw error;
-        } finally {
-            client.release();
-        }
-    }
-
     private trackConnection(client: PoolClient) {
         const stack = new Error().stack || '';
         this.activeConnections.set(client, {

@@ -2,16 +2,19 @@
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
         "rootDir": ".",
-        "noEmit": true,
-        "jsx": "preserve",
+        "outDir": "../../dist/client",
         "paths": {
-            "*": [
+            "./*": [
                 "./*"
             ],
             "#/*": [
                 "./src/*"
             ]
-        }
+        },
+        "types": [
+            "node",
+            "vite/client"
+        ]
     },
     "include": [
         "**/*"
@@ -20,5 +23,5 @@
         {
             "path": "../shared"
         }
-    ]
+    ],
 }

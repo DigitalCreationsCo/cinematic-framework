@@ -1,6 +1,6 @@
 export const promptVersion = "3.0.0-costume-makeup";
 
-import { Character } from "../types/workflow.types.js";
+import { Character } from "../types/index.js";
 import { buildSafetyGuidelinesPrompt } from "./safety-instructions.js";
 
 /**

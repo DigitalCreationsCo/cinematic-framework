@@ -4,12 +4,11 @@ import { Badge } from "#/components/ui/badge.js";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip.js";
 import { Play, Camera, Sun, Music, Clock, ChevronRight, RefreshCw } from "lucide-react";
 import { cn } from "#/lib/utils.js";
-import type { Scene, StatusType } from "../../../shared/types/pipeline.types.js";
+import type { Scene, StatusType } from "../../../shared/types/index.js";
 import StatusBadge from "./StatusBadge.js";
 import { Skeleton } from "#/components/ui/skeleton.js";
 import { memo } from "react";
-import { useStore } from "#/lib/store.js";
-import { getAllBestFromAssets } from "../../../shared/utils/utils.js";
+import { getAllBestFromAssets } from "../../../shared/utils/assets-utils.js";
 
 interface SceneCardProps {
   scene: Scene;

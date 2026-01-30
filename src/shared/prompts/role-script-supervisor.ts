@@ -1,6 +1,6 @@
 export const promptVersion = "3.0.0-script-supervisor";
 
-import { Scene, Character, Location } from "../types/workflow.types.js";
+import { Scene, Character, Location } from "../types/index.js";
 
 /**
  * SCRIPT SUPERVISOR - Continuity Tracking
@@ -12,8 +12,8 @@ export const buildScriptSupervisorContinuityChecklist = (
       characters: Character[],
       locations: Location[],
 ) => {
-      const location = locations.find((l) => l.id === scene.location);
-      const previousLocation = previousScene?.location ? locations.find((l) => l.id === previousScene.location) : undefined;
+      const location = locations.find((l) => l.id === scene.locationId);
+      const previousLocation = previousScene?.locationId ? locations.find((l) => l.id === previousScene.locationId) : undefined;
 
       return `
 CONTINUITY CHECKLIST for Scene ${scene.id}:
@@ -24,8 +24,8 @@ PREVIOUS SCENE ${previousScene.id}:
 End Frame: ${previousScene.assets[ 'scene_end_frame' ]?.versions[ previousScene.assets[ 'scene_end_frame' ]?.best ].data || "N/A"}
 Description: ${previousScene.description}
 Lighting: ${JSON.stringify(previousScene.lighting)}
-Characters: ${previousScene.characters.join(", ")}
-Location: ${previousScene.location}
+Characters: ${previousScene.characterIds.join(", ")}
+Location: ${previousScene.locationId}
 ` : `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FIRST SCENE - ESTABLISH BASELINES
@@ -36,8 +36,8 @@ No previous scene. Set initial states for all characters and location.
 CURRENT SCENE ${scene.id} REQUIREMENTS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Description: ${scene.description}
-Characters: ${scene.characters.join(", ")}
-Location: ${scene.location}
+Characters: ${scene.characterIds.join(", ")}
+Location: ${scene.locationId}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CHARACTER CONTINUITY (verify each):

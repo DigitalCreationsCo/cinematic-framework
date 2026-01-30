@@ -1,5 +1,5 @@
 import { PipelineCommand, PipelineEvent } from "../shared/types/pipeline.types.js";
-import { Project, ProjectMetadata, Storyboard, WorkflowState } from "../shared/types/workflow.types.js";
+import { Project, ProjectMetadata, Storyboard, WorkflowState } from "../shared/types/index.js";
 import { CinematicVideoWorkflow } from "./graph.js";
 import { CheckpointerManager } from "./checkpointer-manager.js";
 import { RunnableConfig } from "@langchain/core/runnables";
@@ -9,7 +9,8 @@ import { GCPStorageManager } from "../shared/services/storage-manager.js";
 import { JobControlPlane } from "../shared/services/job-control-plane.js";
 import { v7 as uuidv7 } from 'uuid';
 import { ProjectRepository } from "../shared/services/project-repository.js";
-import { mergeParamsIntoState, getAllBestFromAssets } from "../shared/utils/utils.js";
+import { mergeParamsIntoState } from "../shared/utils/utils.js";
+import { getAllBestFromAssets } from "../shared/utils/assets-utils.js";
 import { imageModelName, qualityCheckModelName, textModelName, videoModelName } from "../shared/llm/google/models.js";
 import { AssetVersionManager } from "../shared/services/asset-version-manager.js";
 import { DistributedLockManager } from "../shared/services/lock-manager.js";
@@ -338,12 +339,12 @@ export class WorkflowOperator {
             return;
         }
 
-        const sceneCharacters = projectCharacters.filter(char => scene.characters.includes(char.id));
-        const sceneLocation = projectLocations.find(loc => loc.id === scene.location);
+        const sceneCharacters = projectCharacters.filter(char => scene.characterIds.includes(char.id));
+        const sceneLocation = projectLocations.find(loc => loc.id === scene.locationId);
         const previousScene = projectScenes.find(s => s.sceneIndex === scene.sceneIndex - 1);
         const previousSceneAssets = previousScene?.assets;
         if (!sceneLocation) {
-            console.error(`[WorkflowOperator.regenerateFrame] Location ${scene.location} not found`);
+            console.error(`[WorkflowOperator.regenerateFrame] Location ${scene.locationId} not found`);
             return;
         }
 

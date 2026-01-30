@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PipelineCommandHandler } from '../services/command-handler';
-import { db } from '../../shared/db';
+import { PipelineCommandHandler } from '../command-handler.js';
+import { db } from '../../shared/db/index.js';
 
 vi.mock('../../shared/db', () => ({
     db: {

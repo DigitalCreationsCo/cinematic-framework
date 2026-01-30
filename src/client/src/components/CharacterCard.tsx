@@ -2,10 +2,10 @@ import { Card, CardContent } from "#/components/ui/card.js";
 import { Users, User as UserIcon } from "lucide-react";
 import { Badge } from "#/components/ui/badge.js";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip.js";
-import type { Character } from "../../../shared/types/workflow.types.js";
+import type { Character } from "../../../shared/types/index.js";
 import { Skeleton } from "#/components/ui/skeleton.js";
 import { memo } from "react";
-import { getAllBestFromAssets } from "../../../shared/utils/utils.js";
+import { getAllBestFromAssets } from "../../../shared/utils/assets-utils.js";
 
 interface CharacterCardProps {
   character: Character;

@@ -1,9 +1,9 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import SubLink from '@/components/sidebar/sublink'
-import { Separator } from '@/components/ui/separator'
-import { Routes } from '@/lib/pageroutes'
+import SubLink from '#w/components/sidebar/sublink.js';
+import { Separator } from '#w/components/ui/separator.js';
+import { Routes } from '#w/lib/pageroutes.js'
 
 export function PageMenu({ isSheet = false }) {
   const pathname = usePathname()

@@ -1,7 +1,7 @@
 export const promptVersion = "3.0.0-production-designer";
 
-import { Location } from "../types/workflow.types.js";
-import { getAllBestFromAssets } from "../../shared/utils/utils.js";
+import { Location } from "../types/index.js";
+import { getAllBestFromAssets } from "../../shared/utils/assets-utils.js";
 
 /**
  * PRODUCTION DESIGNER - Location & Environment Specification

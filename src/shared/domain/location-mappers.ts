@@ -1,16 +1,13 @@
 import {
     LocationAttributes,
-    Location
-} from "../types/workflow.types.js";
-import {
+    Location,
     InsertLocation,
-    LocationEntity
-} from "../db/zod-db.js";
+} from "../types/index.js";
 import { z } from "zod";
 
 
 
-export function mapDbLocationToDomain(entity: LocationEntity): Location {
+export function mapDbLocationToDomain(entity: Location): Location {
     return Location.parse(entity);
 }
 

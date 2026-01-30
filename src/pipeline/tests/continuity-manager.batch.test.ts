@@ -1,11 +1,10 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ContinuityManagerAgent } from '../agents/continuity-manager';
-import { GCPStorageManager } from '../../workflow/storage-manager';
-import { FrameCompositionAgent } from '../agents/frame-composition-agent';
-import { Scene, Project } from '../../shared/types/workflow.types';
-import { TextModelController } from '../llm/text-model-controller';
-import { QualityCheckAgent } from '../agents/quality-check-agent';
+import { ContinuityManagerAgent } from '../../shared/agents/continuity-manager.js';
+import { GCPStorageManager } from '../../shared/services/storage-manager.js';
+import { FrameCompositionAgent } from '../../shared/agents/frame-composition-agent.js';
+import { Scene, Project } from '../../shared/types/index.js';
+import { TextModelController } from '../../shared/llm/text-model-controller.js';
 
 // Mocks
 const mockStorageManager = {

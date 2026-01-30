@@ -1,17 +1,15 @@
 import {
     Character,
+    InsertCharacter,
     SceneAttributes,
-    Scene
-} from "../types/workflow.types.js";
-import {
-    CharacterEntity,
-    InsertCharacter
-} from "../db/zod-db.js";
+    Scene,
+    DbScenesToCharacters,
+} from "../types/index.js";
 import { z } from "zod";
 
 
 
-export function mapDbCharacterToDomain(entity: CharacterEntity): Character {
+export function mapDbCharacterToDomain(entity: Character): Character {
     return Character.parse(entity);
 }
 
@@ -24,13 +22,13 @@ export function mapDomainCharacterToInsertCharacterDb(char: z.input<typeof Inser
  * Ensures the character reference list is flattened into a format 
  * compatible with the scenesToCharacters join table.
  */
-export function extractCharacterJoins(sceneDrafts: Scene[]): { sceneId: string; characterId: string; }[] {
+export function extractCharacterJoins(sceneDrafts: Scene[]): DbScenesToCharacters[] {
     return sceneDrafts.flatMap((draft) => {
-        if (!draft.id || !Array.isArray(draft.characters)) {
+        if (!draft.id || !Array.isArray(draft.characterIds)) {
             return [];
         }
 
-        return draft.characters.map((charId: string) => ({
+        return draft.characterIds.map((charId: string) => ({
             sceneId: draft.id,
             characterId: charId,
         }));

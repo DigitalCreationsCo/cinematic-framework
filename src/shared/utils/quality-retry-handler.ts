@@ -5,7 +5,7 @@
  */
 
 import { GetAttemptMetricCallback } from "../types/pipeline.types.js";
-import { QualityEvaluationResult, QualityConfig, Scene } from "../types/workflow.types.js";
+import { QualityEvaluationResult, QualityConfig, Scene } from "../types/index.js";
 import { RetryLogger, RetryContext } from "./retry-logger.js";
 
 

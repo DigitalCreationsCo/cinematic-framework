@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { aggregateProjectPerformance } from '../workers/metrics-worker';
-import { db } from '../../shared/db';
+import { aggregateProjectPerformance } from '../workers/metrics-worker.js';
+import { db } from '../../shared/db/index.js';
 
 vi.mock('../../shared/db', () => ({
     db: {

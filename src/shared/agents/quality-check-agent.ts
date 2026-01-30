@@ -1,5 +1,5 @@
 
-import { Scene, Character, Location, QualityEvaluationResult, QualityConfig, AssetStatus, QualityEvaluationAttributes } from "../types/workflow.types.js";
+import { Scene, Character, Location, QualityEvaluationResult, QualityConfig, AssetStatus, QualityEvaluationAttributes } from "../types/index.js";
 import { getJSONSchema } from '../utils/utils.js';
 import { GCPStorageManager, GcsObjectPathParams } from "../services/storage-manager.js";
 import { buildFrameEvaluationPrompt, buildSceneVideoEvaluationPrompt } from "../prompts/evaluation-instruction.js";

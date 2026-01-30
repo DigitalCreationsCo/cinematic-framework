@@ -1,29 +1,24 @@
 import {
   pgTable, uuid, text, timestamp, integer,
-  jsonb, real, pgEnum,
+  jsonb, real, 
   index, uniqueIndex,
   primaryKey
 } from "drizzle-orm/pg-core";
-import {
-  ProjectMetadata, AssetRegistry, 
-  CharacterState, LocationState, 
-  createDefaultMetrics,
-  Project,
-  Lighting, PhysicalTraits, WorkflowMetrics,
-  Composition,
-  AudioAnalysisAttributes,
-  TransitionType,
-  ShotType,
-  CameraAngle,
-  CameraMovement,
-} from "../types/workflow.types.js";
 import { v7 as uuidv7 } from "uuid";
-import { relations, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+import { JobState, JobType } from "../types/job.types.js";
+import { ProjectMetadata } from "../types/metadata.types.js";
+import { AssetRegistry } from "../types/assets.types.js";
+import { CharacterState } from "../types/character.types.js";
+import { LocationState } from "../types/location.types.js";
+import { createDefaultMetrics, WorkflowMetrics } from "../types/metrics.types.js";
+import { Lighting, Composition, TransitionType, ShotType, CameraAngle, CameraMovement } from "../types/cinematography.types.js";
+import { PhysicalTraits } from "../types/character.types.js";
+import { AudioAnalysisAttributes } from "../types/audio.types.js";
+import { AssetKey, AssetStatus } from "../types/assets.types.js";
+import { Storyboard } from "../types/workflow.types.js";
 
-// --- ENUMS ---
-export const assetStatusEnum = pgEnum("asset_status", [ "pending", "generating", "evaluating", "complete", "error" ]);
-export const jobStateEnum = pgEnum("job_state", [ "CREATED", "RUNNING", "COMPLETED", "FAILED", "FATAL", "CANCELLED" ]);
-
+// --- TABLES ---
 export const users = pgTable("users", {
   id: uuid("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -32,18 +27,14 @@ export const users = pgTable("users", {
   email: text("email").notNull(),
 });
 
-// --- TABLES ---
-
 export const projects = pgTable("projects", {
   id: uuid("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  // Core Data - uses loose types for insertion flexibility
-  storyboard: jsonb("storyboard").$type<Project["storyboard"]>().notNull(),
+  storyboard: jsonb("storyboard").$type<Storyboard>().notNull(),
   metadata: jsonb("metadata").$type<ProjectMetadata>().notNull(),
   audioAnalysis: jsonb("audio_analysis").$type<AudioAnalysisAttributes>(),
-  // Workflow Control
-  status: assetStatusEnum("status").default("pending").notNull(),
+  status: text("status").$type<AssetStatus>().default("pending").notNull(),
   metrics: jsonb("metrics").$type<WorkflowMetrics>().default(createDefaultMetrics()).notNull(),
   assets: jsonb("assets").$type<AssetRegistry>().default({}).notNull(),
   currentSceneIndex: integer("current_scene_index").default(0).notNull(),
@@ -57,7 +48,7 @@ export const characters = pgTable("characters", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
-  referenceId: text("reference_id").notNull(), // e.g. char_1
+  referenceId: text("reference_id").notNull(), 
   name: text("name").notNull(),
   aliases: text("aliases").array().default([]).notNull(),
   age: text("age").notNull(),
@@ -66,19 +57,6 @@ export const characters = pgTable("characters", {
   assets: jsonb("assets").$type<AssetRegistry>().default({}).notNull(),
   state: jsonb("state").$type<CharacterState>().notNull(),
 });
-
-export const scenesToCharacters = pgTable("scenes_to_characters", {
-  sceneId: uuid("scene_id")
-    .notNull()
-    .references(() => scenes.id, { onDelete: "cascade" }),
-  characterId: uuid("character_id")
-    .notNull()
-    .references(() => characters.id, { onDelete: "cascade" }),
-}, (t) => ({
-  pk: primaryKey({ columns: [ t.sceneId, t.characterId ] }),
-  sceneCharacterIdx: uniqueIndex("idx_scene_character")
-    .on(t.sceneId, t.characterId),
-}));
 
 export const scenes = pgTable("scenes", {
   id: uuid("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
@@ -110,20 +88,13 @@ export const scenes = pgTable("scenes", {
   lighting: jsonb("lighting").$type<Lighting>().notNull(),
   // Script Supervisor Links
   continuityNotes: text("continuity_notes").array().default([]),
-  location: uuid("location_id").references(() => locations.id, { onDelete: "set null" }),
+  locationReferenceId: text("location_reference_id").notNull(),
+  locationId: uuid("location_id").references(() => locations.id, { onDelete: "cascade" }).notNull(),
   // Persistent Results
-  status: assetStatusEnum("status").default("pending"),
+  status: text("status").$type<AssetStatus>().default("pending"),
   progressMessage: text("progress_message"),
   assets: jsonb("assets").$type<AssetRegistry>().default({}),
 });
-
-export const scenesRelations = relations(scenes, ({ one, many }) => ({
-  location: one(locations, {
-    fields: [ scenes.location ],
-    references: [ locations.id ],
-  }),
-  characters: many(scenesToCharacters),
-}));
 
 export const locations = pgTable("locations", {
   id: uuid("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
@@ -147,20 +118,16 @@ export const locations = pgTable("locations", {
   state: jsonb("state").$type<LocationState>().notNull(),
 });
 
-export const locationsRelations = relations(locations, ({ many }) => ({
-  scenes: many(scenes),
-}));
-
 export const jobs = pgTable("jobs", {
   id: text("id").notNull().primaryKey().$defaultFn(() => uuidv7()),
   projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
-  type: text("type").notNull(), // JobType
-  state: jobStateEnum("state").default("CREATED").notNull(),
+  type: text("type").$type<JobType>().notNull(),
+  state: text("state").$type<JobState>().default("CREATED").notNull(),
   payload: jsonb("payload"),
   result: jsonb("result"),
   error: text("error"),
   uniqueKey: text("unique_key"),
-  assetKey: text("asset_key"),
+  assetKey: text("asset_key").$type<AssetKey>(),
   attempt: integer("attempt").default(1).notNull(),
   maxRetries: integer("max_retries").default(3).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -195,3 +162,13 @@ export const jobs = pgTable("jobs", {
   // 4. Monitoring: Fast recovery of stale jobs
   stateIdx: index("idx_jobs_state_updated").on(table.state, table.updatedAt),
 }));
+
+export const scenesToCharacters = pgTable("scenes_to_characters", {
+  sceneId: uuid("scene_id")
+    .notNull()
+    .references(() => scenes.id, { onDelete: "cascade" }),
+  characterId: uuid("character_id")
+    .notNull()
+    .references(() => characters.id, { onDelete: "cascade" }),
+}, (t) => ([ primaryKey({ columns: [ t.sceneId, t.characterId ] }) ])
+);

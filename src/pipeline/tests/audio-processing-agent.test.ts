@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AudioProcessingAgent } from '../agents/audio-processing-agent';
-import { GCPStorageManager } from '../../workflow/storage-manager';
-import { TextModelController } from "../llm/text-model-controller";
+import { AudioProcessingAgent } from '../../shared/agents/audio-processing-agent.js';
+import { GCPStorageManager } from '../../shared/services/storage-manager.js';
+import { TextModelController } from '../../shared/llm/text-model-controller.js';
 import ffmpeg from 'fluent-ffmpeg';
 
 vi.mock('fluent-ffmpeg', () => ({

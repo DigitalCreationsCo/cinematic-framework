@@ -1,14 +1,11 @@
 import {
-  Scene,
-  Storyboard,
   InitialStoryboardContext,
   SceneBatch,
-  Location,
   StoryboardAttributes,
   SceneAttributes,
   isValidDuration,
   AudioAnalysisAttributes
-} from "../types/workflow.types.js";
+} from "../types/index.js";
 import { cleanJsonOutput, deleteBogusUrlsStoryboard, getJSONSchema, roundToValidDuration } from "../utils/utils.js";
 import { GCPStorageManager } from "../services/storage-manager.js";
 import { composeFrameGenerationPromptMeta, composeStoryboardEnrichmentPrompt } from "../prompts/prompt-composer.js";

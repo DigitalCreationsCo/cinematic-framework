@@ -6,6 +6,8 @@ import {
 } from "../shared/types/pipeline.types.js";
 import { eq, sql } from "drizzle-orm";
 
+
+
 export const PipelineCommandHandler = {
   /**
    * UPDATE_SCENE_ASSET: Manually promotes a specific version 
@@ -17,7 +19,7 @@ export const PipelineCommandHandler = {
     return await db.transaction(async (tx) => {
       // 1. Fetch current assets
       const existing = await tx.query.scenes.findFirst({
-        where: eq(scenes.id, scene.id),
+        where: { id: scene.id },
         columns: { assets: true }
       });
 

@@ -1,6 +1,7 @@
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg, { Pool, PoolConfig } from 'pg';
 import * as schema from './schema.js';
+import { relations } from './relations.js';
 
 
 
@@ -25,11 +26,10 @@ export const poolConfig: PoolConfig = {
 
 let internalPool: Pool | null;
 
-
 export function initializeDatabase(pool: Pool) {
   if (db) return db;
   internalPool = pool;
-  db = drizzle(pool, { schema });
+  db = drizzle({ client: pool, schema, relations });
   return db;
 }
 
@@ -56,5 +56,5 @@ export async function closeDb() {
   }
 }
 
-export let db: NodePgDatabase<typeof schema>;
+export let db = drizzle({ client: getPool(), schema, relations });
 export { schema };

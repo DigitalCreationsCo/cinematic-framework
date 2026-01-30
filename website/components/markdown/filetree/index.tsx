@@ -2,6 +2,6 @@
 
 import dynamic from 'next/dynamic'
 
-export const FileTree = dynamic(() => import('@/components/markdown/filetree/component'), {
+export const FileTree = dynamic(() => import('#w/components/markdown/filetree/component.js'), {
   ssr: false,
 })

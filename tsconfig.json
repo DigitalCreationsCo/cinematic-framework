@@ -1,17 +1,27 @@
 {
-  "files": [],
-  "references": [
-    {
-      "path": "./src/shared"
-    },
-    {
-      "path": "./src/pipeline"
-    },
-    {
-      "path": "./src/server"
-    },
-    {
-      "path": "./src/worker"
-    }
-  ]
+    "files": [],
+    "include": [],
+    "exclude": [
+      "**/node_modules"
+    ],
+    "references": [
+      {
+        "path": "./src/shared"
+      },
+      {
+        "path": "./src/worker"
+      },
+      {
+        "path": "./src/client"
+      },
+      {
+        "path": "./src/pipeline"
+      },
+      {
+        "path": "./src/server"
+      },
+      {
+        "path": "./website"
+      },
+    ]
 }

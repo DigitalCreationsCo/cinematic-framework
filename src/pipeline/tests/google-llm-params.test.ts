@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { buildllmParams, buildImageGenerationParams, buildVideoGenerationParams } from '../llm/google/google-llm-params';
+import { buildllmParams, buildImageGenerationParams, buildVideoGenerationParams } from '../../shared/llm/google/google-llm-params.js';
 import { Modality, HarmCategory, HarmBlockThreshold, HarmBlockMethod } from '@google/genai';
-import { textModelName, imageModelName, videoModelName } from '../llm/google/models';
+import { textModelName, imageModelName, videoModelName } from '../../shared/llm/google/models.js';
 
 describe('LLM Parameter Builders', () => {
     describe('buildllmParams', () => {

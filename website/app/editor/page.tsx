@@ -1,9 +1,9 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { MarkdownEditor } from '@/components/editor/markdown-editor'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { MarkdownEditor } from '#w/components/editor/markdown-editor.js';
+import { Button } from '#w/components/ui/button.js';
+import { Input } from '#w/components/ui/input.js'
 
 interface UpdateFile {
   slug: string

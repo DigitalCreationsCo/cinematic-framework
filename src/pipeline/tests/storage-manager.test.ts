@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { GCPStorageManager } from '../../workflow/storage-manager';
+import { GCPStorageManager } from '../../shared/services/storage-manager.js';
 
 // Mock @google-cloud/storage
 const mockFile = {

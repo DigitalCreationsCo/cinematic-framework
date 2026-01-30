@@ -3,7 +3,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "#/component
 import { Badge } from "#/components/ui/badge.js";
 import { ChevronDown, AlertTriangle, AlertCircle, Info } from "lucide-react";
 import { useState } from "react";
-import type { QualityEvaluationResult, QualityIssue } from "../../../shared/types/workflow.types.js";
+import type { QualityEvaluationResult, QualityIssue } from "../../../shared/types/index.js";
 import QualityScoreBar from "./QualityScoreBar.js";
 import StatusBadge from "./StatusBadge.js";
 

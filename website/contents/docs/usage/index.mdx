@@ -25,7 +25,7 @@ curl -X POST http://localhost:8000/api/video/start \
 
 Use POST to `/api/video/stop`. This publishes a `STOP_PIPELINE` command, causing the worker to save its current state and terminate processing for that run ID.
 
-In local CLI executions (e.g., running `src/workflow/graph.ts` directly), the workflow now supports graceful interruption via **SIGINT (Ctrl+C)**. This triggers an `AbortController` signal, allowing LLM calls to be cancelled mid-flight, ensuring a cleaner shutdown and checkpointing if possible.
+In local CLI executions (e.g., running `src/workflo#w/graph.js.ts` directly), the workflow now supports graceful interruption via **SIGINT (Ctrl+C)**. This triggers an `AbortController` signal, allowing LLM calls to be cancelled mid-flight, ensuring a cleaner shutdown and checkpointing if possible.
 
 ```bash
 curl -X POST http://localhost:8000/api/video/stop \

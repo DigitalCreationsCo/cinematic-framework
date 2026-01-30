@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AssetVersionManager } from './asset-version-manager.js';
 import { ProjectRepository } from './project-repository.js';
-import { Scope, AssetKey, AssetType } from '../types/workflow.types.js';
+import { Scope, AssetKey, AssetType } from '../types/index.js';
 
 vi.mock('./project-repository.js');
 

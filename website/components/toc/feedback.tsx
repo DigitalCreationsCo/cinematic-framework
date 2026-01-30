@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { LuArrowUpRight } from 'react-icons/lu'
-import { cn } from '@/lib/utils'
-import { GitHubLink } from '@/settings/navigation'
+import { cn } from '#w/lib/utils.js';
+import { GitHubLink } from '#w/settings/navigation.js'
 
 interface SideBarEdit {
   title: string

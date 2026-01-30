@@ -5,13 +5,13 @@
  * at various generation points in the workflow.
  */
 
-import { Scene, Character, Location, QualityEvaluationResult, CharacterAttributes, LocationAttributes } from "../types/workflow.types.js";
+import { Scene, Character, Location, QualityEvaluationResult, CharacterAttributes, LocationAttributes } from "../types/index.js";
 import { buildDirectorSceneBeatPrompt } from "./role-director.js";
 import { buildGafferGuidelines, buildGafferLightingSpec } from "./role-gaffer.js";
 import { buildScriptSupervisorContinuityChecklist } from "./role-script-supervisor.js";
 import { buildCostumeAndMakeupSpec, buildCostumeAndMakeupNarrative } from "./role-costume-makeup.js";
 import { buildProductionDesignerSpec, buildProductionDesignerNarrative } from "./role-production-designer.js";
-import { formatCharacterSpecs, formatLocationSpecs } from "../../shared/utils/utils.js";
+import { formatCharacterSpecs, formatLocationSpecs } from "../../shared/utils/type-utils.js";
 import { buildCinematographerGuidelines, buildCinematographerNarrative } from "./role-cinematographer.js";
 
 /**
@@ -185,7 +185,7 @@ export const composeFrameGenerationPromptMeta = (
   previousScene?: Scene,
   generationRules?: string[]
 ) => {
-  const location = locations.find((l) => l.id === scene.location);
+  const location = locations.find((l) => l.id === scene.locationId);
 
   // Build the narrative components
   const cinematography = buildCinematographerNarrative(scene, framePosition);
@@ -259,7 +259,7 @@ CONTINUITY FROM PREVIOUS SCENE ${previousScene.id}:
     ? characters.map((c) => `${buildCostumeAndMakeupNarrative(c)}
 ${formatCharacterTemporalState(c)}`).join("\n\n")
     : "No specific characters in this shot.";
-  const location = locations.find((l) => l.id === scene.location)!;
+  const location = locations.find((l) => l.id === scene.locationId)!;
 
   return `Scene ID: ${scene.id}
 

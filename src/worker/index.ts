@@ -70,7 +70,7 @@ async function publishJobEvent(event: JobEvent) {
     });
 }
 
-export async function publishPipelineEvent(event: PipelineEvent) {
+export async function publishPipelineEvent(event: PipelineEvent): Promise<void> {
     console.log({ event }, `Publishing pipeline event to ${PIPELINE_EVENTS_TOPIC_NAME}`);
     const dataBuffer = Buffer.from(JSON.stringify(event));
     await videoEventsTopicPublisher.publishMessage({
@@ -121,7 +121,10 @@ async function main() {
                     if (event && event.type === "JOB_DISPATCHED") {
                         await logContextStore.run({ ...logContext, jobId: event.jobId, shouldPublish: false }, async () => {
                             console.log({ event }, `Received JOB_DISPATCHED event.`);
-                            await workerService.processJob(event.jobId);
+                            workerService.processJob(event.jobId).catch((error) => {
+                                console.error({ error }, `Error processing job`);
+                            });
+                            // nacking here is not necessary as the job is processed asynchronously and failed are monitored
                         });
                     }
                     await message.ackWithResponse(); 

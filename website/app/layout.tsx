@@ -1,12 +1,12 @@
 import { GoogleTagManager } from '@next/third-parties/google'
 import type { Metadata } from 'next'
 import { Roboto_Mono, Google_Sans, Zalando_Sans } from 'next/font/google';
-import { Footer } from '@/components/navigation/footer'
-import { Navbar } from '@/components/navigation/navbar'
-import { Providers } from '@/providers'
-import { Settings } from '@/types/settings'
+import { Footer } from '#w/components/navigation/footer.js';
+import { Navbar } from '#w/components/navigation/navbar.js';
+import { Providers } from '#w/providers/index.js';
+import { Settings } from '#w/types/settings.js'
 
-import '@/styles/globals.css'
+import '#w/styles/globals.js.css'
 
 const robotoMono = Roboto_Mono({
   variable: '--font-roboto-mono',

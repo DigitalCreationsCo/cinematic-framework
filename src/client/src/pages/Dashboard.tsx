@@ -25,8 +25,8 @@ import type {
   Character,
   Location,
   AssetStatus,
-} from "../../../shared/types/workflow.types.js";
-import { getAllBestFromAssets } from "../../../shared/utils/utils.js";
+} from "../../../shared/types/index.js";
+import { getAllBestFromAssets } from "../../../shared/utils/assets-utils.js";
 import PipelineHeader from "#/components/PipelineHeader.js";
 import SceneCard from "#/components/SceneCard.js";
 import SceneDetailPanel from "#/components/SceneDetailPanel.js";
@@ -110,11 +110,11 @@ export default function Dashboard() {
 
 
   const selectedSceneCharacters = useMemo(() => selectedScene
-    ? currentCharacters.filter(c => selectedScene.characters.includes(c.id))
+    ? currentCharacters.filter(c => selectedScene.characterIds.includes(c.id))
     : [], [ selectedScene, currentCharacters ]);
 
   const selectedSceneLocation = useMemo(() => selectedScene
-    ? currentLocations.find(l => l.id === selectedScene.location)
+    ? currentLocations.find(l => l.id === selectedScene.locationId)
     : undefined, [ selectedScene, currentLocations ]);
 
   const completedScenes = useMemo(() => currentScenes.filter(s => s.status === "complete").length, [ currentScenes ]);

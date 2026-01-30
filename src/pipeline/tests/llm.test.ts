@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TextModelController } from '../llm/text-model-controller';
+import { TextModelController } from '../../shared/llm/text-model-controller.js';
 
 // Mock the GoogleProvider module with proper class syntax
 vi.mock('../llm/google/provider', () => {
